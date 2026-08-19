@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+data/openstanley.db*
+.env
+.gstack/
+.omc/
+.playwright-mcp/
+web/.omc/
+
+# runtime logs
+data/server.log

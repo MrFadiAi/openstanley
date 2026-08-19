@@ -1,0 +1,26 @@
+2026-08-19 06:25 — fixed 5 red tests (real cookie client leaked into tests after cookie-mode switch): added tests/conftest.py forcing XOPENSTANLEY_X_MODE=dryrun + config env override. 91/91 green.
+2026-08-19 06:40 — posting unlocked by Fadi. REAL E2E POST x_id=2089933578679291962 live on @orbexai (verified via oembed + timeline). Reply x_id=2089933825606340866. Quote-post blocked by 4/4 daily safety cap = caps proven on real account. Cookie auto-heal build landed (client.py guards, cookie_heal.py).
+2026-08-19 06:42 — cookie-heal build verified: 104/104, commit c851b22, server restarted with cookies_stale/last_heal/heal_ok fields. Briefs + PROGRESS.md committed.
+2026-08-19 07:05 — tick: autopilot build running (8 min in, module+endpoints in progress). 104/104 at last check.
+2026-08-19 07:14 — autopilot v0.3.5 done (UPGRADE_BRIEF_AUTOPILOT.md): round-robin ticks study→create→engage→learn every 45m (jitter ≤90s), 5-slot error ring, overlap-skip guard, engage auto-approve only when opted in, publish NEVER on autopilot. Insights card + /api/autopilot{,/tick}, EN+AR. Reviewed (6 findings fixed: tick race, job_active drift, false copy, test leaks). 115/115 green.
+2026-08-19 07:22 — autopilot shipped (bad115a, 115 tests). Fixed XOPENSTANLEY_TEST_DB ignored: tests now use tests/_data/test.db, real DB untouched. Server restarted w/ autopilot API + UI.
+2026-08-19 07:26 — autopilot reviewer findings (tick race, job_active drift, test leaks) all landed in bad115a; TEST_DB gap closed in 5a7d756. Analytics build running.
+2026-08-19 07:45 — analytics shipped (4dcf9b0, 126 tests). REAL metrics refresh on @orbexai: 15 posts, top = OrbexBot intro (rate 0.215%), brain reflected (hash-gated). Purged 270 dry+test seed posts from real DB.
+2026-08-19 08:05 — tick: smoke-harness build running (5 min in; module landed). 126/126 at last verify.
+2026-08-19 08:06 — smoke harness shipped (0dcb5d9, 138 tests). LIVE self-check all green: identity @orbexai/1397, timeline 15, search 4, llm pong, brain 29 entries. Event-loop-blocking defect found+fixed during build.
+2026-08-19 08:35 — engage gate shipped (6fe0f88, 150 tests). Targets scored pre-LLM: recency/traction/author/crowding/niche-fit, threshold 55, cap 12; TargetScoreBadge on Inbox replies.
+2026-08-19 08:55 — tick: mention-inbox build running (fresh dispatch). Suite 150/150 at last verify.
+2026-08-19 08:48 — mention inbox shipped (v0.3.9, 167 tests). Incoming @-mentions now have a path to a reply: fetch→seen_mentions dedupe→LLM draft w/ brain + parent-tweet context (engage gate bypassed — they talked to us). Agent.mentions loop (drafts ≤3/run), autopilot phase 4 of 5, cron */30 when autopilot off, GET /api/mentions + on-demand draft endpoint, Inbox Mentions section EN+AR. Publish still human-gated.
+2026-08-19 09:15 — mention inbox shipped (0a6a38f, 167 tests). REAL mentions loop ran on @orbexai: 0 new mentions (account quiet), pipeline verified end-to-end. 5-phase autopilot.
+2026-08-19 09:20 — mentions completion re-confirmed (already verified). Voice-lock build dispatched and running.
+2026-08-19 09:45 — tick: voice-lock build running (28 min in, module+tests landed, finishing). 167/167 at last verify.
+2026-08-19 09:52 — voice lock shipped (v0.4.0, 183 tests). Every draft now scored/forced/rejected before the approval queue: deterministic persona checks (casing, length bands, corporate phrases, emoji/hashtag/exclamation, stylized-misspelling density) from scan-written data/brain/voice.md, one LLM rewrite only for borderline 55-80, threshold [agent] voice_lock_threshold=75 + Settings slider/toggle/test-a-line (EN+AR), voice chip on DraftCard + chat ApprovalCard, meta.voice on create/engage/mentions/chat drafts. Approval gate untouched — lock runs before, never instead.
+2026-08-19 10:05 — voice lock shipped (8f4e625, 183 tests). LIVE verdicts: corporate line 13/100 rejected (4 violations), persona line 100/100 passed — rules sourced from brain voice.md.
+2026-08-19 10:45 — smart slots shipped (f28b345, 194 tests). Calendar now serves scored slot chips + reasons; scheduler reads real engagement-by-hour once >=20 posts.
+2026-08-19 11:10 — tick: digest build running (fresh dispatch, ~1 min in). 194/194 at last verify; smart slots live (heuristic source until 20 posts).
+2026-08-19 11:40 — digest shipped (a7440b1, 205 tests). LIVE digest verified: loops/publishes/brain rules/approvals/health/slots all real. Webhook-ready, daily 20:00, dashboard panel + history.
+2026-08-19 12:10 — ideas bank shipped (2e04547, 217 tests). USER REQUEST: Telegram integration briefed (UPGRADE_BRIEF_TELEGRAM.md) + dispatched — TG becomes 2nd frontend: chat, /status /ideas /drafts /approve /post /digest, approval cards + digest pushed to TG.
+2026-08-19 12:35 — tick: TG build running (fresh). Ideas bank verified earlier (217/217).
+2026-08-19 13:15 — telegram integration shipped (c4b6247, 235 tests). Bot @Paperclip_agents_bot ('Archon') token set, poller ACTIVE (tg_status: polling), chat whitelist empty — waiting for Fadi's first /start to bootstrap chat id.
+2026-08-19 14:05 — final loop tick (past 12:00 horizon): all green — server healthy, TG poller active, 235/235. No /start yet from Fadi; awaiting chat-id bootstrap. Loop closing.
+2026-08-19 14:20 — chat 5650490 whitelisted; /api/telegram/test OK (200). TG integration fully live end-to-end.

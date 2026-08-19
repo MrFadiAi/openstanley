@@ -1,0 +1,233 @@
+@import 'tailwindcss';
+@import './components/bui/theme/tokens.css';
+
+/* class-based dark variant (the app is permanently dark; html carries .dark) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─────────────────────────────────────────────────────────
+ * OpenStanley palette — the app is dark-only, so both the legacy
+ * app color names (bg/panel/edge/…) and the beautifului token
+ * names (surface/ink/line/…) resolve to one dark purple theme.
+ * Legacy names are mapped onto the bui CSS vars so there is a
+ * single source of truth in :root below.
+ * ───────────────────────────────────────────────────────── */
+@theme {
+  --color-bg: var(--page);
+  --color-panel: var(--surface);
+  --color-panel2: var(--hover);
+  --color-edge: var(--line);
+  --color-base: var(--ink);
+  --color-muted: var(--ink-2);
+  --color-accent2: var(--accent-ink);
+  --color-good: var(--green);
+  --color-bad: var(--red);
+  --color-warn: var(--orange);
+  --color-cyan: #4fc3f7;
+
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, Consolas, Menlo, monospace;
+
+  /* used by PromptBar menus / FineTuneCard / SidebarNav */
+  --shadow-raised:
+    0 0 0 1px rgba(255, 255, 255, 0.045), 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+/* OpenStanley identity — dark canvas, purple accent (#7c6cff family) */
+:root {
+  --page: #0a0a0f;
+  --canvas: #0a0a0f;
+  --surface: #111116;
+  --inset: #14141b;
+  --hover: #18181f;
+  --hover-2: #22222c;
+  --ink: #ececf1;
+  --ink-2: #9b9ba7;
+  --ink-3: #6d6d7c;
+  --line: #26262f;
+  --line-strong: #34343f;
+  --field: #14141b;
+  --accent: #7c6cff;
+  --accent-ink: #a89bff;
+  --accent-tint: #1c1930;
+  --green: #3fb96d;
+  --green-tint: #12271b;
+  --orange: #e0a53f;
+  --orange-tint: #2a2113;
+  --red: #e0564f;
+  --red-tint: #2b1715;
+
+  --shadow-btn: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-card:
+    0 0 0 1px rgba(255, 255, 255, 0.03), 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-overlay: 0 8px 40px rgba(0, 0, 0, 0.7);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  font-size: 16px;
+}
+
+/* compact / dense mode — shrinks every rem-based utility proportionally */
+html.dense {
+  font-size: 14px;
+}
+
+html.dense body {
+  letter-spacing: -0.005em;
+}
+
+body {
+  margin: 0;
+  background-color: #0a0a0f;
+  color: #ececf1;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── beautifului component support classes ───────────────
+ * Shared card furniture the primitives compose
+ * (primitive-card-*, primitive-icon-button, animated-underline,
+ * source-avatar) — themed from the same tokens.
+ * ──────────────────────────────────────────────────────── */
+.primitive-card-pad {
+  padding: 12px 14px;
+}
+.primitive-card-footer {
+  padding: 8px 10px;
+}
+.primitive-card-bar {
+  padding: 8px 12px;
+}
+.primitive-icon-button {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+.animated-underline {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: text-decoration-color 150ms ease;
+}
+.animated-underline:hover {
+  text-decoration-color: currentColor;
+}
+.source-avatar {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* scrollbars */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #26262f;
+  border-radius: 8px;
+  border: 2px solid #0a0a0f;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #34343f;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* native inputs on dark */
+input[type='time'],
+input[type='datetime-local'],
+input[type='date'] {
+  color-scheme: dark;
+}
+
+/* markdown body (chat bubbles, summaries) */
+.md > *:first-child {
+  margin-top: 0;
+}
+.md > *:last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.4em 0;
+  white-space: pre-wrap;
+}
+.md ul,
+.md ol {
+  margin: 0.4em 0;
+  padding-inline-start: 1.35em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.15em 0;
+}
+.md code {
+  font-family: ui-monospace, Consolas, Menlo, monospace;
+  font-size: 0.86em;
+  background: #14141b;
+  border: 1px solid #26262f;
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.md pre {
+  background: #14141b;
+  border: 1px solid #26262f;
+  border-radius: 9px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.md pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.86em;
+}
+.md a {
+  color: #a89bff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-weight: 700;
+  margin: 0.65em 0 0.3em;
+  font-size: 1em;
+  color: #ececf1;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.92em;
+}
+.md th,
+.md td {
+  border: 1px solid #26262f;
+  padding: 4px 9px;
+  text-align: start;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid #26262f;
+  margin: 0.7em 0;
+}
+.md strong {
+  color: #ffffff;
+  font-weight: 650;
+}

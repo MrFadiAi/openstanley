@@ -1,0 +1,35 @@
+# XStanley local config. Secrets stay in environment (.env), not here.
+
+[llm]
+# GLM via z.ai (Anthropic-compatible transport — reuses your existing key)
+base_url = "https://api.z.ai/api/anthropic"
+model = "glm-5.3"
+transport = "anthropic"
+temperature = 0.85
+max_tokens = 2000
+
+[x]
+mode = "cookie"        # dryrun | cookie | api
+username = "local_user"
+import_count = 400
+
+[agent]
+daily_draft_target = 4
+post_times = ["09:00", "13:00", "18:00"]
+niche_accounts = []    # e.g. ["naval", "levelsio"]
+evergreen_themes = [
+  "lessons from building things",
+  "contrarian takes in my field",
+  "tools and workflows I actually use",
+]
+timezone = "Europe/Amsterdam"
+auto_approve_replies = false
+
+[server]
+host = "127.0.0.1"
+port = 7878
+
+[harness]
+sample_count = 5
+real_llm = false
+suites = ["voice", "algorithm", "bilingual", "tools", "safety"]

@@ -1,0 +1,94 @@
+/*
+ * Beautiful UI design tokens — palette, radii, easing, keyframes.
+ * MIT License — Copyright (c) 2026 Shane Levine (https://www.beautifului.dev/)
+ *
+ * Usage: import into your global stylesheet (after Tailwind):
+ *   @import './tokens.css';
+ * The @theme block wires Tailwind utilities (bg-surface, text-ink-2,
+ * border-line, ring-accent, ...) to the palette below.
+ */
+
+:root {
+  --page: #fafafb;
+  --canvas: #f1f2f3;
+  --surface: #ffffff;
+  --inset: #f7f8f9;
+  --hover: #f4f5f6;
+  --hover-2: #e7e9eb;
+  --ink: #1f2124;
+  --ink-2: #62656b;
+  --ink-3: #9a9da3;
+  --line: #ecedef;
+  --line-strong: #e0e2e5;
+  --field: #f2f2f3;
+  --accent: #0285ff;
+  --accent-ink: #0170dd;
+  --accent-tint: #e9f3ff;
+  --green: #189a4d;
+  --green-tint: #e8f5ed;
+  --orange: #ef720c;
+  --orange-tint: #fdf1e5;
+  --red: #e3474c;
+  --red-tint: #fcecec;
+
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 10px;
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-link: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --shadow-btn: 0 1px 2px rgba(31, 33, 36, 0.08);
+  --shadow-card: 0 1px 2px rgba(31, 33, 36, 0.06), 0 4px 16px rgba(31, 33, 36, 0.06);
+  --shadow-overlay: 0 8px 40px rgba(31, 33, 36, 0.14);
+}
+
+@theme {
+  --color-page: var(--page);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-inset: var(--inset);
+  --color-hover: var(--hover);
+  --color-hover-2: var(--hover-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-field: var(--field);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-green: var(--green);
+  --color-green-tint: var(--green-tint);
+  --color-orange: var(--orange);
+  --color-orange-tint: var(--orange-tint);
+  --color-red: var(--red);
+  --color-red-tint: var(--red-tint);
+
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 10px;
+  /* Direct values (not var()) — a @theme var cycle would invalidate these. */
+  --shadow-hairline: 0 0 0 1px var(--line);
+  --shadow-btn: 0 1px 2px rgba(31, 33, 36, 0.08);
+  --shadow-card: 0 1px 2px rgba(31, 33, 36, 0.06), 0 4px 16px rgba(31, 33, 36, 0.06);
+  --shadow-overlay: 0 8px 40px rgba(31, 33, 36, 0.14);
+}
+
+@keyframes shimmer-text{0%{background-position:150%}to{background-position:-50%}}
+
+@keyframes fade-up{0%{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+@keyframes fade-in{0%{opacity:0}to{opacity:1}}
+
+@keyframes eq-bounce{0%,to{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+
+@keyframes stream-in{0%{opacity:0;filter:blur(4px)}to{opacity:1;filter:blur()}}
+
+@keyframes caret-blink{0%,to{opacity:1}50%{opacity:0}}
+
+@keyframes pop-in{0%{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+
+@keyframes spin{to{transform:rotate(1turn)}}
+
+@keyframes pixel-on{0%,to{opacity:.15}18%,42%{opacity:1}62%{opacity:.15}}
