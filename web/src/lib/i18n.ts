@@ -603,7 +603,7 @@ const ar: Record<I18nKey, string> = {
   'common.today': 'اليوم',
   'common.score': 'النتيجة',
   'common.you': 'أنت',
-  'common.openstanley': 'ستانلي · رئيس المحتوى الذكي',
+  'common.openstanley': 'أوبن ستانلي · رئيس المحتوى الذكي',
   'common.mode': 'وضع {mode}',
   'common.retry': 'إعادة المحاولة',
 
