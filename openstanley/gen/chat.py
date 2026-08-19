@@ -380,7 +380,7 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
            "candidates": candidates}
 
 
-def draft_from_chat(cfg: Config, text: str) -> int:
+def draft_from_chat(cfg: Config, text: str, image: str | None = None) -> int:
     """User approved a post written in chat → save as a real draft for the queue.
 
     The human already approved it, so the voice lock never rejects here —
@@ -395,6 +395,7 @@ def draft_from_chat(cfg: Config, text: str) -> int:
                                                allow_fix=False).meta()
     except Exception as e:  # noqa: BLE001
         db.log("voice", f"chat draft check failed: {e}", level="warn")
-    did = db.add_draft(text=text, kind="post", temperature="chat", meta=meta)
+    did = db.add_draft(text=text, kind="post", temperature="chat",
+                       meta=meta, image=image)
     db.log("chat", f"chat draft saved #{did} (alg {alg['score']})")
     return did

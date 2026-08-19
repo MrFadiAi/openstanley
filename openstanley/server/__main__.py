@@ -812,6 +812,7 @@ class ChatMessage(BaseModel):
 
 class ChatDraftBody(BaseModel):
     text: str
+    image: str | None = None
 
 
 @app.get("/api/chat/history")
@@ -845,7 +846,12 @@ async def chat_stream_ep(body: ChatMessage):
 @app.post("/api/chat/draft")
 async def chat_draft_ep(body: ChatDraftBody):
     from ..gen import chat as chat_mod
-    did = await asyncio.to_thread(chat_mod.draft_from_chat, cfg, body.text)
+    if body.image and ("/" in body.image or "\\" in body.image or ".." in body.image):
+        raise HTTPException(400, "bad image name")
+    if body.image and not (MEDIA_DIR / body.image).exists():
+        raise HTTPException(404, "no such media file")
+    did = await asyncio.to_thread(chat_mod.draft_from_chat, cfg,
+                                  body.text, body.image)
     return {"ok": True, "draft_id": did}
 
 
