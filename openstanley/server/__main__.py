@@ -107,6 +107,12 @@ class AccountCookies(BaseModel):
     cookies_json: str
 
 
+# every cookie paste goes through one normalizer (x/client.py) — the user
+# never hand-builds JSON. This is the 400 when nothing can be extracted.
+COOKIES_PASTE_HINT = ("Paste your auth_token (the long token from the x.com "
+                      "'auth_token' cookie), or the full JSON — either works")
+
+
 class CapSettings(BaseModel):
     max_posts_per_day: int | None = None
     max_replies_per_day: int | None = None
@@ -1428,13 +1434,10 @@ async def create_account_ep(body: AccountCreate):
         raise HTTPException(400, "handle required")
     cookies = ""
     if body.cookies_json:
-        try:
-            parsed = json.loads(body.cookies_json)
-        except json.JSONDecodeError as e:
-            raise HTTPException(400, f"cookies_json parse error: {e}") from e
-        if not isinstance(parsed, dict) or "auth_token" not in parsed:
-            raise HTTPException(400, "cookies must be a JSON object with at least 'auth_token'")
-        cookies = body.cookies_json
+        from ..x.client import normalize_cookies_input
+        cookies = normalize_cookies_input(body.cookies_json) or ""
+        if not cookies:
+            raise HTTPException(400, COOKIES_PASTE_HINT)
     acct_id = db.create_account(handle, cookies)
     from ..gen import brain as brain_mod
     brain_mod.ensure(acct_id)  # fresh EMPTY brain — seeds only, no other account's memory
@@ -1455,17 +1458,15 @@ async def activate_account_ep(account_id: int):
 @app.post("/api/accounts/{account_id}/cookies")
 async def set_account_cookies_ep(account_id: int, body: AccountCookies):
     """Write-only cookie storage for one account (masked in GETs, never logged)."""
-    try:
-        parsed = json.loads(body.cookies_json)
-    except json.JSONDecodeError as e:
-        raise HTTPException(400, f"cookies_json parse error: {e}") from e
-    if not isinstance(parsed, dict) or "auth_token" not in parsed:
-        raise HTTPException(400, "cookies must be a JSON object with at least 'auth_token'")
-    if not db.set_account_cookies(account_id, body.cookies_json):
+    from ..x.client import normalize_cookies_input
+    canonical = normalize_cookies_input(body.cookies_json)
+    if not canonical:
+        raise HTTPException(400, COOKIES_PASTE_HINT)
+    if not db.set_account_cookies(account_id, canonical):
         raise HTTPException(404, f"no account {account_id}")
     db.log("accounts", f"cookies updated for account #{account_id} (values not logged)")
     return {"ok": True, "cookies_set": True,
-            "cookies_masked": db.mask_cookies(body.cookies_json)}
+            "cookies_masked": db.mask_cookies(canonical)}
 
 
 @app.delete("/api/accounts/{account_id}")
@@ -1517,15 +1518,11 @@ async def account_bootstrap_ep(body: AccountBootstrap):
     Validates the cookies against real X via me(); the returned handle then
     either re-selects an existing account (reconnect) or creates a fresh one
     with a seeded empty brain. The account becomes active."""
-    import json as _json
-    try:
-        cookies = _json.loads(body.cookies_json)
-    except _json.JSONDecodeError as e:
-        raise HTTPException(400, f"Cookies JSON parse error: {e}") from e
-    if not isinstance(cookies, dict) or "auth_token" not in cookies:
-        raise HTTPException(400, "Cookies must be a JSON object containing at least 'auth_token' (and ideally 'ct0').")
-    from ..x.client import XCookie
-    probe = XCookie(body.cookies_json, caps={
+    from ..x.client import XCookie, normalize_cookies_input
+    canonical = normalize_cookies_input(body.cookies_json)
+    if not canonical:
+        raise HTTPException(400, COOKIES_PASTE_HINT)
+    probe = XCookie(canonical, caps={
         "max_posts_per_day": cfg.x.max_posts_per_day,
         "max_replies_per_day": cfg.x.max_replies_per_day,
         "min_delay_s": cfg.x.min_delay_s,
@@ -1539,7 +1536,7 @@ async def account_bootstrap_ep(body: AccountBootstrap):
         db.log("system", f"account bootstrap failed: {str(e)[:200]}", level="error")
         raise HTTPException(400, f"Cookies rejected by X: {str(e)[:300]}") from e
     handle = me["username"]
-    single_line = _json.dumps(cookies, separators=(",", ":"))
+    single_line = canonical
     existing = next((a for a in db.list_accounts()
                      if a["handle"].lower() == handle.lower()), None)
     if existing:
@@ -1571,14 +1568,10 @@ async def cookie_connect(body: CookieConnect):
 
     v0.5.0: cookies persist into the ACTIVE account's row (DB is the source
     of truth; .env stays a bootstrap fallback for account 1)."""
-    import json as _json
-    try:
-        cookies = _json.loads(body.cookies_json)
-    except _json.JSONDecodeError as e:
-        raise HTTPException(400, f"Cookies JSON parse error: {e}") from e
-    if not isinstance(cookies, dict) or "auth_token" not in cookies:
-        raise HTTPException(400, "Cookies must be a JSON object containing at least 'auth_token' (and ideally 'ct0').")
-    from ..x.client import XCookie
+    from ..x.client import XCookie, normalize_cookies_input
+    canonical = normalize_cookies_input(body.cookies_json)
+    if not canonical:
+        raise HTTPException(400, COOKIES_PASTE_HINT)
     caps = {
         "max_posts_per_day": cfg.x.max_posts_per_day,
         "max_replies_per_day": cfg.x.max_replies_per_day,
@@ -1586,7 +1579,7 @@ async def cookie_connect(body: CookieConnect):
         "max_delay_s": cfg.x.max_delay_s,
     }
     acct = db.active_account()
-    probe = XCookie(body.cookies_json, caps=caps, account_id=acct)
+    probe = XCookie(canonical, caps=caps, account_id=acct)
     try:
         me = await probe.me()  # validates cookies by calling c.user()
     except HTTPException:
@@ -1595,8 +1588,7 @@ async def cookie_connect(body: CookieConnect):
         db.log("system", f"cookie connect failed: {str(e)[:200]}", level="error")
         raise HTTPException(400, f"Cookies rejected by X: {str(e)[:300]}") from e
     # success → persist into the account row and switch mode
-    single_line = _json.dumps(cookies, separators=(",", ":"))
-    db.set_account_cookies(acct, single_line)
+    db.set_account_cookies(acct, canonical)
     db.set_account_handle(acct, me["username"])
     _set_config_mode("cookie")
     db.set_me(me)

@@ -537,21 +537,68 @@ class XApi(XClient):
         return (await asyncio.to_thread(c.get_me)).data.id
 
 
+# a bare auth_token paste — the value X shows in DevTools (hex/base64url-ish)
+_BARE_TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{20,}")
+# 'auth_token=…; ct0=…' cookie-header pairs (';', newline or whitespace between)
+_COOKIE_PAIR_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*[\"']?([^\"';\s]+)[\"']?")
+
+
+def _clean_cookie_value(v) -> str:
+    """Strip whitespace + stray matching quotes a clipboard often adds."""
+    s = str(v).strip()
+    while len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        s = s[1:-1].strip()
+    return s
+
+
+def normalize_cookies_input(raw: str) -> Optional[str]:
+    """One normalizer for every cookie-input surface (server endpoints AND the
+    .env bootstrap): users paste whatever they have, never hand-built JSON.
+
+    Accepted forms → canonical single-line JSON with at least 'auth_token':
+      * full JSON object (extra cookies like ct0/twid preserved)
+      * browser cookie header: 'auth_token=…; ct0=…'
+      * a bare auth_token value
+    Returns None when no auth_token can be extracted — callers translate that
+    into their 400. Never raises.
+    """
+    text = _clean_cookie_value(raw or "")  # also unwraps stray outer quotes
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        parsed = None
+    if isinstance(parsed, dict):  # full JSON — canonical pass-through
+        cookies = {str(k).strip(): _clean_cookie_value(v) for k, v in parsed.items()}
+        if not cookies.get("auth_token"):
+            return None
+        return json.dumps(cookies, separators=(",", ":"))
+    if isinstance(parsed, str):  # a JSON-quoted token paste → bare form below
+        text = parsed.strip()
+    if "=" in text:  # cookie header — pair it up
+        cookies = {m.group(1).lower(): _clean_cookie_value(m.group(2))
+                   for m in _COOKIE_PAIR_RE.finditer(text)}
+        if not cookies.get("auth_token"):
+            return None
+        return json.dumps(cookies, separators=(",", ":"))
+    if _BARE_TOKEN_RE.fullmatch(text):  # just the token
+        return json.dumps({"auth_token": text}, separators=(",", ":"))
+    return None
+
+
 def resolve_cookies(cfg, account_id: int) -> str:
     """Cookies for one account: the accounts row wins; the .env bootstrap
-    value is a fallback for account 1 only (v0.5.0)."""
-    import json as _json
+    value is a fallback for account 1 only (v0.5.0). The .env value goes
+    through the same normalizer as every paste surface — a bare auth_token
+    in .env works too."""
     stored = db.account_cookies(account_id)
     if stored:
         return stored
     if account_id == 1:
-        env_cookies = cfg.x.cookies
-        if env_cookies:
-            try:  # accept a JSON object or a raw auth_token string
-                if isinstance(_json.loads(env_cookies), dict):
-                    return env_cookies
-            except (ValueError, TypeError):
-                pass
+        canonical = normalize_cookies_input(cfg.x.cookies)
+        if canonical:
+            return canonical
     return ""
 
 

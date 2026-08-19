@@ -150,9 +150,7 @@ export function AccountsCard() {
                 <Textarea
                   value={cookiesDraft}
                   onChange={(e) => setCookiesDraft(e.target.value)}
-                  placeholder={t('account.cookiesField', {
-                    handle: a.handle || t('account.noHandle'),
-                  })}
+                  placeholder={t('account.cookiesPlaceholder')}
                   className="mb-1 font-mono text-[12px]"
                   rows={3}
                   dir="ltr"
