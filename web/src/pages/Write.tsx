@@ -11,6 +11,7 @@ import {
   apiPost,
   streamChat,
   getLoopsStatus,
+  uploadMedia,
   type ChatAction,
   type ChatCandidate,
   type ChatFallbackResponse,
@@ -161,10 +162,14 @@ function CandidateApproval({
   candidate,
   busy,
   onRegenerate,
+  stagedImage,
+  onImageConsumed,
 }: {
   candidate: ChatCandidate;
   busy: boolean;
   onRegenerate: () => void;
+  stagedImage?: string | null;
+  onImageConsumed?: () => void;
 }) {
   const { t } = useApp();
   const [savedId, setSavedId] = useState<number | null>(null);
@@ -200,8 +205,10 @@ function CandidateApproval({
         try {
           const r = await apiPost<{ ok: boolean; draft_id: number }>('chat/draft', {
             text: candidate.text,
+            image: stagedImage ?? undefined,
           });
           setSavedId(r.draft_id);
+          onImageConsumed?.();
           toast.success(t('write.draftSaved', { id: r.draft_id }));
         } catch (e) {
           toast.error(t('write.draftSaveFailed', { msg: errMsg(e) }));
@@ -225,12 +232,16 @@ function AssistantTurn({
   busy,
   onFollowUp,
   onPatchContent,
+  stagedImage,
+  onImageConsumed,
 }: {
   msg: ChatMsg;
   busy: boolean;
   onFollowUp: (text: string) => void;
   /** selection-rewrite Keep applies the replacement to this turn */
   onPatchContent: (key: string, selected: string, replacement: string) => void;
+  stagedImage?: string | null;
+  onImageConsumed?: () => void;
 }) {
   const { t, lang } = useApp();
   const [tab, setTab] = useState<'reply' | 'reasoning'>('reply');
@@ -376,6 +387,8 @@ function AssistantTurn({
                     candidate={c}
                     busy={busy}
                     onRegenerate={() => onFollowUp('Regenerate that post, hotter.')}
+                    stagedImage={stagedImage}
+                    onImageConsumed={onImageConsumed}
                   />
                 ))}
               </div>
@@ -628,6 +641,22 @@ export function WritePage() {
   const [language, setLanguage] = useState<PromptLanguage>('auto');
   const scrollRef = useRef<HTMLDivElement>(null);
   const counter = useRef(0);
+  const [stagedImage, setStagedImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const stageFile = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      setUploading(true);
+      const r = await uploadMedia(f);
+      setStagedImage(r.name);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const nextKey = (p: string): string => {
     counter.current += 1;
@@ -827,12 +856,28 @@ export function WritePage() {
                 busy={busy}
                 onFollowUp={send}
                 onPatchContent={patchContent}
+                stagedImage={stagedImage}
+                onImageConsumed={() => setStagedImage(null)}
               />
             );
           })}
         </div>
 
         <div className="pb-4 pt-3">
+          {stagedImage ? (
+            <div className="mb-2 inline-flex items-center gap-2 rounded-chip bg-inset px-2 py-1">
+              <img src={`/api/media/${stagedImage}`} alt="" className="size-6 rounded object-cover" />
+              <span className="max-w-40 truncate font-mono text-[11px] text-ink-2">{stagedImage}</span>
+              <button
+                type="button"
+                onClick={() => setStagedImage(null)}
+                className="text-ink-3 hover:text-ink"
+                aria-label={t('inbox.composeImage')}
+              >
+                ✕
+              </button>
+            </div>
+          ) : null}
           <PromptBar
             value={input}
             onChange={setInput}
@@ -865,6 +910,15 @@ export function WritePage() {
             }}
             noMatchesLabel={t('write.noMatches')}
             footerHint={t('write.sendHint')}
+            onAttach={stagedImage === null && !uploading ? () => fileRef.current?.click() : undefined}
+            attachLabel={uploading ? t('inbox.uploading') : t('inbox.composeImage')}
+          />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => { void stageFile(e.target.files?.[0]); e.target.value = ''; }}
           />
         </div>
       </div>

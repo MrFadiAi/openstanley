@@ -82,6 +82,8 @@ export default function PromptBar({
   pickerLabels,
   noMatchesLabel,
   footerHint,
+  onAttach,
+  attachLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -102,6 +104,8 @@ export default function PromptBar({
   };
   noMatchesLabel: string;
   footerHint?: string;
+  onAttach?: () => void;
+  attachLabel?: string;
 }) {
   const [dismissed, setDismissed] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
@@ -389,7 +393,9 @@ export default function PromptBar({
 
         <div
           ref={controlsRef}
-          className="grid grid-cols-[28px_minmax(0,1fr)_auto_28px] items-end gap-x-1 gap-y-1.5"
+          className={`grid items-end gap-x-1 gap-y-1.5 ${
+            onAttach ? "grid-cols-[28px_minmax(0,1fr)_auto_auto_28px]" : "grid-cols-[28px_minmax(0,1fr)_auto_28px]"
+          }`}
         >
           <button
             type="button"
@@ -468,6 +474,24 @@ export default function PromptBar({
             </span>
           </button>
 
+          {/* attach — paperclip button */}
+          {onAttach ? (
+            <button
+              type="button"
+              aria-label={attachLabel}
+              title={attachLabel}
+              disabled={!onAttach}
+              onClick={onAttach}
+              className={`flex h-7 shrink-0 items-center justify-center rounded-[8px] text-ink-3 transition-[background-color,color,transform] duration-150 hover:bg-hover hover:text-ink enabled:active:scale-[0.94] ${
+                expanded ? "col-start-4 row-start-2" : "col-start-4 row-start-1"
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+          ) : null}
+
           {/* send — tactile square */}
           <button
             type="button"
@@ -475,7 +499,7 @@ export default function PromptBar({
             disabled={!canSend}
             onClick={send}
             className={`flex size-7 shrink-0 items-center justify-center rounded-[8px] transition-[background-color,color,transform] duration-200 enabled:active:scale-[0.94] ${
-              expanded ? "col-start-4 row-start-2" : "col-start-4 row-start-1"
+              expanded ? (onAttach ? "col-start-5 row-start-2" : "col-start-4 row-start-2") : onAttach ? "col-start-5 row-start-1" : "col-start-4 row-start-1"
             }`}
             style={{
               background: canSend ? "var(--accent)" : "var(--line-strong)",
