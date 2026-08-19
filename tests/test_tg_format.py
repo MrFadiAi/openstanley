@@ -133,19 +133,65 @@ def test_converter_leaves_code_contents_alone():
             == "<pre>print('&lt;b&gt;')\n</pre>")
 
 
-def test_converter_unbalanced_markers_stay_literal():
-    assert tg._md_to_tg_html("**bold") == "**bold"              # no close
-    assert tg._md_to_tg_html("`unclosed") == "`unclosed"
+def test_converter_unbalanced_markers_are_stripped():
+    """TOTAL conversion (v0.5.1): a marker that never closes is removed —
+    raw `**`/backticks must never reach the chat."""
+    assert tg._md_to_tg_html("**bold") == "bold"                # no close
+    assert tg._md_to_tg_html("`unclosed") == "unclosed"
     assert tg._md_to_tg_html("3 * 4 * 5") == "3 * 4 * 5"        # math ≠ italic
-    # mid-stream fragment (progressive edits) never yields a broken tag
-    assert tg._md_to_tg_html("here is **bol") == "here is **bol"
+    assert tg._md_to_tg_html("here is **bol") == "here is bol"
+    assert tg._md_to_tg_html("a ~~struck") == "a struck"
 
 
 def test_converter_links_and_bullets():
     assert (tg._md_to_tg_html("[docs](https://x.com)")
             == '<a href="https://x.com">docs</a>')
-    assert tg._md_to_tg_html("- one\n- two") == "· one\n· two"
-    assert tg._md_to_tg_html("* item") == "· item"
+    assert tg._md_to_tg_html("- one\n- two") == "• one\n• two"
+    assert tg._md_to_tg_html("* item") == "• item"
+    assert "+" not in tg._md_to_tg_html("+ plus bullet")[0]      # + → • too
+
+
+def test_converter_headers_become_bold_lines():
+    assert tg._md_to_tg_html("## Section title") == "<b>Section title</b>"
+    assert tg._md_to_tg_html("#### **Bold head**") == "<b>Bold head</b>"
+    assert tg._md_to_tg_html("###") == ""                  # bare hashes gone
+    assert "#" not in tg._md_to_tg_html("## Head")         # hash gone
+    assert tg._md_to_tg_html("issue #42 stays") == "issue #42 stays"  # hashtag
+
+
+def test_converter_tables_never_leak_pipes():
+    src = "| Feature | Status |\n|---|---|\n| Voice | 100% |\n| Style | ok |"
+    out = tg._md_to_tg_html(src)
+    assert out.startswith("<pre>") and out.endswith("</pre>")
+    assert "|" not in out and "---" not in out    # never raw pipes/rules
+    assert "Feature" in out and "100%" in out    # aligned columns kept
+
+
+def test_converter_nested_lists_flatten_with_indent():
+    out = tg._md_to_tg_html("- top\n  - nested\n    - deeper")
+    assert out == "• top\n  • nested\n    • deeper"  # indent capped at 2 levels
+
+
+def test_converter_strips_horizontal_rules_and_house_dot():
+    assert tg._md_to_tg_html("above\n---\nbelow") == "above\n\nbelow"
+    assert tg._md_to_tg_html("***") == ""
+    assert tg._md_to_tg_html("· legacy bullet\n· two") == "• legacy bullet\n• two"
+
+
+def test_converter_strips_zero_width_chars():
+    zwsp, bom = chr(0x200b), chr(0xfeff)
+    assert tg._md_to_tg_html(f"vi{zwsp}si{bom}ble") == "visible"
+
+
+def test_converter_strike_and_smart_quotes_survive():
+    assert tg._md_to_tg_html("~~gone~~ kept") == "<s>gone</s> kept"
+    assert tg._md_to_tg_html("“smart” — fine") == "“smart” — fine"
+
+
+def test_md_to_plain_strips_all_markers():
+    """The no-parse_mode retry path: plain text, but never raw markdown."""
+    out = tg._md_to_plain("**bold** and `code` and <tag> and\n## Head")
+    assert out == "bold and code and <tag> and\nHead"
 
 
 def test_converter_quote_blocks_become_blockquotes():
@@ -168,6 +214,7 @@ def test_format_falls_back_to_plain_when_tags_would_overflow():
     out = tg._format_tg(pathological)
     assert len(out) <= 4096
     assert "<b>" not in out                   # plain, never a broken tag
+    assert "**" not in out                    # and never raw markdown
 
 
 # ---------------- parse_mode on the wire ----------------
@@ -201,6 +248,7 @@ def test_send_retries_plain_once_on_entity_rejection(monkeypatch):
     assert sends[0]["parse_mode"] == "HTML"
     assert "parse_mode" not in sends[1]
     assert "<b>" not in sends[1]["text"]             # retry went out plain
+    assert "**" not in sends[1]["text"]              # nor raw markdown
 
 
 def test_edit_retries_plain_once_on_entity_rejection(monkeypatch):
@@ -238,3 +286,115 @@ def test_tg_chat_uses_the_tg_assistant_persona(monkeypatch):
     assert "clean, warm, direct" in sys_prompt            # assistant voice rule
     assert "only inside post drafts" in sys_prompt        # X voice is scoped
     assert sys_prompt != chat_mod._system(cfg, "hello there")  # not the X voice
+
+
+# ---------------- v0.5.1: streaming flash artifacts ----------------
+
+def test_partial_edits_defer_incomplete_markers():
+    """Progressive edits render only COMPLETE segments: a half-emitted
+    **bold / fence / link / table row is deferred, never flashed raw."""
+    assert tg._format_tg("here is **bol", partial=True) == "here is "
+    assert tg._format_tg("a `code seg", partial=True) == "a "
+    assert tg._format_tg("see [docs](https://x", partial=True) == "see "
+    assert tg._format_tg("code:\n```py\nprint(1)", partial=True) == "code:\n"
+    assert tg._format_tg("table:\n| a | b", partial=True) == "table:\n"
+    assert tg._format_tg("table:\n| a | b |\n| 1 |", partial=True) \
+        == "table:\n<pre>a  b</pre>\n"
+    # deferred content reappears the moment the marker closes
+    assert tg._format_tg("here is **bold** now", partial=True) \
+        == "here is <b>bold</b> now"
+
+
+def test_stream_never_flashes_raw_markers(fake_api, monkeypatch):
+    """End-to-end over the wire: chunk splits INSIDE markdown markers — no
+    intermediate bubble/edit may contain literal **, ` or ##."""
+    monkeypatch.setattr(tg, "STREAM_EDIT_MIN_S", 0.0)
+    monkeypatch.setattr(tg, "STREAM_EDIT_EVERY", 1)
+    full = ("## Plan\n\n- first **key** idea\n- second `code` idea\n"
+            "- see [docs](https://x.com)")
+    mid = len(full) // 2
+    parts = [full[:mid // 2], full[mid // 2:mid], full[mid:]]
+    assert tg.send_stream(1, _chunks(*parts))["ok"]
+    wire = [p["text"] for m, p in fake_api.calls
+            if m in ("sendMessage", "editMessageText")]
+    assert wire and wire[-1] == tg._md_to_tg_html(full)  # final is complete
+    for text in wire:                       # every intermediate edit is clean
+        assert "**" not in text and "`" not in text and "##" not in text
+
+
+def test_stream_abort_delivers_clean_partial(fake_api):
+    def exploding():
+        yield "partial answer with an unbalanced **bold"
+        raise RuntimeError("boom")
+
+    r = tg.send_stream(1, exploding())
+    assert r["error"]
+    sent = fake_api.of("sendMessage")
+    assert sent and "**" not in sent[0]["text"]    # partial, but no raw marker
+    assert "unbalanced" in sent[0]["text"]        # complete words kept
+
+
+# ---------------- v0.5.1: the redesigned approval card ----------------
+
+def _draft(i: int, text: str, kind: str = "reply", **meta) -> dict:
+    return {"id": i, "kind": kind, "text": text, "meta": meta}
+
+
+def test_drafts_card_matches_the_v051_design():
+    """The user's exact complaint: · soup, [reply] brackets, mid-word cuts.
+    The card now quotes drafts VERBATIM in full, one block per draft."""
+    card = tg.drafts_card([
+        _draft(2321, "agents know this already anxiety needs a body, "
+                     "i just run the loop again",
+               target_author="naval", voice={"score": 100}),
+        _draft(2320, "i made myself into an agent that works while i sleep. "
+                     "my human just drinks coffee now",
+               target_author="naval", voice={"score": 85}),
+    ])
+    assert card == (
+        "⏳ 2 drafts waiting for approval\n"
+        "Replies drafted to @naval's recent posts:\n"
+        "\n"
+        "#2321 — voice 100%\n"
+        "“agents know this already anxiety needs a body, i just run the loop again”\n"
+        "\n"
+        "#2320 — voice 85%\n"
+        "“i made myself into an agent that works while i sleep. "
+        "my human just drinks coffee now”\n"
+        "\n"
+        "Reply /approve <id> or /reject <id>")
+    # no · soup, no brackets, no truncation dots, no mid-word cuts
+    assert "·" not in card and "[reply]" not in card and "…" not in card
+    # the wire version stays clean too (only <id> gets HTML-escaped)
+    wire = tg._format_tg(card)
+    assert "·" not in wire and "**" not in wire and "`" not in wire
+
+
+def test_drafts_card_mixed_kinds_show_per_draft_target():
+    card = tg.drafts_card([
+        _draft(30, "reply text to alice", target_author="alice",
+               voice={"score": 90}),
+        _draft(31, "a standalone post draft", kind="post",
+               voice={"score": 77}),
+    ])
+    assert "#30 — reply to @alice — voice 90%" in card   # mixed → per-draft
+    assert "#31 — voice 77%" in card                     # posts carry no target
+    assert "Waiting for your review:" in card
+
+
+def test_drafts_card_quotes_full_text_and_caps_the_page():
+    long_text = ("word " * 40).strip()          # 200 chars — fits verbatim
+    drafts = [_draft(1000 + i, f"{long_text} {i}", target_author="naval",
+                     voice={"score": 80}) for i in range(7)]
+    card = tg.drafts_card(drafts)
+    assert "7 drafts waiting" in card
+    assert f"“{long_text} 0”" in card                # full verbatim quote
+    assert "2 more in the queue — /drafts" in card   # page cap announced
+    assert tg.drafts_card([]) == "Nothing waiting — the approval queue is clear."
+
+
+def test_draft_card_quote_hard_cap_is_a_true_truncation():
+    huge = "x " * 500                                    # pathological /post
+    out = tg._quote(huge)
+    assert out.startswith("“") and out.endswith("…”")   # … only at true cuts
+    assert len(out) <= tg.QUOTE_HARD_CAP + 2           # “, ”, text, …

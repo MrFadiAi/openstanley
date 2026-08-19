@@ -129,7 +129,7 @@ def _reason(hour: int, minute: int, src: str, dt: datetime,
         spread = "no recent post"
     else:
         spread = _fmt_gap((dt - last).total_seconds() / 3600)
-    return f"{label} · {spread}"
+    return f"{label}, {spread}"
 
 
 def _score(base: float, dt: datetime, now: datetime,

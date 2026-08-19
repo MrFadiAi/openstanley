@@ -377,9 +377,9 @@ _LABELS = {
         "replies": "sent {n} repl(ies)",
         "voice_rejected": "voice lock rejected {n} draft(s)",
         "engage_rejected": "engage gate rejected {n} target(s)",
-        "mentions": "mentions: {handled} handled · {pending} pending",
+        "mentions": "mentions: {handled} handled, {pending} pending",
         "no_journal": "no reflections today",
-        "rules": "rules: {added} added · {retired} retired",
+        "rules": "rules: {added} added, {retired} retired",
         "no_rules": "no rule changes today",
         "strategy": "strategy",
         "approvals": "{n} draft(s) waiting for approval",
@@ -408,9 +408,9 @@ _LABELS = {
         "replies": "أُرسل {n} رداً",
         "voice_rejected": "رفض قفل الصوت {n} مسودة",
         "engage_rejected": "رفضت بوابة التفاعل {n} هدفاً",
-        "mentions": "الإشارات: {handled} عولجت · {pending} معلّقة",
+        "mentions": "الإشارات: {handled} عولجت، {pending} معلّقة",
         "no_journal": "لا تأملات اليوم",
-        "rules": "القواعد: {added} جديدة · {retired} متقاعدة",
+        "rules": "القواعد: {added} جديدة، {retired} متقاعدة",
         "no_rules": "لا تغييرات على القواعد اليوم",
         "strategy": "الاستراتيجية",
         "approvals": "{n} مسودة بانتظار اعتمادك",
@@ -482,7 +482,7 @@ def _lines(d: Digest, lang: str = "en") -> dict[str, list[str]]:
         learned_lines.append(L["rules"].format(added=ra.get("count", 0),
                                                retired=learned.get("rules_retired", 0)))
         if ra.get("latest"):
-            learned_lines.append(f"· {ra['latest']}")
+            learned_lines.append(f"{ra['latest']}")
     else:
         learned_lines.append(L["no_rules"])
     for su in learned.get("strategy_updates") or []:
@@ -493,7 +493,7 @@ def _lines(d: Digest, lang: str = "en") -> dict[str, list[str]]:
     pa = needs.get("pending_approvals") or {}
     if pa.get("count"):
         needs_lines.append(L["approvals"].format(n=pa["count"]))
-        needs_lines += [f"· “{p}”" for p in pa.get("previews") or []]
+        needs_lines += [f"“{p}”" for p in pa.get("previews") or []]
     else:
         needs_lines.append(L["no_approvals"])
     ap = needs.get("autopilot") or {}
@@ -543,9 +543,11 @@ def render_markdown(digest: Digest, lang: str = "en") -> str:
 
 
 def render_text(digest: Digest, lang: str = "en") -> str:
-    """Compact webhook rendering — emoji-headed plain lines, no markdown."""
+    """Compact webhook/Telegram rendering — emoji-headed plain lines, no
+    markdown, no `·` separators (v0.5.1: the middle dot renders as a box on
+    mobile TG)."""
     L = _LABELS.get(lang, _LABELS["en"])
-    out = [f"📰 {L['title']} · {digest.day}"]
+    out = [f"📰 {L['title']} — {digest.day}"]
     for key in ("did", "learned", "needs_you", "numbers", "tomorrow"):
         out.append(f"{_EMOJI[key]} {L[key]}")
         out.extend(_lines(digest, lang)[key])

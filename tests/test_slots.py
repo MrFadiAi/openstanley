@@ -179,7 +179,7 @@ def test_approve_uses_pick_slot_with_reason(monkeypatch):
     """Slotless drafts: approve schedules via the smart picker and persists
     the reason into meta (spy proves the call, hermetic — no real scoring)."""
     picked = _at(15, 0) + timedelta(days=1)
-    reason = "metrics peak 13:00 · 5h after last post"
+    reason = "metrics peak 13:00, 5h after last post"
     calls: list[str] = []
 
     def _spy(cfg, kind, now):

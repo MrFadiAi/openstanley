@@ -216,7 +216,7 @@ def test_render_text_compact():
     _seed_populated_day()
     d = digest_mod.build_digest(CFG, TODAY)
     text = digest_mod.render_text(d)
-    assert text.startswith(f"📰 OpenStanley daily digest · {TODAY}")
+    assert text.startswith(f"📰 OpenStanley daily digest — {TODAY}")
     assert "##" not in text          # no markdown syntax in the webhook body
     for head in ("✅ What I did", "🧠 What I learned", "⚠️ Needs you",
                  "📊 Numbers", "📅 Tomorrow"):

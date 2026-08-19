@@ -261,6 +261,70 @@ def test_engage_loop_all_rejected_calls_no_llm(monkeypatch):
     assert ids == []
 
 
+# ---------------- v0.5.1: per-author batch crowding cap ----------------
+
+def test_niche_batch_caps_two_replies_per_author(monkeypatch):
+    """The user's complaint: 5 drafts to @naval in ONE batch = spammy. The
+    cap keeps at most PER_AUTHOR_BATCH_CAP per author, walking past a
+    crowded author to fill the batch from the rest of the pool."""
+    _clean_db()
+    _style_topics(["building", "tools", "shipping"])
+    cfg = Config()
+    now = datetime.now()
+    # five healthy targets from ONE author + two from others
+    for i in range(5):
+        db.upsert_post({"x_id": f"naval{i}", "author_handle": "naval",
+                        "is_own": 0,
+                        "created_at": (now - timedelta(hours=1)).isoformat(
+                            timespec="seconds"),
+                        "text": f"naval take {i} on building tools",
+                        "likes": 350, "reposts": 80, "replies": 10,
+                        "impressions": 12000})
+    for j, who in enumerate(("alice", "bob")):
+        db.upsert_post({"x_id": f"{who}x", "author_handle": who, "is_own": 0,
+                        "created_at": (now - timedelta(hours=1)).isoformat(
+                            timespec="seconds"),
+                        "text": f"{who} on shipping tools and building",
+                        "likes": 300, "reposts": 60, "replies": 8,
+                        "impressions": 9000})
+
+    def ok_llm(cfg2, system, user, **kw):
+        return '{"reply": "sharp angle — answered with a number, no fluff"}'
+
+    monkeypatch.setattr(replies, "chat", ok_llm)
+    ids = replies.draft_niche_replies(cfg, limit=5)
+    assert len(ids) == 4                       # 2 naval + alice + bob
+    authors = [db.get_draft(i)["meta"]["target_author"] for i in ids]
+    assert authors.count("naval") == replies.PER_AUTHOR_BATCH_CAP
+    assert "alice" in authors and "bob" in authors
+
+
+def test_mention_batch_caps_two_replies_per_author(monkeypatch):
+    _clean_db()
+    cfg = Config()
+    with db.connect() as c:                    # five fresh mentions from ONE author
+        for i in range(5):
+            c.execute(
+                "INSERT INTO engagements (account_id, x_id, kind, author_handle, "
+                "author_name, text, status, created_at, seen_at) "
+                "VALUES (1, ?, 'mention', 'chatter', 'Chatter', ?, 'new', ?, ?)",
+                (f"m{i}", f"hey about those tools ({i})",
+                 (datetime.now() - timedelta(minutes=10)).isoformat(
+                     timespec="seconds"),
+                 datetime.now().isoformat(timespec="seconds")))
+
+    def ok_llm(cfg2, system, user, **kw):
+        return '{"reply": "sharp angle — answered with a number, no fluff"}'
+
+    monkeypatch.setattr(replies, "chat", ok_llm)
+    ids = replies.draft_replies(cfg, limit=8)
+    assert len(ids) == replies.PER_AUTHOR_BATCH_CAP
+    with db.connect() as c:                    # the rest stay 'new' for retry
+        (still,) = c.execute(
+            "SELECT COUNT(*) FROM engagements WHERE status='new'").fetchone()
+    assert int(still) == 3
+
+
 def test_meta_is_json_safe():
     _clean_db()
     cfg = Config()

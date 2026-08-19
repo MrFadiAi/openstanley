@@ -1,9 +1,15 @@
-"""Telegram frontend (v0.4.4) — reach OpenStanley from a chat app.
+"""Telegram frontend (v0.5.1) — reach OpenStanley from a chat app.
 
 The dashboard stays primary; Telegram is a SECOND frontend that mirrors and
 notifies: talk to OpenStanley (same chat engine, per-chat sessions), approve or
 reject drafts, read status/ideas/digest, and receive the daily digest plus
 "needs approval" cards the moment a loop drafts something.
+
+v0.5.1 (FIX_BRIEF_TG_OUTPUT_POLISH): output parity with the web agent — the
+markdown→HTML converter is total (no raw **, `, ##, tables or fences ever
+reach the chat), progressive stream edits render only complete segments,
+cards quote drafts verbatim in full (no previews, no `·` soup), and the
+engage loop caps replies per author per batch.
 
 Design constraints (from the brief):
   * works WITHOUT a token configured (disabled state) — activates when the
@@ -44,14 +50,13 @@ MAX_OUT_PER_MIN = 20         # outbound rate limit (drops beyond this)
 SESSION_CAP = 20             # messages remembered per TG chat
 DRAFTS_PAGE = 5              # /drafts previews
 IDEAS_PAGE = 5               # /ideas rows
-PREVIEW_CHARS = 90
 MSG_LIMIT = 4000             # Telegram hard limit is 4096 — clip under it
 TOKEN_MIN_LEN = 10           # anything shorter is not a real bot token
 
 HELP_TEXT = (
     "I'm OpenStanley — your AI Head of Content, now on Telegram.\n\n"
     "/status — active account, autopilot, health, bank, today's caps\n"
-    "/account — list accounts · /account <id> switches the active one\n"
+    "/account — list accounts; /account <id> switches the active one\n"
     "/ideas — top idea-bank angles\n"
     "/drafts — drafts waiting for your approval\n"
     "/approve <id> — approve a draft (it gets scheduled)\n"
@@ -128,27 +133,30 @@ def _entities_rejected(r: httpx.Response) -> bool:
         return False
 
 
-def _api_send_text(token: str, chat_id: int, text: str) -> httpx.Response:
+def _api_send_text(token: str, chat_id: int, text: str,
+                   partial: bool = False) -> httpx.Response:
     """sendMessage with HTML formatting; if Telegram rejects the entities,
-    retried ONCE with parse_mode removed — formatting must never cost
-    delivery."""
+    retried ONCE with parse_mode removed (plain, markers stripped) —
+    formatting must never cost delivery."""
     r = _api(token, "sendMessage",
-             {"chat_id": chat_id, "text": _format_tg(text), "parse_mode": "HTML"})
+             {"chat_id": chat_id, "text": _format_tg(text, partial=partial),
+              "parse_mode": "HTML"})
     if _entities_rejected(r):
-        r = _api(token, "sendMessage", {"chat_id": chat_id, "text": _clip(text)})
+        r = _api(token, "sendMessage",
+                 {"chat_id": chat_id, "text": _clip(_md_to_plain(text))})
     return r
 
 
-def _api_edit_text(token: str, chat_id: int, message_id: int,
-                   text: str) -> httpx.Response:
+def _api_edit_text(token: str, chat_id: int, message_id: int, text: str,
+                   partial: bool = False) -> httpx.Response:
     """editMessageText with the same formatting + plain-retry contract."""
     r = _api(token, "editMessageText",
              {"chat_id": chat_id, "message_id": message_id,
-              "text": _format_tg(text), "parse_mode": "HTML"})
+              "text": _format_tg(text, partial=partial), "parse_mode": "HTML"})
     if _entities_rejected(r):
         r = _api(token, "editMessageText",
                  {"chat_id": chat_id, "message_id": message_id,
-                  "text": _clip(text)})
+                  "text": _clip(_md_to_plain(text))})
     return r
 
 
@@ -162,18 +170,37 @@ def _clip(text: str, limit: int = MSG_LIMIT) -> str:
 # Hermes-style rich messages: bold labels, bullets, code, links — not walls of
 # emoji. HTML (not MarkdownV2) because it needs no escape-everything traps.
 # Contract: whatever the LLM emitted, the output must be something Telegram
-# accepts — stray & < > are escaped BEFORE tags are inserted, and unbalanced
-# markers stay literal instead of becoming half a tag.
+# accepts — stray & < > are escaped BEFORE tags are inserted, and the
+# conversion is TOTAL (v0.5.1, FIX_BRIEF_TG_OUTPUT_POLISH): unknown or
+# unbalanced markdown is stripped, never shown raw. Web-only shapes degrade:
+# `## Header` → bold line, tables → aligned <pre> block, nested lists → flat
+# `•` bullets, `---` rules dropped, zero-width chars never emitted, and `·`
+# (which renders as a box on mobile TG) never survives as a bullet/separator.
 
 TG_MSG_LIMIT = 4096            # Telegram's hard ceiling for one message
+BULLET = "•"                    # the house bullet — never the middle dot `·`
 
 _MD_CODE_BLOCK_RE = re.compile(r"```[a-zA-Z0-9_+-]*[ \t]*\n?(.*?)```", re.DOTALL)
 _MD_CODE_RE = re.compile(r"`([^`\n]+)`")
 _MD_BOLD_RE = re.compile(r"\*\*([^*\n]+)\*\*")
 _MD_ITALIC_RE = re.compile(r"\*(?!\s)([^*\n]+?)(?<!\s)\*")
+_MD_STRIKE_RE = re.compile(r"~~(?!\s)([^~\n]+?)(?<!\s)~~")
 _MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
+_MD_HEADER_RE = re.compile(r"^#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$")
+_MD_HEADER_BARE_RE = re.compile(r"^#{1,6}[ \t]*$")
+_MD_HR_RE = re.compile(r"^[ \t]*(?:-[ \t]*){3,}$|^[ \t]*(?:\*[ \t]*){3,}$"
+                       r"|^[ \t]*(?:_[ \t]*){3,}$")
 _MD_QUOTE_RE = re.compile(r"^&gt;[ \t]?")
-_MD_BULLET_RE = re.compile(r"^[-*][ \t]+")
+_TAG_UNWRAP_RE = re.compile(r"</?(?:b|i|s|u|code)\b[^>]*>")
+_MD_BULLET_RE = re.compile(r"^([ \t]*)(?:[-*+])[ \t]+")
+_MD_DOT_BULLET_RE = re.compile(r"^[ \t]*·[ \t]?")
+_MD_TABLE_ROW_RE = re.compile(r"^[ \t]*\|.*\|[ \t]*$")
+_MD_TABLE_SEP_RE = re.compile(
+    r"^[ \t]*\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)+\|?[ \t]*$")
+# zero-width chars render as boxes on mobile — stripped at the door
+_ZW_RE = re.compile("[" + "".join(map(chr, (0x200b, 0x200c, 0x200d, 0x2060,
+                                            0xfeff))) + "]")
+_TAG_RE = re.compile(r"</?(?:b|i|u|s|code|pre|a|blockquote)\b[^>]*>")
 
 _BLOCK_TAG = "\x00B{}\x00"     # placeholder tokens for stashed code (the
 _CODE_TAG = "\x00C{}\x00"      # \x00 byte never occurs in real message text)
@@ -183,18 +210,86 @@ def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _unescape(s: str) -> str:
+    return s.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+
+
+def _bulletize(m: re.Match) -> str:
+    """A markdown bullet → flat `• ` with (capped) indent for nesting depth."""
+    depth = len(m.group(1).expandtabs(2))
+    return ("  " * min(2, depth // 2)) + BULLET + " "
+
+
+def _line_html(line: str) -> str:
+    """One escaped line → TG line: headers bolded (hash dropped), HRs dropped,
+    bullets flattened to `• ` with the old `·` bullets normalised too."""
+    if _MD_HR_RE.match(line):
+        return ""
+    h = _MD_HEADER_RE.match(line)
+    if h:  # the line is bold as a whole — inner markers/tags would only nest
+        inner = _TAG_UNWRAP_RE.sub("", h.group(1).replace("**", "")).strip()
+        return f"<b>{inner}</b>"
+    if _MD_HEADER_BARE_RE.match(line):
+        return ""
+    line = _MD_BULLET_RE.sub(_bulletize, line)
+    return _MD_DOT_BULLET_RE.sub(BULLET + " ", line)
+
+
+def _table_pre(rows: list[str]) -> str:
+    """GFM table rows → one aligned <pre> block (separator row dropped,
+    columns padded, cells clipped at 40 so a wide table can't blow the 4096
+    ceiling). Never raw pipes."""
+    grid: list[list[str]] = []
+    for ln in rows:
+        if _MD_TABLE_SEP_RE.match(ln):
+            continue
+        cells = [c.strip()[:40] for c in ln.strip().strip("|").split("|")]
+        grid.append(cells)
+    if not grid:
+        return ""
+    width = max(len(r) for r in grid)
+    cols = [max((len(r[i]) if i < len(r) else 0) for r in grid)
+            for i in range(width)]
+    norm = ["  ".join((r[i] if i < len(r) else "").ljust(cols[i])
+                      for i in range(width)) for r in grid]
+    return "<pre>" + _esc("\n".join(norm)) + "</pre>"
+
+
 def _md_to_tg_html(text: str) -> str:
     """Markdown-ish LLM output → Telegram HTML. Converts **bold**, *italic*,
-    `code`, fenced ```blocks``` (→ <pre>, language tag dropped), [links](url),
-    > quote blocks (→ <blockquote>, post candidates keep their own voice) and
-    normalises -/* bullets to the house `·`. Everything else is escaped."""
-    blocks: list[str] = []
+    ~~strike~~, `code`, fenced ```blocks``` (→ <pre>, language tag dropped),
+    [links](url), ## headers (→ bold line), tables (→ aligned <pre>), >
+    quote blocks (→ <blockquote>, post candidates keep their own voice) and
+    flattens -/*/+ bullets to `• `. Total: any leftover marker is stripped,
+    so raw markdown symbols can never reach the chat."""
+    text = _ZW_RE.sub("", text or "").replace("\r\n", "\n").replace("\r", "\n")
 
-    def _stash_block(m: re.Match) -> str:
-        blocks.append(f"<pre>{_esc(m.group(1))}</pre>")
+    blocks: list[str] = []      # code fences + rendered tables, restored last
+
+    def _stash_block(html: str) -> str:
+        blocks.append(html)
         return _BLOCK_TAG.format(len(blocks) - 1)
 
-    text = _MD_CODE_BLOCK_RE.sub(_stash_block, text or "")
+    text = _MD_CODE_BLOCK_RE.sub(
+        lambda m: _stash_block(f"<pre>{_esc(m.group(1))}</pre>"), text)
+
+    # contiguous table rows → one aligned <pre>, stashed like code so escaping
+    # and the marker sweep can't touch it
+    src = text.split("\n")
+    kept: list[str] = []
+    i = 0
+    while i < len(src):
+        if _MD_TABLE_ROW_RE.match(src[i]) or _MD_TABLE_SEP_RE.match(src[i]):
+            tbl: list[str] = []
+            while i < len(src) and (_MD_TABLE_ROW_RE.match(src[i])
+                                    or _MD_TABLE_SEP_RE.match(src[i])):
+                tbl.append(src[i])
+                i += 1
+            kept.append(_stash_block(_table_pre(tbl)))
+            continue
+        kept.append(src[i])
+        i += 1
+    text = "\n".join(kept)
 
     codes: list[str] = []
 
@@ -208,38 +303,123 @@ def _md_to_tg_html(text: str) -> str:
     text = _MD_LINK_RE.sub(r'<a href="\2">\1</a>', text)
     text = _MD_BOLD_RE.sub(r"<b>\1</b>", text)
     text = _MD_ITALIC_RE.sub(r"<i>\1</i>", text)
-    for i, c in enumerate(codes):
-        text = text.replace(_CODE_TAG.format(i), c)
+    text = _MD_STRIKE_RE.sub(r"<s>\1</s>", text)
 
-    # quote lines → one <blockquote> per contiguous group; bullets → `· `
+    # quote lines → one <blockquote> per contiguous group; line shapes last
     src = text.split("\n")
     out: list[str] = []
     i = 0
     while i < len(src):
         q = _MD_QUOTE_RE.match(src[i])
         if not q:
-            out.append(_MD_BULLET_RE.sub("· ", src[i]))
+            out.append(_line_html(src[i]))
             i += 1
             continue
         group: list[str] = []
         while i < len(src) and (m := _MD_QUOTE_RE.match(src[i])):
-            group.append(_MD_BULLET_RE.sub("· ", src[i][m.end():]))
+            group.append(_line_html(src[i][m.end():]))
             i += 1
         out.append("<blockquote>" + "\n".join(group) + "</blockquote>")
     text = "\n".join(out)
 
+    # total-conversion sweep: unbalanced **/`/~~ markers are REMOVED, not
+    # shown raw. Stashed code (and fences/tables) are restored AFTER, so
+    # their literal contents keep their markers — that's what code means.
+    text = text.replace("**", "").replace("`", "").replace("~~", "")
+    for i, c in enumerate(codes):
+        text = text.replace(_CODE_TAG.format(i), c)
     for i, b in enumerate(blocks):
         text = text.replace(_BLOCK_TAG.format(i), b)
     return text
 
 
-def _format_tg(text: str) -> str:
+def _md_to_plain(text: str) -> str:
+    """Markdown → plain text (no tags, no markers) for the no-parse_mode
+    retry path: even the plain fallback must never show raw markdown."""
+    return _unescape(_TAG_RE.sub("", _md_to_tg_html(text)))
+
+
+# ---------------- streaming partials ----------------
+#
+# Progressive edits render only COMPLETE markdown segments: the tail from the
+# last unclosed marker is deferred to the next edit / the final edit, so a
+# half-emitted **bold or ```fence never flashes as literal symbols.
+
+
+def _last_unclosed(text: str) -> int | None:
+    """Position where the incomplete segment starts, or None. Markers pair
+    left-to-right (a closer clears its opener), so completed spans — even
+    several of them — are never mistaken for unclosed tails."""
+    fences = [m.start() for m in re.finditer(r"```", text)]
+    if len(fences) % 2 == 1:      # unterminated code fence dominates
+        return fences[-1]
+    opens: dict[str, int] = {}    # marker → position of its unclosed opener
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if text[i:i + 2] == "**":
+            if "**" in opens:
+                del opens["**"]
+            else:
+                opens["**"] = i
+            i += 2
+            continue
+        if ch == "`":
+            if "`" in opens:
+                del opens["`"]
+            else:
+                opens["`"] = i
+            i += 1
+            continue
+        if ch == "[":
+            j = text.find("]", i + 1)
+            if j == -1:                     # bracket never closed
+                opens["["] = i
+                i += 1
+                continue
+            if j + 1 < n and text[j + 1] == "(" and text.find(")", j + 2) == -1:
+                return i                    # [link](url — paren never arrived
+            i = j + 1
+            continue
+        if (ch == "*" and i + 1 < n and text[i + 1] not in " *"):
+            if "*" in opens:
+                if text[i - 1] != " ":      # closer shape (italic)
+                    del opens["*"]
+            else:
+                opens["*"] = i              # opener shape
+            i += 1
+            continue
+        i += 1
+    if opens:
+        return max(opens.values())          # hide the least content first
+    last_line = text.rsplit("\n", 1)[-1]
+    if not text.endswith("\n") and (last_line.count("|") >= 2
+                                    or last_line.lstrip().startswith("|")):
+        return len(text) - len(last_line)   # table row still being typed
+    return None
+
+
+def _defer_incomplete(text: str) -> str:
+    """Drop every trailing incomplete markdown segment (loop: cutting one can
+    expose an earlier unclosed marker)."""
+    while True:
+        cut = _last_unclosed(text)
+        if cut is None:
+            return text
+        text = text[:cut]
+
+
+def _format_tg(text: str, partial: bool = False) -> str:
     """One outbound text, send-ready: clipped at the SOURCE (so a clip can
     never cut a tag in half), markdown → HTML, and a plain-text fallback when
-    tag overhead would push the message past Telegram's 4096 ceiling."""
+    tag overhead would push the message past Telegram's 4096 ceiling.
+    partial=True (progressive stream edits) renders only complete markdown
+    segments — the incomplete tail waits for the next edit."""
     clipped = _clip(text)
-    html = _md_to_tg_html(clipped)
-    return html if len(html) <= TG_MSG_LIMIT else clipped
+    src = _defer_incomplete(clipped) if partial else clipped
+    html = _md_to_tg_html(src)
+    return html if len(html) <= TG_MSG_LIMIT else _clip(_md_to_plain(clipped))
 
 
 def _scrub(text: str, token: str) -> str:
@@ -325,7 +505,8 @@ def send_stream(chat_id: int, text_stream) -> dict:
                     pass
                 last_ping_t = now
             if msg_id is None and (len("".join(buf)) >= 24 or _stream_done(buf)):
-                sent = _send_and_capture(token, chat_id, "".join(buf))
+                sent = _send_and_capture(token, chat_id, "".join(buf),
+                                         partial=True)
                 if sent.get("ok"):
                     msg_id = sent["message_id"]
                     last_edit_t = time.time()
@@ -338,12 +519,13 @@ def send_stream(chat_id: int, text_stream) -> dict:
             if (chunks_since_edit >= STREAM_EDIT_EVERY
                     and elapsed >= STREAM_EDIT_MIN_S):
                 try:
-                    _api_edit_text(token, chat_id, msg_id, "".join(buf))
+                    _api_edit_text(token, chat_id, msg_id, "".join(buf),
+                                   partial=True)
                     last_edit_t = now
                     chunks_since_edit = 0
                 except Exception:  # noqa: BLE001 — a dropped edit is cosmetic
                     pass
-        # final edit — always the complete text
+        # final edit — always the complete text, fully converted
         full = "".join(buf)
         if msg_id is None:
             return _send_and_capture(token, chat_id, full)
@@ -356,12 +538,15 @@ def send_stream(chat_id: int, text_stream) -> dict:
     except Exception as e:  # noqa: BLE001 — streaming must never raise
         db.log("telegram", f"stream to chat {chat_id} aborted: "
                            f"{_scrub(str(e), token)}", level="warn")
-        # still try to deliver whatever we accumulated
+        # still try to deliver whatever we accumulated (partial: the text
+        # genuinely ends mid-segment here — defer what never closed)
         try:
             if buf:
                 if msg_id is None:
-                    return _send_and_capture(token, chat_id, "".join(buf))
-                _api_edit_text(token, chat_id, msg_id, "".join(buf))
+                    return _send_and_capture(token, chat_id, "".join(buf),
+                                             partial=True)
+                _api_edit_text(token, chat_id, msg_id, "".join(buf),
+                               partial=True)
         except Exception:  # noqa: BLE001
             pass
         return {"ok": False, "status_code": None,
@@ -374,8 +559,9 @@ def _stream_done(buf: list[str]) -> bool:
     return ("\n" in text) or ("." in text[-3:])
 
 
-def _send_and_capture(token: str, chat_id: int, text: str) -> dict:
-    r = _api_send_text(token, chat_id, text)
+def _send_and_capture(token: str, chat_id: int, text: str,
+                      partial: bool = False) -> dict:
+    r = _api_send_text(token, chat_id, text, partial=partial)
     ok = 200 <= r.status_code < 300
     mid = None
     if ok:
@@ -411,14 +597,7 @@ def notify_new_drafts(draft_ids: list[int]) -> dict:
     rows = [d for d in (db.get_draft(i) for i in draft_ids) if d]
     if not rows:
         return {"ok": False, "sent": 0, "chats": 0, "error": "no drafts"}
-    n = len(rows)
-    lines = [f"🟡 {n} draft needs your approval:" if n == 1
-             else f"🟡 {n} drafts need your approval:"]
-    lines += (f"· {draft_line(d, with_kind=True)}" for d in rows[:DRAFTS_PAGE])
-    if len(rows) > DRAFTS_PAGE:
-        lines.append(f"· +{len(rows) - DRAFTS_PAGE} more — /drafts")
-    lines.append("Reply /approve <id> or /reject <id> — or open the dashboard.")
-    return notify("\n".join(lines))
+    return notify(drafts_card(rows))
 
 
 # ---------------- inbound parsing + auth ----------------
@@ -513,7 +692,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
             clean += "\n\n" + extra
         else:      # LLM down → the terse fallback still says what ran
             clean += "\n" + "\n".join(
-                f"· {r['name']}: {'ok' if r.get('ok') else 'failed'}"
+                f"{BULLET} {r['name']}: {'ok' if r.get('ok') else 'failed'}"
                 for r in tool_results)
 
     # post candidates (markdown quote blocks) → real drafts, exactly what the
@@ -541,32 +720,73 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
 
 # ---------------- commands ----------------
 
-def _voice_chip(meta: dict) -> str:
-    v = meta.get("voice") or {}
-    if v.get("score") is not None:
-        return f"voice {v['score']}%"
-    vm = meta.get("voice_match")
-    return f"voice {vm}%" if vm is not None else "voice —"
+# ---------------- draft cards (v0.5.1 redesign) ----------------
+#
+# Structure over symbols (FIX_BRIEF_TG_OUTPUT_POLISH): full draft text
+# verbatim (drafts are ≤280 chars — they fit, nothing is cut), one block per
+# draft separated by a blank line, em-dash chips, no `·` soup, emoji only as
+# the leading section marker.
+
+QUOTE_HARD_CAP = 800            # safety ceiling for pathological /post text
 
 
-def _target_chip(d: dict) -> str:
+def _draft_head(d: dict, show_target: bool = True) -> str:
+    """'#2321 — reply to @naval — voice 100%': em-dash chips, never a dot.
+    show_target=False when the card's context line already names the author."""
     meta = d.get("meta") or {}
-    if d.get("kind") == "reply":
+    parts = [f"#{d['id']}"]
+    if show_target and d.get("kind") == "reply":
         who = meta.get("target_author") or meta.get("author")
-        return f"→ @{who}" if who else "→ reply"
-    if d.get("kind") == "quote":
-        q = meta.get("quote") or {}
-        return f"→ quoting @{q.get('author', '?')}"
-    return ""
+        if who:
+            parts.append(f"reply to @{who}")
+    v = meta.get("voice") or {}
+    score = v.get("score") if v.get("score") is not None else meta.get("voice_match")
+    if score is not None:
+        parts.append(f"voice {score}%")
+    return " — ".join(parts)
 
 
-def draft_line(d: dict, with_kind: bool = False) -> str:
-    text = " ".join((d.get("text") or "").split())
-    text = text if len(text) <= PREVIEW_CHARS else text[: PREVIEW_CHARS - 1] + "…"
-    head = f"**#{d['id']}**" + (f" [{d.get('kind') or 'post'}]" if with_kind else "")
-    chips = " · ".join(c for c in (_target_chip(d), _voice_chip(d.get("meta") or {}))
-                       if c)
-    return f"{head} “{text}”{(' · ' + chips) if chips else ''}"
+def _quote(text: str) -> str:
+    """Draft text quoted verbatim, whitespace collapsed to one line. The `…`
+    appears ONLY at a true truncation point (the safety cap, never drafts)."""
+    text = " ".join((text or "").split())
+    if len(text) > QUOTE_HARD_CAP:
+        text = text[: QUOTE_HARD_CAP - 1].rsplit(" ", 1)[0] + "…"
+    return f"“{text}”"
+
+
+def drafts_card(drafts: list[dict]) -> str:
+    """The approval card — ⏳ header, one context line, one block per draft
+    (head line + verbatim quote), /approve footer."""
+    drafts = [d for d in drafts if d]
+    if not drafts:
+        return "Nothing waiting — the approval queue is clear."
+    n = len(drafts)
+    lines = [f"⏳ {n} draft{'s' if n != 1 else ''} waiting for approval"]
+    authors = []
+    for d in drafts:
+        meta = d.get("meta") or {}
+        if d.get("kind") == "reply":
+            who = meta.get("target_author") or meta.get("author")
+            if who:
+                authors.append(who)
+    one_author = len(authors) == n and len(set(authors)) == 1 if authors else False
+    if one_author:
+        lines.append(f"Replies drafted to @{authors[0]}'s recent posts:")
+    elif len(authors) == n:
+        lines.append("Replies drafted to recent posts:")
+    else:
+        lines.append("Waiting for your review:")
+    lines.append("")
+    for d in drafts[:DRAFTS_PAGE]:
+        lines.append(_draft_head(d, show_target=not one_author))
+        lines.append(_quote(d.get("text") or ""))
+        lines.append("")
+    if n > DRAFTS_PAGE:
+        lines.append(f"{n - DRAFTS_PAGE} more in the queue — /drafts")
+        lines.append("")
+    lines.append("Reply /approve <id> or /reject <id>")
+    return "\n".join(lines).rstrip()
 
 
 def _cmd_status(cfg: Config) -> str:
@@ -581,20 +801,21 @@ def _cmd_status(cfg: Config) -> str:
     smoke = db.get_setting("smoke_last") or {}
     bank = ideas_mod.bank_health()
     caps = usage()
-    ap_line = (f"· **autopilot** on — phase {ap.get('phase')}, "
+    ap_line = (f"{BULLET} **Autopilot** on — phase {ap.get('phase')}, "
                f"next {ap.get('next_tick')}" if ap.get("enabled")
-               else "· **autopilot** off")
-    bank_line = f"· **idea bank** {bank['count']} idea(s)"
+               else f"{BULLET} **Autopilot** off")
+    bank_line = f"{BULLET} **Idea bank** {bank['count']} idea(s)"
     if (bank.get("last") or {}).get("at"):
-        bank_line += f" · replenished {bank['last']['at'][:10]}"
+        bank_line += f", replenished {bank['last']['at'][:10]}"
     lines = [
-        f"**Account #{db.active_account()} — @{handle}**"
-        f" ({me.get('followers', '?')} followers, mode={cfg.x.mode})",
+        f"🤖 Account #{db.active_account()} — @{handle}"
+        f" ({me.get('followers', '?')} followers, mode {cfg.x.mode})",
+        "",
         ap_line,
-        f"· **health check** {smoke.get('status', 'never')}",
+        f"{BULLET} **Health check** {smoke.get('status', 'never')}",
         bank_line,
-        f"· **today** {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} posts"
-        f" · {caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
+        f"{BULLET} **Today** {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} posts, "
+        f"{caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
     ]
     return "\n".join(lines)
 
@@ -604,13 +825,14 @@ def _cmd_account(args: str) -> str:
     parts = args.split()
     accounts = db.list_accounts()
     if not parts:
-        lines = ["**Accounts**"]
+        lines = [f"👤 Accounts ({len(accounts)})"]
         for a in accounts:
-            mark = "✅" if a["active"] else "·"
+            mark = "✅" if a["active"] else BULLET
             fol = f", {a['followers']} followers" if a["followers"] is not None else ""
             posts = f", {a['own_posts']} posts" if a["own_posts"] else ""
             lines.append(f"{mark} #{a['id']}. @{a['handle'] or 'no handle yet'}{fol}{posts}")
-        lines.append(f"\nActive: #{db.active_account()} — /account <id> switches.")
+        lines.append("")
+        lines.append(f"Active: #{db.active_account()} — /account <id> switches.")
         return "\n".join(lines)
     try:
         target = int(parts[0])
@@ -634,17 +856,12 @@ def _cmd_ideas() -> str:
     ideas = db.fresh_ideas(IDEAS_PAGE)
     if not ideas:
         return "Idea bank is empty — /study refills it."
-    return "**Idea bank — top angles**\n" + "\n".join(
-        f"· {idea['title']} (score {idea['score']})" for idea in ideas)
+    return ("💡 Idea bank — top angles\n\n" + "\n".join(
+        f"{BULLET} {idea['title']} (score {idea['score']})" for idea in ideas))
 
 
 def _cmd_drafts() -> str:
-    drafts = db.drafts_by_status("draft", DRAFTS_PAGE)
-    if not drafts:
-        return "Nothing waiting — the approval queue is clear."
-    return ("**Waiting for approval**\n"
-            + "\n".join(f"· {draft_line(d, with_kind=True)}" for d in drafts)
-            + "\n/approve <id> · /reject <id> — or open the dashboard.")
+    return drafts_card(db.drafts_by_status("draft", DRAFTS_PAGE))
 
 
 STUDY_LOOPS = ("import", "study", "scan", "learn")
@@ -669,22 +886,22 @@ def _cmd_study(cfg: Config) -> str:
                                              timeout=STUDY_LOOP_TIMEOUT_S) or {}
             except asyncio.TimeoutError:
                 ok_all = False
-                lines.append(f"· **{name}** timed out after {STUDY_LOOP_TIMEOUT_S}s")
+                lines.append(f"{BULLET} **{name}** timed out after {STUDY_LOOP_TIMEOUT_S}s")
                 continue
             except Exception as e:  # noqa: BLE001 — one loop failing must not drop the rest
                 ok_all = False
-                lines.append(f"· **{name}** failed — {e}")
+                lines.append(f"{BULLET} **{name}** failed — {e}")
                 continue
             if name == "import":
                 me = res.get("me") or {}
-                lines.append(f"· **import** {res.get('own', '?')} own + {res.get('niche', '?')} niche"
-                             + (f" · @{me.get('username')} ({me.get('followers')} followers)" if me else ""))
+                lines.append(f"{BULLET} **import** {res.get('own', '?')} own + {res.get('niche', '?')} niche posts"
+                             + (f", @{me.get('username')} ({me.get('followers')} followers)" if me else ""))
             elif name == "study":
-                lines.append(f"· **study** +{res.get('niche_new', 0)} niche · bank {res.get('bank', '?')}")
+                lines.append(f"{BULLET} **study** +{res.get('niche_new', 0)} niche, bank {res.get('bank', '?')}")
             elif name == "scan":
-                lines.append(f"· **scan** {res.get('posts_scanned', 0)} posts · voice {res.get('voice', '?')}")
+                lines.append(f"{BULLET} **scan** {res.get('posts_scanned', 0)} posts, voice {res.get('voice', '?')}")
             else:
-                lines.append(f"· **learn** refreshed {res.get('refreshed', 0)} posts")
+                lines.append(f"{BULLET} **learn** refreshed {res.get('refreshed', 0)} posts")
         return lines, ok_all
 
     try:
@@ -693,7 +910,7 @@ def _cmd_study(cfg: Config) -> str:
         return f"study chain failed: {e}"
     tail = ("\n\n✅ Brain updated — everything I know about you is fresh." if ok_all
             else "\n\n⚠️ Study finished with errors — see the lines above.")
-    return "\n".join(lines) + tail
+    return "🔍 Study report\n\n" + "\n".join(lines) + tail
 
 
 def _cmd_digest(cfg: Config) -> str:

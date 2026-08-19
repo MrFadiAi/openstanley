@@ -200,7 +200,7 @@ def test_status_command_reports_state(monkeypatch):
     text = fake.sent()[0][1]
     assert "@fadi" in text and "1234" in text
     assert "autopilot" in text.lower()
-    assert "<b>idea bank</b>" in text and str(bank) in text   # bold on the wire
+    assert "<b>Idea bank</b>" in text and str(bank) in text   # bold on the wire
     assert "dryrun" in text
 
 
@@ -221,27 +221,37 @@ def test_ideas_and_drafts_commands(monkeypatch):
     assert f"#{d1}" in drafts_text and f"#{d2}" in drafts_text
     assert "@alice" in drafts_text            # target chip
     assert "voice 82%" in drafts_text         # voice chip
+    # v0.5.1: drafts quoted VERBATIM in full — no previews, no truncation
+    assert "“a post draft that waits and waits for approval”" in drafts_text
+    assert "“solid question reply”" in drafts_text
+    assert "…" not in drafts_text and "·" not in drafts_text
 
 
 def test_command_replies_share_one_template(monkeypatch):
-    """Audit invariant (FIX_BRIEF_TG_STYLE): every list-bearing command uses
-    the same shape — a bold header line, `· ` bullet lines, ids bolded, and
-    no decorative emoji leading lines."""
+    """Audit invariant (v0.5.1 FIX_BRIEF_TG_OUTPUT_POLISH): every command
+    reply is clean Telegram — no literal markdown (`**`, backticks, `##`),
+    no `·` separators anywhere, and emoji only as leading section markers."""
     _enable()
     db.set_setting("me", {"username": "fadi", "followers": 10})
     db.add_idea("an idea", "angle", "one-liner", "study", 7.5)
     did = db.add_draft(text="a draft whose preview is long enough to read well here")
     fake = _FakeTGHttpx()
     monkeypatch.setattr(tg, "httpx", fake)
-    for i, cmd in enumerate(("/status", "/ideas", "/drafts")):
+    for i, cmd in enumerate(("/status", "/ideas", "/drafts", "/help",
+                             "/account")):
         tg.handle_update(CFG, _upd(i + 1, CHAT, cmd))
     texts = [t for _c, t in fake.sent()]
-    assert len(texts) == 3
+    assert len(texts) == 5
     for text in texts:
-        assert text.startswith("<b>")                   # bold header, on the wire
-        assert "\n· " in text                           # · bullet lines
-        assert not re.search(r"^[\U0001F300-\U0001FAFF]", text, re.MULTILINE)
-    assert f"<b>#{did}</b>" in texts[2]                 # ids are bolded
+        assert "**" not in text and "`" not in text and "##" not in text
+        assert "·" not in text                       # never a dot separator
+    assert f"#{did}" in texts[2]                     # draft id on the wire
+    # emoji appear ONLY as the leading section marker (header line)
+    emoji_re = re.compile(r"^[\U0001F300-\U0001FAFF⏳]")
+    for text in texts[:3]:
+        lines = [ln for ln in text.splitlines() if ln.strip()]
+        headed = [i for i, ln in enumerate(lines) if emoji_re.match(ln)]
+        assert headed == [0], lines                   # header only, nowhere else
 
 
 def test_digest_command_renders_today(monkeypatch):
@@ -680,6 +690,27 @@ def test_agent_create_loop_enqueues_tg_card(monkeypatch):
 
     out = asyncio.run(scenario())
     assert out["drafts"] == 1 and cards == [[d]]
+
+
+def test_new_draft_card_on_the_wire_is_the_v051_design(monkeypatch):
+    """notify_new_drafts end-to-end: the card the owner actually receives
+    quotes the drafts verbatim, no · soup, no truncation."""
+    _enable()
+    long_reply = ("agents know this already anxiety needs a body, "
+                  "i just run the loop again")
+    d1 = db.add_draft(text=long_reply, kind="reply",
+                      meta={"target_author": "naval", "reply_to_x_id": "x1",
+                            "voice": {"score": 100, "checked": True}})
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    r = tg.notify_new_drafts([d1])
+    assert r["ok"] and r["sent"] == 1
+    text = fake.sent()[0][1]
+    assert text.startswith("⏳ 1 draft waiting for approval")
+    assert "Replies drafted to @naval's recent posts:" in text
+    assert f"“{long_reply}”" in text          # verbatim, in full
+    assert f"#{d1} — voice 100%" in text
+    assert "·" not in text and "…" not in text and "**" not in text
 
 
 # ---------------- settings API + test endpoint ----------------

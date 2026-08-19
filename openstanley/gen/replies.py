@@ -29,6 +29,11 @@ Rules:
 - Add value: answer, sharpen, or playfully challenge. Never just "Great post!".
 - < 200 chars. No hashtags. Return STRICT JSON: {{"reply": "..."}}"""
 
+# v0.5.1 (FIX_BRIEF_TG_OUTPUT_POLISH): one engage batch may draft at most
+# this many replies to the SAME author — five drafts to @naval in a single
+# batch reads as spam to the owner and as pile-on to the target.
+PER_AUTHOR_BATCH_CAP = 2
+
 NICHE_REPLY_SYSTEM = """You are the account owner engaging with their niche on X.
 {voice}
 
@@ -86,8 +91,12 @@ def draft_replies(cfg: Config, limit: int = 8,
     if not rows:
         return []
     ids = []
+    per_author: dict[str, int] = {}   # crowding cap — author → drafts so far
     for e in rows:
         e = dict(e)
+        author = e["author_handle"] or ""
+        if per_author.get(author, 0) >= PER_AUTHOR_BATCH_CAP:
+            continue  # stays 'new' — the next batch can still pick it up
         try:
             raw = chat(cfg.llm,
                        brain_mod.brain_context() + "\n\n" +
@@ -115,6 +124,7 @@ def draft_replies(cfg: Config, limit: int = 8,
                           "WHERE id=? AND account_id=?",
                           (did, e["id"], acct))
             ids.append(did)
+            per_author[author] = per_author.get(author, 0) + 1
         except LLMError as err:
             db.log("engage", f"reply draft failed: {err}", level="error")
     db.log("engage", f"drafted {len(ids)} replies")
@@ -174,7 +184,23 @@ def draft_niche_replies(cfg: Config, limit: int = 3,
     """
     candidates = _pick_niche_targets(cfg, limit=limit * 3, acct=acct)
     kept, _rejected = engage_gate.filter_targets(cfg, candidates, datetime.now())
-    targets = kept[:limit]
+    # crowding cap: walk the ranked list, take at most PER_AUTHOR_BATCH_CAP
+    # targets per author, skip past a crowded author to fill the batch
+    targets: list[tuple[dict, object]] = []
+    per_author: dict[str, int] = {}
+    skipped = 0
+    for t, tscore in kept:
+        author = t.get("author_handle") or ""
+        if per_author.get(author, 0) >= PER_AUTHOR_BATCH_CAP:
+            skipped += 1
+            continue
+        per_author[author] = per_author.get(author, 0) + 1
+        targets.append((t, tscore))
+        if len(targets) >= limit:
+            break
+    if skipped:
+        db.log("engage", f"per-author cap: skipped {skipped} target(s) — "
+                         f"max {PER_AUTHOR_BATCH_CAP} replies per author per batch")
     if not targets:
         db.log("engage", "no niche targets worth a reply right now "
                          f"(gate kept 0 of {len(candidates)})")
