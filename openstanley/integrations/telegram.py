@@ -39,7 +39,7 @@ from typing import Optional
 import httpx
 
 from ..core import db
-from ..core.config import Config
+from ..core.config import Config, ROOT
 
 API_URL = "https://api.telegram.org/bot{token}/{method}"
 POLL_TIMEOUT_S = 25          # Telegram long-poll window
@@ -52,6 +52,9 @@ DRAFTS_PAGE = 5              # /drafts previews
 IDEAS_PAGE = 5               # /ideas rows
 MSG_LIMIT = 4000             # Telegram hard limit is 4096 — clip under it
 TOKEN_MIN_LEN = 10           # anything shorter is not a real bot token
+
+FILE_URL = "https://api.telegram.org/file/bot{token}/{path}"
+MAX_IMAGE_BYTES = 5 * 1024 * 1024   # matches the /api/media upload cap
 
 HELP_TEXT = (
     "I'm OpenStanley — your AI Head of Content, now on Telegram.\n\n"
@@ -78,6 +81,9 @@ _state: dict = {
 _denied_chats: set[int] = set()          # strangers already refused once
 _sessions: dict[int, list[dict]] = {}    # chat id → [{role, content}, …]
 _rate_times: deque[float] = deque()      # send timestamps (rate limiter)
+
+MEDIA_DIR = ROOT / "data" / "media"   # same folder /api/media writes to; monkeypatched in tests
+_card_map: dict[int, dict[int, list[int]]] = {}  # chat → card message_id → previewed draft ids
 
 
 # ---------------- settings ----------------
@@ -461,10 +467,50 @@ def send_message(chat_id: int, text: str) -> dict:
         if not ok:
             db.log("telegram", f"sendMessage to chat {chat_id} failed "
                                f"(HTTP {r.status_code})", level="warn")
-        return {"ok": ok, "status_code": r.status_code,
+        mid = None
+        if ok:
+            try:
+                mid = int(r.json().get("result", {}).get("message_id"))
+            except Exception:  # noqa: BLE001
+                mid = None
+        return {"ok": ok, "status_code": r.status_code, "message_id": mid,
                 "error": None if ok else r.text[:200]}
     except Exception as e:  # noqa: BLE001 — sending must never take the caller down
         db.log("telegram", f"sendMessage to chat {chat_id} error: "
+                           f"{_scrub(str(e), token)}", level="warn")
+        return {"ok": False, "status_code": None,
+                "error": _scrub(str(e), token)[:200]}
+
+
+def send_photo(chat_id: int, image_name: str, caption: str = "") -> dict:
+    """One outbound photo/document. Same contract as send_message: rate-
+    limited, never raises. GIFs go as documents (TG won't render them as
+    photos); anything else as sendPhoto."""
+    token = bot_token()
+    if not token:
+        return {"ok": False, "status_code": None, "error": "no bot token"}
+    path = MEDIA_DIR / image_name
+    if not path.exists():
+        return {"ok": False, "status_code": None, "error": "no such media file"}
+    if not _rate_allow():
+        db.log("telegram", f"rate limit hit — photo to chat {chat_id} dropped",
+               level="warn")
+        return {"ok": False, "status_code": None, "error": "rate limited"}
+    method = "sendDocument" if image_name.lower().endswith(".gif") else "sendPhoto"
+    field = "document" if method == "sendDocument" else "photo"
+    try:
+        r = httpx.post(API_URL.format(token=token, method=method),
+                       files={field: (image_name, path.read_bytes())},
+                       data={"chat_id": chat_id, "caption": _clip(caption)},
+                       timeout=HTTP_TIMEOUT_S)
+        ok = 200 <= r.status_code < 300
+        if not ok:
+            db.log("telegram", f"{method} to chat {chat_id} failed "
+                               f"(HTTP {r.status_code})", level="warn")
+        return {"ok": ok, "status_code": r.status_code,
+                "error": None if ok else r.text[:200]}
+    except Exception as e:  # noqa: BLE001
+        db.log("telegram", f"{method} to chat {chat_id} error: "
                            f"{_scrub(str(e), token)}", level="warn")
         return {"ok": False, "status_code": None,
                 "error": _scrub(str(e), token)[:200]}
@@ -573,13 +619,21 @@ def _send_and_capture(token: str, chat_id: int, text: str,
             "error": None if ok else r.text[:200]}
 
 
-def notify(text: str) -> dict:
+def notify(text: str, card_drafts: list[int] | None = None) -> dict:
     """Broadcast to every allowed chat (digest cron + approval cards).
-    Rate-limited per message; failures are logged, never raised."""
+    Rate-limited per message; failures are logged, never raised.
+    card_drafts: when set, the sent card's message_id is recorded for
+    reply-with-photo targeting."""
     chats = allowed_chats()
     if not is_enabled():
         return {"ok": False, "sent": 0, "chats": 0, "error": "telegram disabled"}
-    sent = sum(1 for c in chats if send_message(c, text)["ok"])
+    sent = 0
+    for c in chats:
+        r = send_message(c, text)
+        if r["ok"]:
+            sent += 1
+            if card_drafts is not None and r.get("message_id"):
+                _card_map.setdefault(c, {})[r["message_id"]] = list(card_drafts)
     return {"ok": sent > 0, "sent": sent, "chats": len(chats), "error": None}
 
 
@@ -591,13 +645,26 @@ def notify_bg(text: str) -> None:
 
 
 def notify_new_drafts(draft_ids: list[int]) -> dict:
-    """Compact 'needs approval' card for drafts a loop just created."""
+    """Compact 'needs approval' card for drafts a loop just created.
+    Drafts with an image get their photo pushed right after the text card,
+    so the human SEES the visual before /approve."""
     if not draft_ids:
         return {"ok": False, "sent": 0, "chats": 0, "error": "no drafts"}
     rows = [d for d in (db.get_draft(i) for i in draft_ids) if d]
     if not rows:
         return {"ok": False, "sent": 0, "chats": 0, "error": "no drafts"}
-    return notify(drafts_card(rows))
+    previewed = [d["id"] for d in rows[:DRAFTS_PAGE]]
+    result = notify(drafts_card(rows), card_drafts=previewed)
+    for d in rows[:DRAFTS_PAGE]:
+        if not d.get("image"):
+            continue
+        caption = (f"draft #{d['id']} — {(d.get('text') or '')[:180]}\n"
+                   f"reply /approve {d['id']} or /reject {d['id']}")
+        for chat in allowed_chats():
+            if send_photo(chat, d["image"], caption)["ok"]:
+                continue
+            send_message(chat, f"draft #{d['id']} (image attached — view it in Inbox)")
+    return result
 
 
 # ---------------- inbound parsing + auth ----------------

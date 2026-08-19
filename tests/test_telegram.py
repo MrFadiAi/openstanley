@@ -83,9 +83,13 @@ class _FakeTGHttpx:
         self.status = status
         self.on_exhausted = on_exhausted
 
-    def post(self, url, json=None, timeout=None, **kw):  # noqa: A002
+    def post(self, url, json=None, timeout=None, files=None, data=None, **kw):  # noqa: A002
         method = url.rsplit("/", 1)[-1]
-        self.calls.append((url, method, dict(json or {})))
+        params = dict(json or {}) if json else dict(data or {})
+        if files:
+            # multipart (sendPhoto/sendDocument): record the filename
+            params["_file"] = list(files.values())[0][0]
+        self.calls.append((url, method, params))
         if method == "getUpdates":
             if self.status != 200:  # e.g. 401 → the bad-token path
                 return _R(self.status, {"ok": False})
@@ -94,12 +98,17 @@ class _FakeTGHttpx:
             if self.on_exhausted:
                 self.on_exhausted()
             return _R(200, {"ok": True, "result": []})
-        return _R(self.status, {"ok": True})
+        return _R(self.status, {"ok": True, "result": {"message_id": 4242}})
 
     def sent(self) -> list[tuple[int, str]]:
         """(chat_id, text) of every sendMessage the fake saw."""
         return [(p.get("chat_id"), p.get("text", ""))
                 for _u, m, p in self.calls if m == "sendMessage"]
+
+    def media_sends(self) -> list[tuple[str, int, str, str]]:
+        """(method, chat_id, caption, filename) of every multipart send."""
+        return [(m, p.get("chat_id"), p.get("caption", ""), p.get("_file", ""))
+                for _u, m, p in self.calls if m in ("sendPhoto", "sendDocument")]
 
 
 def _enable(token: str = "700:AAHtest-token", chats: list[int] | None = None) -> None:
@@ -743,3 +752,63 @@ def test_settings_mask_token_and_test_endpoint(monkeypatch):
 
     db.set_setting("tg_allowed_chats", [])
     assert client.post("/api/telegram/test").status_code == 400
+
+
+# ---------------- outbound media (v0.6 round-trip) ----------------
+
+
+def _img_draft(text="media draft text") -> int:
+    d = db.add_draft(text=text, acct=1)
+    db.update_draft(d, image="media_test_photo.png", acct=1)
+    return d
+
+
+def test_card_with_image_sends_photo(tmp_path, monkeypatch):
+    _enable()
+    (tmp_path / "media_test_photo.png").write_bytes(b"\x89PNG fake")
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._card_map.clear()
+    d = _img_draft()
+    r = tg.notify_new_drafts([d])
+    assert r["ok"]
+    sends = fake.media_sends()
+    assert len(sends) == 1
+    method, chat, caption, fname = sends[0]
+    assert method == "sendPhoto" and chat == CHAT
+    assert fname == "media_test_photo.png"
+    assert f"#{d}" in caption  # draft id appears in the caption
+
+
+def test_card_gif_sent_as_document(tmp_path, monkeypatch):
+    _enable()
+    (tmp_path / "media_test.gif").write_bytes(b"GIF fake")
+    d = db.add_draft(text="gif draft", acct=1)
+    db.update_draft(d, image="media_test.gif", acct=1)
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg.notify_new_drafts([d])
+    sends = fake.media_sends()
+    assert sends and sends[0][0] == "sendDocument"
+
+
+def test_sendphoto_failure_falls_back_to_text(tmp_path, monkeypatch):
+    _enable()
+    (tmp_path / "media_test_photo.png").write_bytes(b"x")
+
+    class FailPhoto(_FakeTGHttpx):
+        def post(self, url, json=None, timeout=None, files=None, data=None, **kw):  # noqa: A002
+            if url.endswith("/sendPhoto"):
+                return _R(400, {"ok": False, "description": "Bad Request"})
+            return super().post(url, json=json, timeout=timeout, files=files,
+                                data=data, **kw)
+
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = FailPhoto()
+    monkeypatch.setattr(tg, "httpx", fake)
+    r = tg.notify_new_drafts([_img_draft()])
+    assert r["ok"]  # card still delivered
+    texts = " ".join(t for _c, t in fake.sent())
+    assert "image attached" in texts
