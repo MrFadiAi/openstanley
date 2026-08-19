@@ -1479,8 +1479,9 @@ async def delete_account_ep(account_id: int):
     if not remaining:
         raise HTTPException(409, "cannot delete the only account")
     from ..x.client import resolve_cookies  # cookies never enter the archive
+    from ..gen import brain as brain_mod
     handle = account["handle"] or f"account-{account_id}"
-    archive_dir = ROOT / "data" / "accounts" / \
+    archive_dir = brain_mod.ACCOUNTS_ROOT / \
         f"archive-{handle}-{datetime.now().strftime('%Y%m%d')}"
     archive_dir.mkdir(parents=True, exist_ok=True)
     dump = db.dump_account(account_id)
@@ -1501,7 +1502,7 @@ async def delete_account_ep(account_id: int):
         _rebuild_agent()
     db.log("accounts", f"archived + removed account #{account_id} (@{handle}) "
                        f"→ {archive_dir.name}")
-    return {"ok": True, "archived_to": str(archive_dir.relative_to(ROOT)),
+    return {"ok": True, "archived_to": str(archive_dir),
             "active_account_id": db.active_account()}
 
 

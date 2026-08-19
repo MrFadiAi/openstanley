@@ -25,3 +25,18 @@ os.environ.setdefault("OPENSTANLEY_NO_TELEGRAM", "1")
 os.environ.setdefault("OPENSTANLEY_TEST_DB", os.path.join(os.path.dirname(__file__), "_data", "test.db"))
 # v0.4.2 digest files land in the test sandbox, never the real data/digests
 os.environ.setdefault("OPENSTANLEY_DIGEST_DIR", os.path.join(os.path.dirname(__file__), "_data", "digests"))
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _accounts_root_sandbox(tmp_path, monkeypatch):
+    """v0.5.0: EVERY test gets a sandboxed data/accounts root — no test may
+    ever read or write the install's real per-account brains (a test creating
+    or deleting accounts through the API previously archived/moved REAL
+    dirs). Tests that exercise the legacy migration patch ROOT consistently
+    on top of this and are unaffected."""
+    from openstanley.gen import brain
+    monkeypatch.setattr(brain, "ACCOUNTS_ROOT", tmp_path / "accounts")
+    yield

@@ -394,7 +394,7 @@ def test_api_delete_account_archives(client, tmp_path, monkeypatch):
     r = client.delete(f"/api/accounts/{a2}")
     assert r.status_code == 200
     arch = Path(r.json()["archived_to"])
-    assert (ROOT / arch / "dump.json").exists()
+    assert (arch / "dump.json").exists()
     r = client.delete("/api/accounts/1")
     assert r.status_code == 409
     assert db.get_account(a2) is None

@@ -83,6 +83,18 @@ def test_full_v03_pipeline():
     patch_fakes()
     db.set_setting("style_profile", None)
     db.set_setting("voice_profile", None)
+    # the ideas chain mines the ACTIVE account's brain (journal insights +
+    # strategy statements) — seed our own so the bank floor is deterministic
+    # (pre-v0.5 this test silently leaned on the REAL install's journal)
+    from openstanley.gen import brain as brain_mod
+    brain_mod.ensure()
+    brain_mod.journal_append("reflect:learn",
+                             "short posts with a number beat long explainers",
+                             ["learned R1"])
+    p = brain_mod.brain_dir() / "strategies.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "- (none yet — the learn loop will fill these from real metrics)",
+        "- contrarian one-liners drive the most replies"), encoding="utf-8")
 
     cfg = Config()
     cfg.agent.daily_draft_target = 3
