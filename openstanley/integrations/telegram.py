@@ -1056,7 +1056,7 @@ def post_draft_tg(cfg: Config, text: str) -> str:
 # ---------------- update dispatch ----------------
 
 def _download_tg_photo(token: str, file_id: str) -> bytes:
-    """Largest photo → bytes. Two calls: getFile → GET file. Raises on any
+    """file_id → bytes. Two calls: getFile → GET file. Raises on any
     failure — the caller turns it into a human message."""
     r = _api(token, "getFile", {"file_id": file_id})
     if not (200 <= r.status_code < 300):
@@ -1074,6 +1074,8 @@ def _save_tg_photo(token: str, msg: dict) -> str:
     """Download the largest photo size and store it in MEDIA_DIR with the
     standard media_<ts>_<hex> name. Returns the stored name."""
     sizes = msg.get("photo") or []
+    if not sizes:  # _handle_photo only calls us when photo is truthy; belt+braces
+        raise ValueError("no photo sizes in message")
     biggest = max(sizes, key=lambda s: s.get("file_size") or 0)
     if (biggest.get("file_size") or 0) > MAX_IMAGE_BYTES:
         raise ValueError(f"photo too large (max {MAX_IMAGE_BYTES // (1024*1024)}MB)")
