@@ -1,34 +1,44 @@
 # Roadmap
 
-## v0.1 ✅ (done)
-- Dry-run + cookie + api X modes; import; voice rubric; idea bank; drafts (temp ladder);
-  reply drafting; approval-gated scheduler; analytics; dashboard; tests.
+> History lives in PROGRESS.md (one line per ship). This file is the plan forward.
 
-## v0.2 (next — informed by competitive research, docs/references/)
-- [x] Real-X onboarding wizard (cookie paste validation + health check) ✅ 2026-08-18
-- [x] Safety layer: daily caps + jittered delays + cap-reschedule (cookie mode) ✅ 2026-08-18
-- [x] Fixed APScheduler bug: cron jobs crashed in worker thread (ensure_future) ✅ 2026-08-18
-- [x] OpenStanley-parity UI: chat-first Write screen ("Ask OpenStanley"), Content Calendar,
-      X Strategy one-pager, Insights, sidebar layout (from real app screenshots) ✅ 2026-08-18
-- [x] Chat agent with live context (voice + ideas + drafts + analytics) + quick-action chips ✅
-- [ ] Pin `twikit==2.3.3` (research shows it's maintenance-fragile — updates can break)
-- [ ] Performance prediction score before publish (Tweet Hunter idea) — LLM rates each
-      draft 0-10 for reply-likelihood + on-voice fit; shown in dashboard
-- [ ] Media: image attach (twikit upload_media / media upload v2) — 2x algorithm boost
-- [ ] Thread composer UI with per-tweet editing (Typefully idea)
-- [ ] "Inspiration" tab: remixable viral posts from niche, not just abstract ideas (Taplio idea)
-- [ ] Voice-note → post (whisper/ASR → draft) — OpenStanley's signature input
-- [ ] Weekly digest as a dashboard card + markdown export
-- [ ] Post time optimizer (learn best hours from own metrics)
+## Shipped (condensed)
 
-## v0.3
-- [ ] Thread composer UI with per-tweet editing
-- [ ] "Steal this hook" — pattern library extracted from niche winners
-- [ ] A/B variants: approve 2 versions, alternate slots, compare in learn loop
-- [ ] DM inbox triage (read-only)
+- **v0.1–0.2** ✅ 2026-08-18 — dry-run/cookie/api X modes, onboarding wizard,
+  safety caps + jittered delays, chat-first Write screen (SSE streaming, tool
+  calls), Algorithm Score, Calendar, Ideas, Strategy, Insights, bilingual AR/EN,
+  deep-scan style profile. `twikit==2.3.3` pinned.
+- **v0.3.x** ✅ 2026-08-19 — cookie auto-heal via Brave CDP, autopilot
+  (study→create→engage→learn, publish never auto), real metrics ground truth,
+  live smoke self-check, engage quality gate, mention inbox, voice lock,
+  smart slots, daily digest, self-replenishing idea bank.
+- **v0.4.x** ✅ 2026-08-19 — Telegram second frontend (chat, /status /ideas
+  /drafts /approve /post /digest, approval cards, digest push).
+- **v0.5.0** ✅ 2026-08-19 — multi-account: account registry + per-account DB
+  scoping, per-account brains/data dirs, loops pin the active account,
+  AccountSwitcher UI + Connect bootstrap, TG /account. Rename → OpenStanley.
+- **v0.5.1** ✅ 2026-08-19 — TG output polish (web-agent parity), bare-token
+  cookie paste on every cookie surface (no JSON required), bootstrap cookie
+  validation with auto-heal disabled.
+
+## Next up (v0.6 candidates, priority order)
+
+1. **Media/images end-to-end** — image attach on drafts (twikit
+   `upload_media` / media upload v2), thumbnails in Inbox/TG approval cards,
+   image-aware Algorithm Score (media factor already scored). Biggest single
+   engagement lever ("2x algorithm boost").
+2. **Thread composer** — Typefully-style multi-tweet editing, per-tweet
+   voice-lock, thread scheduling in Calendar.
+3. **A/B variants** — approve 2 versions of a draft, alternate slots,
+   compare in the learn loop.
+4. **Voice-note → post** — whisper/ASR input → draft (Stanley's signature
+   input mode).
+5. **Inspiration tab** — remixable viral posts from niche (not just abstract
+   ideas); "steal this hook" pattern library.
 
 ## Later / ideas
-- [ ] Browser-extension cookie grabber
-- [ ] Multi-account support
-- [ ] Auto-engagement budget (max N replies/day, cool-downs) for cookie mode safety
-- [ ] Export/import full state (JSON bundle)
+
+- DM inbox triage (read-only)
+- Browser-extension cookie grabber
+- Export/import full state (JSON bundle)
+- Media generation (inline image gen for drafts)

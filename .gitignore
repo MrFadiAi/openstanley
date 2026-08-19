@@ -10,3 +10,9 @@ web/.omc/
 
 # runtime logs
 data/server.log
+
+# runtime state — written by the app/test runs, never commit
+data/config.toml
+data/harness/
+data/xstanley.db*
+tests/_data/
