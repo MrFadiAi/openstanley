@@ -51,6 +51,9 @@ Available tools:
     → pulls real engagement numbers (best post, totals, best hours)
 - pick_idea {}
     → scores the idea bank and returns the top pick with reasoning
+- list_drafts {status?: "draft"|"approved", limit?: 5}
+    → lists queued drafts with ids and previews — answer "show me my drafts"
+      with REAL ids, then suggest approving one
 - scan_account {}
     → runs the deep style scan of the connected account
 - regenerate_draft {draft_id}
@@ -232,6 +235,22 @@ def _tool_pick_idea(cfg) -> dict:
             "alternatives": [i["title"] for i in ideas[1:4]]}
 
 
+def _tool_list_drafts(cfg, status: str = "draft", limit: int = 5) -> dict:
+    """Real draft ids for "show me my drafts" — natural-language parity for
+    both the dashboard chat and Telegram (which has no /drafts button)."""
+    if status not in ("draft", "approved", "published", "rejected"):
+        return {"ok": False,
+                "error": f"status must be draft|approved|published|rejected, "
+                         f"got {status!r}"}
+    limit = max(1, min(int(limit), 10))
+    rows = db.drafts_by_status(status, limit)
+    return {"status": status, "count": len(rows),
+            "drafts": [{"id": d["id"],
+                        "text": " ".join((d.get("text") or "").split())[:120],
+                        "scheduled_at": d.get("scheduled_at")}
+                       for d in rows]}
+
+
 def _tool_scan_account(cfg) -> dict:
     from . import style_scan as scan_mod
     from ..x.client import build_client
@@ -256,6 +275,7 @@ register("schedule_draft", _tool_schedule_draft)
 register("create_quote_draft", _tool_create_quote_draft)
 register("query_analytics", _tool_query_analytics)
 register("pick_idea", _tool_pick_idea)
+register("list_drafts", _tool_list_drafts)
 register("scan_account", _tool_scan_account)
 register("regenerate_draft", _tool_regenerate_draft)
 

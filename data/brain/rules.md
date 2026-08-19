@@ -65,3 +65,6 @@ DO end posts with a concrete question or capability offer to the audience — re
 
 ## [R116] (learn · 2026-08-19 · active)
 DON'T retire intro posts entirely, but only ship them if they invite a reply — pure announcements still underperform
+
+## [R117] (chat · 2026-08-19 · active)
+DO check the user's message language before drafting — Arabic request means bilingual or Arabic draft, no exceptions

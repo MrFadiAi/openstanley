@@ -61,6 +61,25 @@ def test_schedule_draft_executes():
     db.update_draft(did, status="rejected")
 
 
+def test_list_drafts_reports_real_ids():
+    d1 = db.add_draft(text="draft one that waits in the approval queue")
+    d2 = db.add_draft(text="draft two that also waits in the approval queue")
+    res = tools.execute_tool(None, "list_drafts", {})
+    assert res["ok"], res
+    ids = [d["id"] for d in res["drafts"]]
+    assert d1 in ids and d2 in ids
+    previews = {d["id"]: d["text"] for d in res["drafts"]}
+    assert "draft one that waits" in previews[d1]
+    # status filter (newest approved first) + limit + junk status refusal
+    db.update_draft(d1, status="approved")
+    res = tools.execute_tool(None, "list_drafts", {"status": "approved", "limit": 1})
+    assert res["ok"] and [d["id"] for d in res["drafts"]] == [d1]
+    res = tools.execute_tool(None, "list_drafts", {"status": "nope"})
+    assert res["ok"] is False and "status" in res["error"]
+    db.update_draft(d1, status="rejected")
+    db.update_draft(d2, status="rejected")
+
+
 def test_schedule_draft_without_time_is_draft():
     res = tools.execute_tool(None, "schedule_draft", {"text": "no time given post"})
     assert res["ok"]

@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
+import threading
+import time
 import types
 from datetime import datetime
 from pathlib import Path
@@ -48,6 +51,7 @@ from openstanley.integrations import telegram as tg  # noqa: E402
 CHAT = 111222333
 TODAY = datetime.now().date().isoformat()
 CFG = Config()
+FENCE = "`" * 3
 
 
 # ---------------- helpers ----------------
@@ -126,6 +130,7 @@ def _tg_sandbox(tmp_path, monkeypatch):
     tg._reset_rate()
     tg._denied_chats.clear()
     tg._sessions.clear()
+    tg._chat_tasks.clear()
     tg._state.update(task=None, offset=0, mode="disabled")
     tg._state["stop"].clear()
     yield
@@ -304,6 +309,217 @@ def test_chat_reuses_engine_with_capped_session(monkeypatch):
     "".join(tg.chat_reply_tg_stream(CFG, CHAT, "latest question"))
     assert "latest question" in seen["user"]
     assert "first question" not in seen["user"]        # oldest rolled out
+
+
+# ---------------- chat candidates → drafts (the approval gate's TG path) ----------------
+
+def _stub_voice(monkeypatch, score: int = 88) -> None:
+    """Deterministic voice verdict — check_draft's borderline path attempts
+    an LLM rewrite; tests must never make that call for real."""
+    vc = types.SimpleNamespace(fixed_text=None,
+                               meta=lambda: {"score": score, "checked": True})
+    monkeypatch.setattr(chat_mod.voice_lock, "check_draft",
+                        lambda cfg, text, **k: vc)
+
+
+def test_chat_candidates_saved_as_drafts(monkeypatch):
+    """Defect 1 — a post drafted in TG chat becomes a real draft the user can
+    /approve. Same draft_from_chat path as the web UI's approval cards."""
+    _enable()
+    post = "an ugly first version teaches what slides never will"
+    monkeypatch.setattr(chat_mod, "llm_chat_stream",
+                        lambda *a, **k: iter([f"here you go:\n> {post}\n"]))
+    monkeypatch.setattr(chat_mod, "llm_chat", lambda *a, **k: "")
+    _stub_voice(monkeypatch)
+    tg._sessions.clear()
+    out = "".join(tg.chat_reply_tg_stream(CFG, CHAT, "draft me a post"))
+    m = re.search(r"saved as draft #(\d+) — /approve \1 to publish", out)
+    assert m, out
+    d = db.get_draft(int(m.group(1)))
+    assert d["text"] == post
+    assert d["status"] == "draft"                       # queued, NOT published
+    assert d["meta"]["source"] == "chat"                # web-UI draft path
+    assert out.count(post) == 1                         # prose never duplicated
+    assert tg._sessions[CHAT][-1]["content"].endswith(
+        f"saved as draft #{m.group(1)} — /approve {m.group(1)} to publish")
+
+
+def test_chat_multiple_candidates_each_saved(monkeypatch):
+    _enable()
+    p1 = "first candidate post, long enough to count"
+    p2 = "second candidate post, also long enough"
+    monkeypatch.setattr(chat_mod, "llm_chat_stream",
+                        lambda *a, **k: iter([f"> {p1}\n\n> {p2}\n"]))
+    monkeypatch.setattr(chat_mod, "llm_chat", lambda *a, **k: "")
+    _stub_voice(monkeypatch)
+    tg._sessions.clear()
+    out = "".join(tg.chat_reply_tg_stream(CFG, CHAT, "draft two posts"))
+    ids = re.findall(r"saved as draft #(\d+)", out)
+    assert len(ids) == 2 and ids[0] != ids[1]
+    assert db.get_draft(int(ids[0]))["text"] == p1
+    assert db.get_draft(int(ids[1]))["text"] == p2
+
+
+def test_chat_tool_results_reach_the_user(monkeypatch):
+    """list_drafts + the follow-up turn: "show me the drafts" answers with the
+    REAL ids (web parity), not a guessed list."""
+    _enable()
+    d1 = db.add_draft(text="a draft the chat should be able to list for me")
+    monkeypatch.setattr(chat_mod, "llm_chat_stream",
+                        lambda *a, **k: iter(["checking…\n"
+                                              f"{FENCE}action\n"
+                                              '{"tool": "list_drafts", "args": {}}\n'
+                                              f"{FENCE}\n"]))
+    monkeypatch.setattr(chat_mod, "llm_chat",
+                        lambda *a, **k: f"you have draft #{d1} waiting.")
+    _stub_voice(monkeypatch)
+    tg._sessions.clear()
+    out = "".join(tg.chat_reply_tg_stream(CFG, CHAT, "show me the drafts"))
+    assert f"you have draft #{d1} waiting." in out      # real ids, folded in
+    # the fence was streamed raw, but the stored/remembered reply is clean
+    assert FENCE + "action" not in tg._sessions[CHAT][-1]["content"]
+
+
+# ---------------- TG sessions persist + rebuild (defect 3) ----------------
+
+PCHAT = 555000111    # suite-unique chat id → persisted rows are provably ours
+
+
+def _wipe_persisted(chat_id: int) -> None:
+    with db.connect() as c:
+        c.execute("DELETE FROM chat_messages WHERE chat_id=?", (chat_id,))
+
+
+def test_tg_turns_persist_and_stay_out_of_web_history(monkeypatch):
+    _enable()
+    monkeypatch.setattr(chat_mod, "llm_chat_stream",
+                        lambda *a, **k: iter(["ok answer one"]))
+    monkeypatch.setattr(chat_mod, "llm_chat", lambda *a, **k: "")
+    _stub_voice(monkeypatch)
+    _wipe_persisted(PCHAT)
+    tg._sessions.clear()
+    "".join(tg.chat_reply_tg_stream(CFG, PCHAT, "persisted question one"))
+    rows = db.chat_history_for_chat(PCHAT, 10)
+    assert [r["role"] for r in rows] == ["user", "assistant"]
+    assert rows[0]["content"] == "persisted question one"
+    assert rows[1]["content"] == "ok answer one"
+    assert all(r["meta"].get("chat_id") == PCHAT for r in rows)
+    # the dashboard chat never sees TG turns — histories don't mix
+    tg_ids = {r["id"] for r in rows}
+    assert all(r["id"] not in tg_ids for r in db.chat_history(100))
+
+
+def test_tg_session_rebuilds_from_db_after_restart(monkeypatch):
+    _enable()
+    seen: dict[str, str] = {}
+    replies = iter(["first reply body", "second reply body"])
+
+    def _capture(llm_cfg, system, user):
+        seen["user"] = user
+        return iter([next(replies)])
+
+    monkeypatch.setattr(chat_mod, "llm_chat_stream", _capture)
+    monkeypatch.setattr(chat_mod, "llm_chat", lambda *a, **k: "")
+    _stub_voice(monkeypatch)
+    _wipe_persisted(PCHAT)
+    tg._sessions.clear()
+    "".join(tg.chat_reply_tg_stream(CFG, PCHAT, "question before restart"))
+    tg._sessions.clear()                                # the restart: RAM gone
+    "".join(tg.chat_reply_tg_stream(CFG, PCHAT, "question after restart"))
+    u = seen["user"]
+    assert "question after restart" in u
+    assert "USER: question before restart" in u         # rebuilt from chat_messages
+    assert "ASSISTANT: first reply body" in u
+
+
+# ---------------- concurrent dispatch (defect 2) ----------------
+
+def test_poller_parallel_chats_same_chat_ordered(monkeypatch):
+    """A slow reply parks ITS chat only — other chats still get answers, and
+    replies to one chat never interleave out of order."""
+    _enable()
+    other = CHAT + 1
+    events: list[tuple] = []
+    lock = threading.Lock()
+
+    def fake_handle(cfg, upd):
+        cid, uid = upd["message"]["chat"]["id"], upd["update_id"]
+        with lock:
+            events.append(("start", cid, uid))
+        time.sleep(0.3 if cid == CHAT else 0.02)
+        with lock:
+            events.append(("end", cid, uid))
+
+    monkeypatch.setattr(tg, "handle_update", fake_handle)
+    stop = tg._state["stop"]
+    batch = [_upd(10, CHAT, "slow a"), _upd(11, other, "quick b"),
+             _upd(12, CHAT, "queued c")]
+    fake = _FakeTGHttpx(batches=[batch], on_exhausted=stop.set)
+    monkeypatch.setattr(tg, "httpx", fake)
+
+    async def scenario():
+        await tg.start(CFG, force=True)
+        await tg._state["task"]
+
+    asyncio.run(scenario())
+    # same chat: the queued message waits for the slow one to FINISH
+    assert events.index(("end", CHAT, 10)) < events.index(("start", CHAT, 12))
+    # different chat: answered while the slow one was still running
+    assert events.index(("start", other, 11)) < events.index(("end", CHAT, 10))
+    assert ("end", CHAT, 12) in events                  # nobody was dropped
+
+
+def test_poller_bounds_concurrent_handlers(monkeypatch):
+    _enable()
+    lock = threading.Lock()
+    cur = {"n": 0, "max": 0}
+    done: list[int] = []
+
+    def fake_handle(cfg, upd):
+        with lock:
+            cur["n"] += 1
+            cur["max"] = max(cur["max"], cur["n"])
+        time.sleep(0.15)
+        with lock:
+            cur["n"] -= 1
+            done.append(upd["update_id"])
+
+    monkeypatch.setattr(tg, "handle_update", fake_handle)
+    stop = tg._state["stop"]
+    batch = [_upd(20 + i, 900000 + i, f"m{i}") for i in range(6)]
+    fake = _FakeTGHttpx(batches=[batch], on_exhausted=stop.set)
+    monkeypatch.setattr(tg, "httpx", fake)
+
+    async def scenario():
+        await tg.start(CFG, force=True)
+        await tg._state["task"]
+
+    asyncio.run(scenario())
+    assert sorted(done) == list(range(20, 26))           # every message handled
+    assert 2 <= cur["max"] <= tg.MAX_CONCURRENT_HANDLERS  # parallel but bounded
+
+
+def test_poller_survives_raising_handler(monkeypatch):
+    _enable()
+    calls: list[int] = []
+
+    def fake_handle(cfg, upd):
+        calls.append(upd["update_id"])
+        if upd["update_id"] == 30:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(tg, "handle_update", fake_handle)
+    stop = tg._state["stop"]
+    fake = _FakeTGHttpx(batches=[[_upd(30, CHAT, "x"), _upd(31, CHAT, "y")]],
+                        on_exhausted=stop.set)
+    monkeypatch.setattr(tg, "httpx", fake)
+
+    async def scenario():
+        await tg.start(CFG, force=True)
+        await tg._state["task"]
+
+    asyncio.run(scenario())
+    assert calls == [30, 31]                             # one crash, next still runs
 
 
 # ---------------- outbound rate limit ----------------

@@ -19,6 +19,7 @@ operating manual: I rewrite it as I learn how to serve this account better.
 3. Bilingual respect: Arabic posts follow Arabic conventions (؟ ، ؛).
 
 ## Learned adjustments
+- 2026-08-19 (chat) — When the user writes a request in Arabic, the bilingual rule (R1) was not applied in practice — the draft came back English-only. Treat Arabic-language requests as a hard trigger to produce an EN/AR or AR draft before queueing.
 - 2026-08-19 (learn) — Baseline engagement is 0.016; reply-bait and utility posts (asking the audience a concrete question, offering a capability) beat baseline 2-5x even with 0 likes. Intro/identity posts aren't strictly dead — they earned 0.038-0.060 when they invited a reply — but absolute engagement stays tiny, so keep them rare.
 - 2026-08-19 (scan) — Own feed is still near-zero engagement across 16 posts; niche benchmarks confirm multi-line story posts (70♥/62💬) and reply-bait structures win. Keep prioritizing R109/R111 experiments over one-liners, and retire filler formats entirely.
 - 2026-08-19 (learn) — Reply-driven engagement (1💬) can lift posts above baseline even with 0-1 likes — conversation-starting posts outperform pure statements. Bilingual and self-referential AI posts show mild positive signal; vague one-liners remain at exactly 0.000.

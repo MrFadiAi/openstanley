@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 
 CREATE TABLE IF NOT EXISTS chat_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER,                  -- NULL = dashboard chat; set = Telegram chat id
     role TEXT,                        -- user|assistant
     content TEXT,
     meta_json TEXT DEFAULT '{}',
@@ -186,6 +187,11 @@ def _migrate(c: sqlite3.Connection) -> None:
     pcols = {r["name"] for r in c.execute("PRAGMA table_info(posts)").fetchall()}
     if "metrics_json" not in pcols:
         c.execute("ALTER TABLE posts ADD COLUMN metrics_json TEXT")
+    # v0.4.5: Telegram chat turns are persisted alongside the dashboard chat —
+    # chat_id NULL = dashboard, set = that TG chat's id (histories never mix)
+    ccols = {r["name"] for r in c.execute("PRAGMA table_info(chat_messages)").fetchall()}
+    if "chat_id" not in ccols:
+        c.execute("ALTER TABLE chat_messages ADD COLUMN chat_id INTEGER")
 
 
 def log(loop: str, message: str, level: str = "info") -> None:
@@ -218,20 +224,41 @@ def set_setting(key: str, value: Any) -> None:
 
 # ---------- chat (OpenStanley agent) ----------
 
-def add_chat_message(role: str, content: str, meta: dict | None = None) -> int:
+def add_chat_message(role: str, content: str, meta: dict | None = None,
+                     chat_id: int | None = None) -> int:
+    """chat_id NULL = the dashboard chat; set = that Telegram chat's id."""
     with _lock, connect() as c:
         cur = c.execute(
-            "INSERT INTO chat_messages(role, content, meta_json) VALUES (?,?,?)",
-            (role, content, json.dumps(meta or {})),
+            "INSERT INTO chat_messages(chat_id, role, content, meta_json) "
+            "VALUES (?,?,?,?)",
+            (chat_id, role, content, json.dumps(meta or {})),
         )
         return cur.lastrowid
 
 
 def chat_history(limit: int = 40) -> list[dict]:
+    """Dashboard chat history — Telegram turns (chat_id set) are excluded so
+    the two frontends never mix histories."""
     with _lock, connect() as c:
         rows = c.execute(
             "SELECT id, role, content, ts, meta_json FROM chat_messages "
-            "ORDER BY id DESC LIMIT ?", (limit,),
+            "WHERE chat_id IS NULL ORDER BY id DESC LIMIT ?", (limit,),
+        ).fetchall()
+    out = []
+    for r in reversed(rows):
+        out.append({
+            "id": r["id"], "role": r["role"], "content": r["content"],
+            "ts": r["ts"], "meta": json.loads(r["meta_json"] or "{}"),
+        })
+    return out
+
+
+def chat_history_for_chat(chat_id: int, limit: int = 40) -> list[dict]:
+    """One Telegram chat's persisted turns, oldest → newest."""
+    with _lock, connect() as c:
+        rows = c.execute(
+            "SELECT id, role, content, ts, meta_json FROM chat_messages "
+            "WHERE chat_id=? ORDER BY id DESC LIMIT ?", (chat_id, limit),
         ).fetchall()
     out = []
     for r in reversed(rows):

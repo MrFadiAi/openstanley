@@ -58,7 +58,8 @@ HELP_TEXT = (
     "/post <text> — save your own text as a draft for review\n"
     "/digest — today's report, on demand\n"
     "/study — study your X account fully & refresh my brain\n"
-    "\nAnything else you type, I answer — same brain as the dashboard."
+    "\nAnything else you type, I answer — same brain as the dashboard. Ask me\n"
+    "to write a post and I'll save it as a draft for your /approve."
 )
 
 # module state — single poller per process, like autopilot's module state
@@ -337,14 +338,20 @@ def _auth_reply(chat_id: int) -> Optional[str]:
 # ---------------- chat sessions (same engine as the dashboard) ----------------
 
 def _remember(chat_id: int, role: str, content: str) -> None:
+    """One turn into the RAM session AND the DB (chat_messages) — TG sessions
+    survive restarts, and chat_id keeps them out of the dashboard's history."""
     sess = _sessions.setdefault(chat_id, [])
     sess.append({"role": role, "content": content})
     del sess[:-SESSION_CAP]  # cap the memory the TG chat keeps
+    db.add_chat_message(role, content, meta={"chat_id": chat_id}, chat_id=chat_id)
 
 
 def _history_turn(chat_id: int, user_message: str) -> str:
-    """Mirror of chat._history_turn, but over this chat's private session."""
+    """Mirror of chat._history_turn, but over this chat's private session.
+    RAM session empty (restart wiped it) → rebuild from the persisted rows."""
     hist = _sessions.get(chat_id, [])[:-1]
+    if not hist:
+        hist = db.chat_history_for_chat(chat_id, SESSION_CAP + 1)[:-1]
     if not hist:
         return user_message
     hist_text = "\n".join(f"{h['role'].upper()}: {h['content'][:400]}" for h in hist)
@@ -354,7 +361,10 @@ def _history_turn(chat_id: int, user_message: str) -> str:
 def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     """Streaming TG chat: the dashboard streaming engine (per-chat session,
     voice tuning, tools, follow-up) yielding text chunks. Side effects match
-    chat_reply_tg: session memory, DB persistence, brain reflect."""
+    chat_reply_stream: session memory, DB persistence, brain reflect — plus
+    post candidates are saved as real drafts (TG has no save button), each
+    announced with a /approve line. Publishing still only happens through
+    the approval gate."""
     import dataclasses
 
     from ..gen import brain as brain_mod
@@ -380,12 +390,35 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     tool_results = chat_mod._run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
     if tool_results:
-        clean += "\n" + "\n".join(f"· {r['name']}: {'ok' if r.get('ok') else 'failed'}"
-                                 for r in tool_results)
+        extra = chat_mod._followup(cfg, reply, tool_results)
+        if extra:  # web parity: real tool results folded into prose
+            clean += "\n\n" + extra
+        else:      # LLM down → the terse fallback still says what ran
+            clean += "\n" + "\n".join(
+                f"· {r['name']}: {'ok' if r.get('ok') else 'failed'}"
+                for r in tool_results)
+
+    # post candidates (markdown quote blocks) → real drafts, exactly what the
+    # dashboard's approval cards hold. Saving is safe; publishing is not ours.
+    draft_ids: list[int] = []
+    for cand in chat_mod._extract_candidates(clean, cfg):
+        try:
+            draft_ids.append(chat_mod.draft_from_chat(cfg, cand["text"]))
+        except Exception as e:  # noqa: BLE001 — a failed save must not kill the reply
+            db.log("telegram", f"chat candidate draft save failed: {e}",
+                   level="warn")
+    if draft_ids:
+        clean += "\n" + "\n".join(
+            f"📝 saved as draft #{d} — /approve {d} to publish" for d in draft_ids)
+
     _remember(chat_id, "assistant", clean)
     brain_mod.maybe_reflect_chat_async(cfg)  # every 10th message → reflect
-    if clean != reply:
-        yield "\n" + clean[len(reply):] if clean.startswith(reply) else clean
+    # delta for the final bubble edit: what the streamed text is missing.
+    # clean starts at strip_actions(reply), so the delta is the part after it;
+    # the already-streamed action fences can't be un-sent (append-only bubble).
+    tail = clean[len(tools_mod.strip_actions(reply)):]
+    if tail:
+        yield tail
 
 
 # ---------------- commands ----------------
@@ -641,6 +674,18 @@ def _int_arg(args: str, cmd: str) -> int:
 
 # ---------------- poller lifecycle ----------------
 
+MAX_CONCURRENT_HANDLERS = 4   # parallel update ceiling — 100 queued messages
+                              # must not spawn 100 LLM calls
+SHUTDOWN_GRACE_S = 10.0       # let in-flight replies land before "stopped"
+
+_chat_tasks: dict[int, asyncio.Task] = {}  # chat id → its latest handler task
+
+
+def _upd_chat_id(upd: dict) -> int:
+    msg = upd.get("message") or upd.get("edited_message") or {}
+    return int((msg.get("chat") or {}).get("id") or 0)
+
+
 def status() -> dict:
     return {"state": _state["mode"], "enabled": is_enabled(),
             "chats": len(allowed_chats()), "offset": _state["offset"],
@@ -661,6 +706,7 @@ async def start(cfg: Config, force: bool = False) -> None:
     if _state["task"] and not _state["task"].done():
         return
     _state["stop"].clear()
+    _chat_tasks.clear()  # any survivors belong to the previous (dead) loop
     _state["task"] = asyncio.get_running_loop().create_task(_poll_loop(cfg))
 
 
@@ -685,9 +731,34 @@ async def restart(cfg: Config, force: bool = False) -> None:
 
 
 async def _poll_loop(cfg: Config) -> None:
+    """Long-poll loop. Updates are dispatched CONCURRENTLY (a slow LLM reply
+    must not park every later message) with two guarantees: replies to the
+    SAME chat stay in order (per-chat task chain), and concurrency is bounded
+    (semaphore) so a burst can't spawn unbounded LLM calls. Different chats
+    run in parallel."""
     token = bot_token()
     _state["mode"] = "polling"
     db.log("system", f"telegram poller started ({len(allowed_chats())} allowed chat(s))")
+    sem = asyncio.Semaphore(MAX_CONCURRENT_HANDLERS)
+    pending: set[asyncio.Task] = set()
+
+    async def _dispatch(upd: dict, prev: asyncio.Task | None) -> None:
+        cid = _upd_chat_id(upd)
+        try:
+            if prev is not None and not prev.done():
+                # same chat → strict ordering. asyncio.wait (not gather/await)
+                # never propagates prev's exception into this handler.
+                await asyncio.wait({prev})
+            async with sem:
+                try:
+                    await asyncio.to_thread(handle_update, cfg, upd)
+                except Exception as e:  # noqa: BLE001 — handle_update's own contract
+                    db.log("telegram", f"handler task error: {e}", level="error")
+        finally:
+            pending.discard(asyncio.current_task())
+            if _chat_tasks.get(cid) is asyncio.current_task():
+                del _chat_tasks[cid]
+
     try:
         while not _state["stop"].is_set():
             try:
@@ -713,12 +784,21 @@ async def _poll_loop(cfg: Config) -> None:
             for upd in updates:
                 _state["offset"] = max(_state["offset"],
                                        int(upd.get("update_id", 0)) + 1)
-                await asyncio.to_thread(handle_update, cfg, upd)
+                cid = _upd_chat_id(upd)
+                t = asyncio.create_task(_dispatch(upd, _chat_tasks.get(cid)))
+                _chat_tasks[cid] = t
+                pending.add(t)
             if not updates:
                 await asyncio.sleep(EMPTY_POLL_SLEEP_S)
     except asyncio.CancelledError:
         raise
     finally:
+        # grace-wait in-flight handlers so replies land before "stopped";
+        # anything still alive after the grace period is cancelled
+        if pending:
+            _done, alive = await asyncio.wait(pending, timeout=SHUTDOWN_GRACE_S)
+            for t in alive:
+                t.cancel()
         if _state["mode"] == "polling":
             _state["mode"] = "disabled"
         db.log("system", "telegram poller stopped")

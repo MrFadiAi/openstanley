@@ -169,3 +169,8 @@ Replies, not likes, are the engagement engine at this account size — concrete 
 - strategy: Reply-farming via concrete questions [working]
 - strategy: Story + lesson format [mixed]
 - strategy: Identity musings ban [mixed]
+
+## 2026-08-19 14:24 · reflect:chat
+The Arabic request slipped through without a bilingual draft, showing language detection needs to be an explicit pre-draft check, not a passive rule. Relative-time scheduling ('in 2 hours') worked cleanly with no tz ambiguity.
+- instructions: When the user writes a request in Arabic, the bilingual rule (R1) was not applied in pract
+- added R117: DO check the user's message language before drafting — Arabic request means bilingual or A
