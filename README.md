@@ -49,7 +49,7 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\pip install pytest python-multipart   # tests + uploads
 
-# secrets: .env with XOPENSTANLEY_LLM_API_KEY (z.ai GLM). See .env.example
+# secrets: .env with OPENSTANLEY_LLM_API_KEY (z.ai GLM). See .env.example
 
 # frontend (first run / after web/ changes)
 cd web && npm install && npm run build && cd ..

@@ -37,7 +37,7 @@ BUDGET_CHARS = 1500  # hard cap for brain_context()
 # ---------- security: never let secrets into the brain ----------
 
 # credential-ish name followed by a real value (≥6 chars). The name pattern
-# must also match INSIDE XOPENSTANLEY_LLM_API_KEY=… (no \b before "API" there).
+# must also match INSIDE OPENSTANLEY_LLM_API_KEY=… (no \b before "API" there).
 _SECRET_KEY_RE = re.compile(
     r"(?i)(api[_-]?key|apikey|secret|password|passwd|bearer|"
     r"access[_-]?token|access[_-]?secret|auth[_-]?token|cookies|ct0|"
@@ -61,7 +61,7 @@ def looks_secretly(content: str) -> Optional[str]:
     if _SECRET_KEY_RE.search(content):
         return "key/secret assignment pattern"
     if _ENV_ASSIGN_RE.search(content):
-        return "XOPENSTANLEY_* env assignment"
+        return "OPENSTANLEY_* env assignment"
     if _LONG_TOKEN_RE.search(content):
         return "provider key prefix"
     if _JWT_RE.search(content):

@@ -210,7 +210,7 @@ class XDry(XClient):
 
 
 class XCookie(XClient):
-    """twikit-based free client. Requires XOPENSTANLEY_X_COOKIES env or config.
+    """twikit-based free client. Requires OPENSTANLEY_X_COOKIES env or config.
 
     All writes go through safety: daily caps + jittered human-like delays.
     """

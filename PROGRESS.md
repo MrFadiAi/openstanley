@@ -1,9 +1,9 @@
-2026-08-19 06:25 — fixed 5 red tests (real cookie client leaked into tests after cookie-mode switch): added tests/conftest.py forcing XOPENSTANLEY_X_MODE=dryrun + config env override. 91/91 green.
+2026-08-19 06:25 — fixed 5 red tests (real cookie client leaked into tests after cookie-mode switch): added tests/conftest.py forcing OPENSTANLEY_X_MODE=dryrun + config env override. 91/91 green.
 2026-08-19 06:40 — posting unlocked by Fadi. REAL E2E POST x_id=2089933578679291962 live on @orbexai (verified via oembed + timeline). Reply x_id=2089933825606340866. Quote-post blocked by 4/4 daily safety cap = caps proven on real account. Cookie auto-heal build landed (client.py guards, cookie_heal.py).
 2026-08-19 06:42 — cookie-heal build verified: 104/104, commit c851b22, server restarted with cookies_stale/last_heal/heal_ok fields. Briefs + PROGRESS.md committed.
 2026-08-19 07:05 — tick: autopilot build running (8 min in, module+endpoints in progress). 104/104 at last check.
 2026-08-19 07:14 — autopilot v0.3.5 done (UPGRADE_BRIEF_AUTOPILOT.md): round-robin ticks study→create→engage→learn every 45m (jitter ≤90s), 5-slot error ring, overlap-skip guard, engage auto-approve only when opted in, publish NEVER on autopilot. Insights card + /api/autopilot{,/tick}, EN+AR. Reviewed (6 findings fixed: tick race, job_active drift, false copy, test leaks). 115/115 green.
-2026-08-19 07:22 — autopilot shipped (bad115a, 115 tests). Fixed XOPENSTANLEY_TEST_DB ignored: tests now use tests/_data/test.db, real DB untouched. Server restarted w/ autopilot API + UI.
+2026-08-19 07:22 — autopilot shipped (bad115a, 115 tests). Fixed OPENSTANLEY_TEST_DB ignored: tests now use tests/_data/test.db, real DB untouched. Server restarted w/ autopilot API + UI.
 2026-08-19 07:26 — autopilot reviewer findings (tick race, job_active drift, test leaks) all landed in bad115a; TEST_DB gap closed in 5a7d756. Analytics build running.
 2026-08-19 07:45 — analytics shipped (4dcf9b0, 126 tests). REAL metrics refresh on @orbexai: 15 posts, top = OrbexBot intro (rate 0.215%), brain reflected (hash-gated). Purged 270 dry+test seed posts from real DB.
 2026-08-19 08:05 — tick: smoke-harness build running (5 min in; module landed). 126/126 at last verify.

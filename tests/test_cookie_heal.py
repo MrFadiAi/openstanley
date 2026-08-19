@@ -22,14 +22,14 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-os.environ.setdefault("XOPENSTANLEY_NO_SCHEDULER", "1")
+os.environ.setdefault("OPENSTANLEY_NO_SCHEDULER", "1")
 
 from openstanley.core import db                                    # noqa: E402
 db.init_db()
 
 from openstanley.x import cookie_heal                              # noqa: E402
 
-TEST_ENV_VAR = "XOPENSTANLEY_TEST_HEAL_COOKIES"
+TEST_ENV_VAR = "OPENSTANLEY_TEST_HEAL_COOKIES"
 GOOD_TOKEN, BAD_TOKEN = "g" * 40, "b" * 40
 
 
@@ -118,18 +118,18 @@ def test_env_rewrite_preserves_foreign_lines(tmp_path):
     env = tmp_path / ".env"
     env.write_text(
         "# openstanley secrets\n"
-        "XOPENSTANLEY_LLM_API_KEY=sk-abc\n"
-        'XOPENSTANLEY_X_COOKIES={"auth_token":"old"}\n'
+        "OPENSTANLEY_LLM_API_KEY=sk-abc\n"
+        'OPENSTANLEY_X_COOKIES={"auth_token":"old"}\n'
         "\n"
-        "XOPENSTANLEY_X_MODE=cookie\n",
+        "OPENSTANLEY_X_MODE=cookie\n",
         encoding="utf-8")
     compact = json.dumps({"auth_token": "new", "ct0": "z"}, separators=(",", ":"))
-    cookie_heal.persist_cookies_env(env, "XOPENSTANLEY_X_COOKIES", compact)
+    cookie_heal.persist_cookies_env(env, "OPENSTANLEY_X_COOKIES", compact)
     text = env.read_text(encoding="utf-8")
     assert "# openstanley secrets" in text
-    assert "XOPENSTANLEY_LLM_API_KEY=sk-abc" in text
-    assert "XOPENSTANLEY_X_MODE=cookie" in text
-    assert 'XOPENSTANLEY_X_COOKIES={"auth_token":"new","ct0":"z"}' in text
+    assert "OPENSTANLEY_LLM_API_KEY=sk-abc" in text
+    assert "OPENSTANLEY_X_MODE=cookie" in text
+    assert 'OPENSTANLEY_X_COOKIES={"auth_token":"new","ct0":"z"}' in text
     assert "old" not in text
     assert not (tmp_path / ".env.tmp").exists()  # atomic: no temp left behind
 
@@ -137,16 +137,16 @@ def test_env_rewrite_preserves_foreign_lines(tmp_path):
 def test_env_rewrite_appends_when_key_missing(tmp_path):
     env = tmp_path / ".env"
     env.write_text("OTHER=1\n", encoding="utf-8")
-    cookie_heal.persist_cookies_env(env, "XOPENSTANLEY_X_COOKIES", '{"auth_token":"a"}')
+    cookie_heal.persist_cookies_env(env, "OPENSTANLEY_X_COOKIES", '{"auth_token":"a"}')
     lines = env.read_text(encoding="utf-8").splitlines()
-    assert lines == ["OTHER=1", 'XOPENSTANLEY_X_COOKIES={"auth_token":"a"}']
+    assert lines == ["OTHER=1", 'OPENSTANLEY_X_COOKIES={"auth_token":"a"}']
 
 
 def test_env_rewrite_creates_missing_file(tmp_path):
     env = tmp_path / ".env"
-    cookie_heal.persist_cookies_env(env, "XOPENSTANLEY_X_COOKIES", '{"auth_token":"a"}')
+    cookie_heal.persist_cookies_env(env, "OPENSTANLEY_X_COOKIES", '{"auth_token":"a"}')
     assert env.exists()
-    assert env.read_text(encoding="utf-8") == 'XOPENSTANLEY_X_COOKIES={"auth_token":"a"}\n'
+    assert env.read_text(encoding="utf-8") == 'OPENSTANLEY_X_COOKIES={"auth_token":"a"}\n'
 
 
 # --- healer + cooldown ----------------------------------------------------------

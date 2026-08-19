@@ -2,7 +2,7 @@
 
 All hermetic: the digest reads DB/settings/brain only (no X, no LLM), the
 brain is sandboxed into a tmp dir, HTTP is faked at the httpx seam, and
-digest files land in a tmp dir via XOPENSTANLEY_DIGEST_DIR.
+digest files land in a tmp dir via OPENSTANLEY_DIGEST_DIR.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-os.environ["XOPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
+os.environ["OPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))

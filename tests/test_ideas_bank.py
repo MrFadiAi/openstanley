@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-os.environ["XOPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
+os.environ["OPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))

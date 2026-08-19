@@ -1423,7 +1423,7 @@ async def cookie_connect(body: CookieConnect):
     import os as _os
     single_line = _json.dumps(cookies, separators=(",", ":"))
     env_path = ROOT / ".env"
-    _write_env(env_path, "XOPENSTANLEY_X_COOKIES", single_line)
+    _write_env(env_path, "OPENSTANLEY_X_COOKIES", single_line)
     _os.environ[cfg.x.cookies_env] = single_line  # live process, no restart needed
     _set_config_mode("cookie")
     db.set_setting("me", me)
@@ -1632,15 +1632,15 @@ async def on_startup():
         if v is not None:
             setattr(cfg.agent, k, v)
     import os
-    if os.environ.get("XOPENSTANLEY_NO_SCHEDULER") == "1":
-        db.log("system", "scheduler disabled (XOPENSTANLEY_NO_SCHEDULER=1)")
+    if os.environ.get("OPENSTANLEY_NO_SCHEDULER") == "1":
+        db.log("system", "scheduler disabled (OPENSTANLEY_NO_SCHEDULER=1)")
     else:
         scheduler = start_scheduler()
     # v0.4.4 — Telegram poller (no-op unless enabled + token; tests set
-    # XOPENSTANLEY_NO_TELEGRAM=1 so no TestClient boot ever touches the network)
+    # OPENSTANLEY_NO_TELEGRAM=1 so no TestClient boot ever touches the network)
     await telegram_mod.start(cfg)
-    if os.environ.get("XOPENSTANLEY_NO_SMOKE") == "1":
-        db.log("system", "startup smoke disabled (XOPENSTANLEY_NO_SMOKE=1)")
+    if os.environ.get("OPENSTANLEY_NO_SMOKE") == "1":
+        db.log("system", "startup smoke disabled (OPENSTANLEY_NO_SMOKE=1)")
     else:  # async, non-blocking — runs after scheduler init, never gates boot
         task = asyncio.get_running_loop().create_task(_smoke_boot_task())
         _bg_tasks.add(task)

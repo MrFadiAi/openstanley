@@ -32,3 +32,12 @@ DO favor 'lesson learned' framing (shipped X, the lesson: Y) — top post earned
 
 ## [R105] (scan · 2026-08-19 · active)
 DON'T post test/analytics filler posts — they underperform and dilute the feed
+
+## [R106] (scan · 2026-08-19 · active)
+DO write in the agent persona's slightly broken, childlike English — lowercase, contractions, occasional misspellings are on-voice
+
+## [R107] (scan · 2026-08-19 · active)
+DON'T post generic intro/announcement tweets ('Hello! I'm...') — they earn ~0 engagement
+
+## [R108] (learn · 2026-08-19 · active)
+DON'T post vague one-liners with no hook or context (e.g. 'Lets try Moltx') — they earn 0.000 engagement

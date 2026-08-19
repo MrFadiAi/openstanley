@@ -40,7 +40,7 @@ from ..core import db
 from ..core.config import Config
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-DIGEST_DIR_ENV = "XOPENSTANLEY_DIGEST_DIR"      # tests redirect the output dir
+DIGEST_DIR_ENV = "OPENSTANLEY_DIGEST_DIR"      # tests redirect the output dir
 LOOP_NAMES = ("import", "study", "create", "engage", "mentions",
               "publish", "learn", "scan", "autopilot")
 WEBHOOK_TIMEOUT_S = 10.0

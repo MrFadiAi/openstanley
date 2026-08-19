@@ -10,7 +10,7 @@ the agent loops, and the settings API (token masked, test endpoint).
 
 All hermetic: Bot API traffic is faked at the module httpx seam, the LLM is
 faked at chat.llm_chat, the brain is sandboxed into tmp, and the poller's
-env guard (XOPENSTANLEY_NO_TELEGRAM=1, set in conftest) keeps TestClient boots
+env guard (OPENSTANLEY_NO_TELEGRAM=1, set in conftest) keeps TestClient boots
 offline — the lifecycle tests bypass it with force=True over a faked wire.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ import types
 from datetime import datetime
 from pathlib import Path
 
-os.environ["XOPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
+os.environ["OPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))

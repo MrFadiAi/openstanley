@@ -32,5 +32,5 @@ Build autopilot so the product actually IS OpenStanley.
 README: "Autopilot" section — what runs automatically, what never does (publish),
 how caps interplay. PROGRESS.md: add one line when done.
 
-Hard rules: hermetic tests only (XOPENSTANLEY_X_MODE=dryrun, no network), keep 104/104 green
+Hard rules: hermetic tests only (OPENSTANLEY_X_MODE=dryrun, no network), keep 104/104 green
 (add ~10), ONE focused module + minimal server/UI touches, no real X calls from tests.

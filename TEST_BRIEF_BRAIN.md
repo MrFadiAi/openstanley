@@ -7,7 +7,7 @@ Testing phase = read/scan/study only. If a test would require posting, verify th
 approval gate BLOCKS it instead (that's a passing test).
 
 ## The real X session
-- `.env` contains XOPENSTANLEY_X_COOKIES (auth_token [+ ct0 if present]).
+- `.env` contains OPENSTANLEY_X_COOKIES (auth_token [+ ct0 if present]).
 - KNOWN ISSUE: twikit 2.3.3 (even git master) currently fails with
   "Couldn't get KEY_BYTE indices" — X rotated its JS bundles and twikit's
   x-client-transaction header generator can't parse them.
@@ -29,7 +29,7 @@ approval gate BLOCKS it instead (that's a passing test).
 ## Brain tests (all must pass 100%)
 1. **Structure**: data/brain/ exists with instructions/rules/strategies/files/photos/journal — seeded sensibly.
 2. **CRUD via API**: GET/PUT every part; edits logged to journal as "user edited".
-3. **Sanitization**: content containing .env-style secrets (XOPENSTANLEY_LLM_API_KEY=...,
+3. **Sanitization**: content containing .env-style secrets (OPENSTANLEY_LLM_API_KEY=...,
    auth_token values) must be REJECTED.
 4. **brain_context()**: budget-capped, includes rules + strategies; injected into
    chat/drafts/replies/ideas prompts (verify via fake-LLM capture in tests AND a

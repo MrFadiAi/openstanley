@@ -9,13 +9,13 @@ read path; use the real X session for reads only.
 
 ## ⚠️ Environment blocker found first (read before the scores)
 
-`TEST_BRIEF_BRAIN.md` states *".env contains XOPENSTANLEY_X_COOKIES (auth_token
+`TEST_BRIEF_BRAIN.md` states *".env contains OPENSTANLEY_X_COOKIES (auth_token
 [+ ct0 if present])"*. **It does not.** Verified exhaustively:
 
 | Where cookies would live | Check performed | Result |
 |---|---|---|
-| `.env` | enumerated every line, key names + value lengths only | only `XOPENSTANLEY_LLM_API_KEY` (1 line) |
-| process env | `env \| grep XOPENSTANLEY` | nothing |
+| `.env` | enumerated every line, key names + value lengths only | only `OPENSTANLEY_LLM_API_KEY` (1 line) |
+| process env | `env \| grep OPENSTANLEY` | nothing |
 | `data/config.toml` | parsed, printed keys with values redacted | no cookies key |
 | `data/openstanley.db` `settings` | all setting keys listed | `me` = dry-run local user |
 | repo-wide `auth_token` grep | toml/env/json/txt/cfg | no hits outside code/docs |
@@ -24,7 +24,7 @@ Consequence: **authenticated real-X reads (me(), deep scan of the real
 account) could not be executed — no credentials exist in this environment.**
 Everything else ran for real. The read path itself was fixed and verified
 against the live x.com home page anonymously (see §1). Paste cookies via
-Dashboard → X-Connect (or `.env` → `XOPENSTANLEY_X_COOKIES={"auth_token":"…","ct0":"…"}`)
+Dashboard → X-Connect (or `.env` → `OPENSTANLEY_X_COOKIES={"auth_token":"…","ct0":"…"}`)
 and the real-account scan runs exactly as specced — no code changes needed.
 
 ---
@@ -94,7 +94,7 @@ the live journal). Unknown part → 404; traversal (`files/../../etc/passwd`) �
 FileNotFoundError. Covered by `test_api_brain_endpoints` + browser round-trip (§⑨).
 
 ### ③ Sanitization — PASS
-Rejected (400 / BrainSecurityError, nothing stored): `XOPENSTANLEY_LLM_API_KEY=…`,
+Rejected (400 / BrainSecurityError, nothing stored): `OPENSTANLEY_LLM_API_KEY=…`,
 `api_key: sk-…`, `auth_token: …` (32×a), `{"cookies": "<hex>"}`, `bearer eyJ…`
 (JWT), `ct0=…`, `PASSWORD=…`. Normal text (incl. Arabic `؟ ، ؛`) accepted.
 Reflect-proposed secrets are dropped and counted (`dropped_tainted`) —
@@ -216,7 +216,7 @@ during runs, per known-env-quirk). New: 8 read-path tests + 5 brain tests
 | `.gitignore` | `data/server.log` |
 | `data/brain/**`, `data/harness/**` | the brain's live state + run history (git-friendly by design) |
 
-**Open items:** (1) real-account reads await `XOPENSTANLEY_X_COOKIES` — first
+**Open items:** (1) real-account reads await `OPENSTANLEY_X_COOKIES` — first
 `me()` + deep scan should be re-run the moment they land; (2) if X rejects
 headerless GraphQL reads, next step is porting the x-web transaction
 generator (upstream has none — `d60/twikit#408` tracks it).

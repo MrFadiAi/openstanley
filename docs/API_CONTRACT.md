@@ -187,7 +187,7 @@ implements it. All bodies are JSON unless noted. All times are local ISO strings
   probes: [{name, ok, ms, detail, warn}]}`
 - `POST /api/system/smoke` → run fresh now; **429** within 5 min of the last run
   (rate limit via the `smoke_last_run_epoch` setting). Also runs automatically once
-  at server startup (background task; disable with `XOPENSTANLEY_NO_SMOKE=1`)
+  at server startup (background task; disable with `OPENSTANLEY_NO_SMOKE=1`)
 
 ### Daily digest (v0.4.2 — the agent reports to its owner)
 

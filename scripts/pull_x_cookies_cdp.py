@@ -77,7 +77,7 @@ else:
     env = pathlib.Path(r"D:\ai\openstanley\.env")
     compact = json.dumps(out, separators=(",", ":"))
     lines = env.read_text(encoding="utf-8").splitlines()
-    lines = [l for l in lines if not l.startswith("XOPENSTANLEY_X_COOKIES=")]
-    lines.append(f"XOPENSTANLEY_X_COOKIES={compact}")
+    lines = [l for l in lines if not l.startswith("OPENSTANLEY_X_COOKIES=")]
+    lines.append(f"OPENSTANLEY_X_COOKIES={compact}")
     env.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"cookies pulled from live Brave: {sorted(out)} (auth_token len={len(out.get('auth_token',''))}, ct0 len={len(out.get('ct0',''))}) — persisted to .env")

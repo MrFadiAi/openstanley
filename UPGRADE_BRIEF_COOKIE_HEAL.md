@@ -15,7 +15,7 @@ Build `openstanley/x/cookie_heal.py` + integration:
    b. Else: no auto-launch of browsers (surprising) — heal fails gracefully.
       (Manual path documented in UI instead.)
    c. Pull x.com auth_token+ct0; if auth_token CHANGED, persist to `.env`
-      (`XOPENSTANLEY_X_COOKIES=` compact JSON, preserve all other lines, atomic write),
+      (`OPENSTANLEY_X_COOKIES=` compact JSON, preserve all other lines, atomic write),
       rebuild the twikit client, reset `me` cache, log `system` entry.
    d. Same auth_token but new ct0 → update env value in-memory + .env, rebuild.
 3. **Status**: `/api/x/status` gains `cookies_stale: bool`, `last_heal: iso|None`,

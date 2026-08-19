@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-DB_PATH = Path(os.environ.get("XOPENSTANLEY_TEST_DB")
+DB_PATH = Path(os.environ.get("OPENSTANLEY_TEST_DB")
                or (Path(__file__).resolve().parent.parent.parent / "data" / "openstanley.db"))
 _lock = threading.Lock()
 

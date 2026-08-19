@@ -10,7 +10,7 @@ import sys
 import threading
 from pathlib import Path
 
-os.environ["XOPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
+os.environ["OPENSTANLEY_NO_SCHEDULER"] = "1"  # before importing the server
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -84,7 +84,7 @@ def test_read_write_roundtrip():
 # ---------- sanitization ----------
 
 @pytest.mark.parametrize("bad", [
-    "XOPENSTANLEY_LLM_API_KEY=abcdef1234567890abcdef",
+    "OPENSTANLEY_LLM_API_KEY=abcdef1234567890abcdef",
     "set api_key: sk-1234567890abcdefghijklmnopqrst",
     "auth_token: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     '{"cookies": "3f4a9c7d8e2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d"}',

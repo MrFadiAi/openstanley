@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-os.environ["XOPENSTANLEY_NO_SCHEDULER"] = "1"  # no cron loop inside tests
+os.environ["OPENSTANLEY_NO_SCHEDULER"] = "1"  # no cron loop inside tests
 
 from openstanley.core import db                                    # noqa: E402
 db.init_db()

@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-os.environ["XOPENSTANLEY_NO_SCHEDULER"] = "1"
-os.environ["XOPENSTANLEY_NO_SMOKE"] = "1"  # default off; the startup test re-enables it
+os.environ["OPENSTANLEY_NO_SCHEDULER"] = "1"
+os.environ["OPENSTANLEY_NO_SMOKE"] = "1"  # default off; the startup test re-enables it
 
 from openstanley.core import db                                      # noqa: E402
 db.init_db()
@@ -282,7 +282,7 @@ def test_startup_smoke_does_not_block_boot(monkeypatch):
             probes=[smoke_mod.ProbeResult("identity", True, 1, "ok")])
 
     monkeypatch.setattr(smoke_mod, "run_smoke", slow_run)
-    monkeypatch.delenv("XOPENSTANLEY_NO_SMOKE", raising=False)
+    monkeypatch.delenv("OPENSTANLEY_NO_SMOKE", raising=False)
     _clear_smoke_settings()  # prove the report below comes from THIS startup run
     with TestClient(app) as client:
         t0 = time.monotonic()

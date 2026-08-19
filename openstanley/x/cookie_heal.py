@@ -31,7 +31,7 @@ from ..core import db
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 ENV_PATH = ROOT / ".env"
-ENV_VAR = "XOPENSTANLEY_X_COOKIES"
+ENV_VAR = "OPENSTANLEY_X_COOKIES"
 
 CDP_HOST = "127.0.0.1"
 CDP_PORT = 9222

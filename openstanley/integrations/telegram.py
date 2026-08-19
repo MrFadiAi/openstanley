@@ -57,6 +57,7 @@ HELP_TEXT = (
     "/reject <id> — reject a draft\n"
     "/post <text> — save your own text as a draft for review\n"
     "/digest — today's report, on demand\n"
+    "/study — study your X account fully & refresh my brain\n"
     "\nAnything else you type, I answer — same brain as the dashboard."
 )
 
@@ -352,6 +353,37 @@ def _cmd_drafts() -> str:
     ) + "\n/approve <id> · /reject <id>"
 
 
+def _cmd_study(cfg: Config) -> str:
+    """Full 'learn me' chain: import own+niche posts, study the niche, deep-scan
+    voice, refresh metrics, reflect everything into the brain. Read-only on X.
+    Reuses the server's loop runner — same code path as the dashboard buttons."""
+    import asyncio
+
+    async def _chain() -> list[str]:
+        from ..server.__main__ import _run_loop
+        out = []
+        for name, label in (("import", "📥"), ("study", "📚"), ("scan", "🔬"), ("learn", "🧠")):
+            r = await _run_loop(name)
+            res = (r.body if hasattr(r, "body") else r).get("result", {}) if not isinstance(r, dict) else r.get("result", {})
+            if name == "import":
+                me = (res or {}).get("me") or {}
+                out.append(f"📥 import: {res.get('own', '?')} own + {res.get('niche', '?')} niche"
+                           + (f" · @{me.get('username')} ({me.get('followers')} followers)" if me else ""))
+            elif name == "study":
+                out.append(f"📚 study: +{(res or {}).get('niche_new', 0)} niche · bank {(res or {}).get('bank', '?')}")
+            elif name == "scan":
+                out.append(f"🔬 scan: {(res or {}).get('posts_scanned', 0)} posts · voice {(res or {}).get('voice', '?')}")
+            else:
+                out.append(f"🧠 learn: refreshed {(res or {}).get('refreshed', 0)} posts")
+        return out
+
+    try:
+        lines = asyncio.run(_chain())
+        return "\n".join(lines) + "\n\n✅ brain updated — everything I know about you is fresh."
+    except Exception as e:  # noqa: BLE001
+        return f"study chain failed: {e}"
+
+
 def _cmd_digest(cfg: Config) -> str:
     from ..gen import digest as digest_mod
     d = digest_mod.build_digest(cfg)
@@ -466,6 +498,8 @@ def _handle_update(cfg: Config, upd: dict) -> None:
         reply = post_draft_tg(cfg, args)
     elif name == "digest":
         reply = _cmd_digest(cfg)
+    elif name == "study":
+        reply = _cmd_study(cfg)
     else:
         reply = f"Unknown command /{name} — /help lists what I can do."
     send_message(chat_id, reply)
@@ -490,7 +524,7 @@ async def start(cfg: Config, force: bool = False) -> None:
     """Start long-polling when settings allow it. force=True is the test
     escape hatch (ignores env guard + enabled check; httpx still faked)."""
     if not force:
-        if os.environ.get("XOPENSTANLEY_NO_TELEGRAM") == "1":
+        if os.environ.get("OPENSTANLEY_NO_TELEGRAM") == "1":
             _state["mode"] = "disabled"
             return
         if not is_enabled():

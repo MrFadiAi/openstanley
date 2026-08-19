@@ -38,7 +38,7 @@ class LLMConfig:
     provider: str = "openai-compatible"
     base_url: str = "https://api.openai.com/v1"
     model: str = "gpt-4o-mini"
-    api_key_env: str = "XOPENSTANLEY_LLM_API_KEY"
+    api_key_env: str = "OPENSTANLEY_LLM_API_KEY"
     temperature: float = 0.85
     max_tokens: int = 1200
     transport: str = "openai"  # openai | anthropic
@@ -53,13 +53,13 @@ class XConfig:
     mode: str = "dryrun"  # api | cookie | dryrun
     username: str = ""
     # official api v2
-    bearer_token_env: str = "XOPENSTANLEY_X_BEARER"
-    api_key_env: str = "XOPENSTANLEY_X_API_KEY"
-    api_secret_env: str = "XOPENSTANLEY_X_API_SECRET"
-    access_token_env: str = "XOPENSTANLEY_X_ACCESS_TOKEN"
-    access_secret_env: str = "XOPENSTANLEY_X_ACCESS_SECRET"
+    bearer_token_env: str = "OPENSTANLEY_X_BEARER"
+    api_key_env: str = "OPENSTANLEY_X_API_KEY"
+    api_secret_env: str = "OPENSTANLEY_X_API_SECRET"
+    access_token_env: str = "OPENSTANLEY_X_ACCESS_TOKEN"
+    access_secret_env: str = "OPENSTANLEY_X_ACCESS_SECRET"
     # cookie mode (twikit)
-    cookies_env: str = "XOPENSTANLEY_X_COOKIES"
+    cookies_env: str = "OPENSTANLEY_X_COOKIES"
     import_count: int = 400
     scan_count: int = 800   # deep-scan budget (posts+replies)
     # safety caps (cookie mode) — keep the account looking human
@@ -144,7 +144,7 @@ def load_config() -> Config:
             if k in raw:
                 setattr(cfg, k, raw[k])
     # env override — keeps tests hermetic regardless of data/config.toml
-    mode_env = os.environ.get("XOPENSTANLEY_X_MODE")
+    mode_env = os.environ.get("OPENSTANLEY_X_MODE")
     if mode_env in ("api", "cookie", "dryrun"):
         cfg.x.mode = mode_env
     return cfg

@@ -3,7 +3,7 @@ import base64
 import sys
 import httpx
 
-KEY = open(r"D:\ai\openstanley\.env", encoding="utf-8").read().split("XOPENSTANLEY_LLM_API_KEY=")[1].splitlines()[0].strip()
+KEY = open(r"D:\ai\openstanley\.env", encoding="utf-8").read().split("OPENSTANLEY_LLM_API_KEY=")[1].splitlines()[0].strip()
 URL = "https://api.z.ai/api/anthropic"
 
 PROMPT = """You are looking at a screenshot of getstanley.ai (an AI content agent for X/Twitter), page x.getstanley.ai/write.

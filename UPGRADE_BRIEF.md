@@ -3,7 +3,7 @@
 You are upgrading OpenStanley (D:\ai\openstanley) — a local-first clone of getstanley.ai
 (AI Head of Content for X), Python 3.11 venv at .venv, FastAPI backend + vanilla-JS
 dashboard at http://127.0.0.1:7878, SQLite at data/openstanley.db, real GLM-5.3 via z.ai
-anthropic transport (key in .env as XOPENSTANLEY_LLM_API_KEY — NEVER read .env into git,
+anthropic transport (key in .env as OPENSTANLEY_LLM_API_KEY — NEVER read .env into git,
 NEVER touch the X auth token in .env, NEVER make real X API calls in tests).
 
 CURRENT STATE (v0.2): chat-first "Ask OpenStanley" UI (Write/Calendar/Inbox/Ideas/Strategy/
@@ -116,7 +116,7 @@ query_analytics, pick_idea, scan_account, streaming chat uses it too
 ## CONSTRAINTS
 - Windows 11, Git-Bash paths (/d/ai/openstanley), Python 3.11 venv (.venv/Scripts/python)
 - LLM: z.ai anthropic transport ONLY (https://api.z.ai/api/anthropic), model glm-5.3,
-  key from env XOPENSTANLEY_LLM_API_KEY. GLM-5.3 has NO vision — never send images to it.
+  key from env OPENSTANLEY_LLM_API_KEY. GLM-5.3 has NO vision — never send images to it.
   For images use alt-text based reasoning only.
 - Keep FastAPI single-port (7878) serving API + built frontend
 - No new heavy deps beyond: React, Vite, TS, Tailwind, shadcn/ui, Lucide, Recharts,

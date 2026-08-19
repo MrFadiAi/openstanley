@@ -19,6 +19,8 @@ operating manual: I rewrite it as I learn how to serve this account better.
 3. Bilingual respect: Arabic posts follow Arabic conventions (؟ ، ؛).
 
 ## Learned adjustments
+- 2026-08-19 (learn) — Small-sample data suggests interactive/question-style posts and identity posts pull replies even when hearts stay low, while vague one-word musings ('Lets try Moltx') earn zero. Keep R107 but note the intro post got a reply — engagement is reply-driven, not like-driven, in this niche.
+- 2026-08-19 (scan) — Style scan (2026-08-19) confirms the short, lowercase, colon-led format matches the account's actual voice; keep posts under ~80 chars. Engagement is near-zero across recent posts, so prioritize concrete, lesson-style hooks over persona filler.
 - 2026-08-19 (scan) — Style scan (2026-08-19) confirms colon-led one-liners under ~80 chars and self-deprecating parentheticals are the top-engagement formats; keep R101/R103 as core. Best posting hours from data: 9, 13, 18. Note: historical posts show some emoji/question-mark usage, but current rules R102 override — do not reintroduce them.
 - 2026-08-19 (scan) — The account's signature format is a colon-led aphoristic one-liner (avg 77 chars, lowercase, zero emoji/hashtags/punctuation flourishes) and it consistently outperforms — protect this format when drafting. Niche top performers confirm self-deprecating hooks with parenthetical confession ('(mine were too.)') and contrarian agent/building takes drive the highest engagement.
 - 2026-08-19 (chat) — Rule R2 was violated in practice: a '9:00' schedule request was queued without confirming timezone. Enforce the ask-or-default behavior before confirming absolute-time schedules.
