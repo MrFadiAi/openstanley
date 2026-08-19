@@ -112,7 +112,7 @@ def latest_followers() -> int:
                         "ORDER BY captured_at DESC, id DESC LIMIT 1").fetchone()
     if row:
         return int(row["followers"])
-    me = db.get_setting("me") or {}
+    me = db.get_me()
     try:
         return int(me.get("followers") or 0)
     except (TypeError, ValueError):
@@ -165,11 +165,11 @@ def render_summary(summary: dict) -> str:
 async def refresh_metrics(x, cfg, limit: int = REFRESH_LIMIT) -> dict:
     """Pull own recent tweets w/ metrics → posts upsert + time series +
     hash-gated brain reflection. Reads only; existing client methods only."""
-    me = db.get_setting("me") or {}
+    me = db.get_me()
     try:
         fresh = await x.me()  # keeps followers current for identity series
         me = {**me, **fresh}
-        db.set_setting("me", me)
+        db.set_me(me)
     except Exception as e:  # noqa: BLE001 — stored identity is a fine fallback
         db.log("metrics", f"me() refresh failed, using stored identity: {e}",
                level="warn")
@@ -272,7 +272,7 @@ def growth_series(days: int = 14) -> dict:
 
 
 def _public_post(p: dict, followers: int, rank: Optional[int]) -> dict:
-    handle = p.get("author_handle") or (db.get_setting("me") or {}).get("username", "")
+    handle = p.get("author_handle") or (db.get_me()).get("username", "")
     x_id = p.get("x_id")
     return {
         "rank": rank,

@@ -77,22 +77,25 @@ def _normalize(m: dict) -> Optional[dict]:
     }
 
 
-def _is_own(c, x_id: str, author: str, me: str) -> bool:
+def _is_own(c, x_id: str, author: str, me: str, acct: int) -> bool:
     """Own tweets never enter the inbox (self-mention noise, echoed posts)."""
     if me and author.lower() == me.lower():
         return True
-    row = c.execute("SELECT is_own FROM posts WHERE x_id=?", (x_id,)).fetchone()
+    row = c.execute("SELECT is_own FROM posts WHERE account_id=? AND x_id=?",
+                    (acct, x_id)).fetchone()
     return bool(row and row["is_own"])
 
 
 async def fetch_mentions(x, limit: int = FETCH_LIMIT) -> list[dict]:
     """Pull mentions → store unseen ones. Returns the NEW normalized rows.
 
-    Skips own tweets; dedupes by x_id against `posts` + `seen_mentions`.
-    When the client says the mention replies to one of our posts (or carries
-    a parent id), fetches the parent text as conversation context.
+    Operates on the ACTIVE account. Skips own tweets; dedupes by x_id
+    against `posts` + `seen_mentions`. When the client says the mention
+    replies to one of our posts (or carries a parent id), fetches the
+    parent text as conversation context.
     """
-    me = (db.get_setting("me") or {}).get("username") \
+    acct = db.active_account()
+    me = db.get_me(acct).get("username") \
         or getattr(x, "username", "") or ""
     stored: list[dict] = []
     try:
@@ -118,14 +121,14 @@ async def fetch_mentions(x, limit: int = FETCH_LIMIT) -> list[dict]:
                 pass
         try:
             with db.connect() as c:
-                if _is_own(c, x_id, author, me):
+                if _is_own(c, x_id, author, me, acct):
                     continue
                 before = c.total_changes
                 c.execute(
                     "INSERT OR IGNORE INTO seen_mentions "
-                    "(x_id, author, text, created_at, first_seen, handled) "
-                    "VALUES (?,?,?,?,?,0)",
-                    (x_id, author, n["text"], n["created_at"], _now()),
+                    "(account_id, x_id, author, text, created_at, first_seen, handled) "
+                    "VALUES (?,?,?,?,?,?,0)",
+                    (acct, x_id, author, n["text"], n["created_at"], _now()),
                 )
                 if c.total_changes == before:
                     continue  # already seen
@@ -140,12 +143,13 @@ async def fetch_mentions(x, limit: int = FETCH_LIMIT) -> list[dict]:
     return stored
 
 
-def _rows(where: str, limit: int) -> list[dict]:
+def _rows(where: str, limit: int, acct: Optional[int] = None) -> list[dict]:
+    a = db.active_account() if acct is None else acct
     with db.connect() as c:
         rows = c.execute(
-            f"SELECT * FROM seen_mentions WHERE {where} "
+            f"SELECT * FROM seen_mentions WHERE account_id=? AND {where} "
             "ORDER BY created_at IS NULL, created_at DESC, first_seen DESC "
-            "LIMIT ?", (limit,)).fetchall()
+            "LIMIT ?", (a, limit)).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -169,17 +173,20 @@ def recent_mentions(limit: int = PENDING_CAP) -> list[dict]:
     return _rows("1=1", limit)
 
 
-def mark_handled(x_id: str) -> None:
+def mark_handled(x_id: str, acct: Optional[int] = None) -> None:
+    a = db.active_account() if acct is None else acct
     with db.connect() as c:
-        c.execute("UPDATE seen_mentions SET handled=1 WHERE x_id=?", (x_id,))
+        c.execute("UPDATE seen_mentions SET handled=1 WHERE account_id=? AND x_id=?",
+                  (a, x_id))
 
 
-def _mention_draft_statuses() -> dict[str, dict]:
+def _mention_draft_statuses(acct: Optional[int] = None) -> dict[str, dict]:
     """x_id → latest mention-sourced reply draft {id, status} (for the API)."""
+    a = db.active_account() if acct is None else acct
     with db.connect() as c:
         rows = c.execute(
-            "SELECT id, status, meta_json FROM drafts WHERE kind='reply' "
-            "ORDER BY id").fetchall()
+            "SELECT id, status, meta_json FROM drafts WHERE account_id=? AND kind='reply' "
+            "ORDER BY id", (a,)).fetchall()
     out: dict[str, dict] = {}
     for r in rows:
         try:
@@ -192,7 +199,8 @@ def _mention_draft_statuses() -> dict[str, dict]:
 
 
 def mentions_view(pending_only: bool = True, limit: int = PENDING_CAP) -> list[dict]:
-    """Normalized mentions + draft status — the /api/mentions payload."""
+    """Normalized mentions + draft status — the /api/mentions payload
+    (active-account scoped)."""
     rows = pending_mentions(limit) if pending_only else recent_mentions(limit)
     drafts = _mention_draft_statuses()
     out = []
@@ -250,9 +258,12 @@ def draft_mention_reply(cfg: Config, mention: dict) -> Optional[int]:
 
 
 def stats() -> dict[str, Any]:
-    """Tiny counters for dashboards/tests."""
+    """Tiny counters for dashboards/tests (active-account scoped)."""
+    a = db.active_account()
     with db.connect() as c:
         (pending,) = c.execute(
-            "SELECT COUNT(*) FROM seen_mentions WHERE handled=0").fetchone()
-        (total,) = c.execute("SELECT COUNT(*) FROM seen_mentions").fetchone()
+            "SELECT COUNT(*) FROM seen_mentions WHERE account_id=? AND handled=0",
+            (a,)).fetchone()
+        (total,) = c.execute(
+            "SELECT COUNT(*) FROM seen_mentions WHERE account_id=?", (a,)).fetchone()
     return {"pending": pending, "total": total}

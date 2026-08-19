@@ -210,13 +210,16 @@ class XDry(XClient):
 
 
 class XCookie(XClient):
-    """twikit-based free client. Requires OPENSTANLEY_X_COOKIES env or config.
+    """twikit-based free client. Cookies come from the ACCOUNT row
+    (accounts.cookies_json) with the .env bootstrap as a fallback for
+    account 1 only (v0.5.0) — the DB always wins when present.
 
     All writes go through safety: daily caps + jittered human-like delays.
     """
     mode = "cookie"
 
-    def __init__(self, cookies_json: str, username: str = "", caps: dict | None = None):
+    def __init__(self, cookies_json: str, username: str = "", caps: dict | None = None,
+                 account_id: int = 1):
         from ..core.safety import human_delay, check_and_record, usage
         self._human_delay = human_delay
         self._check_and_record = check_and_record
@@ -224,11 +227,12 @@ class XCookie(XClient):
         self._caps = caps or {"max_posts_per_day": 4, "max_replies_per_day": 10}
         self._cookies = cookies_json
         self.username = username
+        self.account_id = account_id
         self._client = None
         self._last_request = 0.0
 
     def safety_status(self) -> dict:
-        return {"caps": self._caps, "usage": self._safety_usage()}
+        return {"caps": self._caps, "usage": self._safety_usage(self.account_id)}
 
     async def _throttle_reads(self) -> None:
         """Space out read requests too — no rapid-fire scraping bursts."""
@@ -328,7 +332,7 @@ class XCookie(XClient):
                          quote_of: Optional[str] = None) -> dict:
         c = await self._ensure()
         kind = "replies" if reply_to else "posts"
-        self._check_and_record(kind, self._caps)  # raises SafetyCapExceeded if over
+        self._check_and_record(kind, self._caps, acct=self.account_id)  # raises SafetyCapExceeded if over
         await self._human_delay((self._caps.get("min_delay_s", 5), self._caps.get("max_delay_s", 20)))
         kwargs: dict = {"text": text}
         if reply_to:
@@ -346,7 +350,7 @@ class XCookie(XClient):
     async def post_thread(self, tweets: list[str]) -> list[dict]:
         # threads count as ONE post toward the cap, but still human-delay each tweet
         c = await self._ensure()
-        self._check_and_record("posts", self._caps)
+        self._check_and_record("posts", self._caps, acct=self.account_id)
         results = []
         reply_to = None
         for t in tweets:
@@ -533,19 +537,39 @@ class XApi(XClient):
         return (await asyncio.to_thread(c.get_me)).data.id
 
 
-def build_client(cfg) -> XClient:
-    """Factory from Config (x.mode)."""
+def resolve_cookies(cfg, account_id: int) -> str:
+    """Cookies for one account: the accounts row wins; the .env bootstrap
+    value is a fallback for account 1 only (v0.5.0)."""
+    import json as _json
+    stored = db.account_cookies(account_id)
+    if stored:
+        return stored
+    if account_id == 1:
+        env_cookies = cfg.x.cookies
+        if env_cookies:
+            try:  # accept a JSON object or a raw auth_token string
+                if isinstance(_json.loads(env_cookies), dict):
+                    return env_cookies
+            except (ValueError, TypeError):
+                pass
+    return ""
+
+
+def build_client(cfg, account_id: int | None = None) -> XClient:
+    """Factory from Config (x.mode). account_id defaults to the ACTIVE account."""
     import os
+    acct = db.active_account() if account_id is None else account_id
     mode = cfg.x.mode
     if mode == "cookie":
-        cookies = cfg.x.cookies or "{}"
+        cookies = resolve_cookies(cfg, acct) or "{}"
         caps = {
             "max_posts_per_day": cfg.x.max_posts_per_day,
             "max_replies_per_day": cfg.x.max_replies_per_day,
             "min_delay_s": cfg.x.min_delay_s,
             "max_delay_s": cfg.x.max_delay_s,
         }
-        return XCookie(cookies, cfg.x.username, caps=caps)
+        username = cfg.x.username if acct == 1 else ""
+        return XCookie(cookies, username, caps=caps, account_id=acct)
     if mode == "api":
         return XApi(
             bearer=os.environ.get(cfg.x.bearer_token_env, ""),

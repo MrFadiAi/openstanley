@@ -573,7 +573,7 @@ def _cmd_status(cfg: Config) -> str:
     from ..gen import autopilot as ap_mod
     from ..gen import ideas as ideas_mod
 
-    me = db.get_setting("me") or {}
+    me = db.get_me()
     ap = ap_mod.get_state()
     smoke = db.get_setting("smoke_last") or {}
     bank = ideas_mod.bank_health()

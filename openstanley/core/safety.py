@@ -2,7 +2,7 @@
 
 - Per-day caps on posts/replies
 - Jittered human-like delays before every write
-- Counters persisted in DB settings (reset by date)
+- Counters persisted in DB settings, keyed PER ACCOUNT (v0.5.0) and reset by date
 """
 from __future__ import annotations
 
@@ -19,32 +19,44 @@ class SafetyCapExceeded(Exception):
     """Raised when a daily cap would be exceeded. Publish loop catches + reschedules."""
 
 
-def _counters() -> dict:
-    c = db.get_setting("safety_counters") or {}
+def _key(acct: int | None) -> str:
+    a = db.active_account() if acct is None else acct
+    return f"safety_counters:{a}"
+
+
+def _counters(acct: int | None = None) -> dict:
+    c = db.get_setting(_key(acct))
+    if c is None and acct is None:  # pre-v0.5 single-install counters carry over
+        legacy = db.get_setting("safety_counters")
+        c = legacy if isinstance(legacy, dict) and legacy.get("date") == TODAY else None
+    c = c or {}
     if c.get("date") != TODAY:
         c = {"date": TODAY, "posts": 0, "replies": 0}
     return c
 
 
-def _save(c: dict) -> None:
-    db.set_setting("safety_counters", c)
+def _save(c: dict, acct: int | None = None) -> None:
+    db.set_setting(_key(acct), c)
 
 
-def usage() -> dict:
-    c = _counters()
+def usage(acct: int | None = None) -> dict:
+    c = _counters(acct)
     return {"date": c["date"], "posts": c.get("posts", 0), "replies": c.get("replies", 0)}
 
 
-def check_and_record(kind: str, caps: dict) -> None:
-    """kind: 'posts' | 'replies'. Raises SafetyCapExceeded if over cap."""
-    c = _counters()
+def check_and_record(kind: str, caps: dict, acct: int | None = None) -> None:
+    """kind: 'posts' | 'replies'. Raises SafetyCapExceeded if over cap.
+
+    acct: the account the write is for — counters are per account_id, so one
+    account hitting its cap never blocks another (v0.5.0)."""
+    c = _counters(acct)
     cap = caps.get(f"max_{kind}_per_day", 99)
     if c.get(kind, 0) >= cap:
         raise SafetyCapExceeded(
             f"Daily cap reached for {kind}: {c.get(kind)}/{cap}. Skipping until tomorrow."
         )
     c[kind] = c.get(kind, 0) + 1
-    _save(c)
+    _save(c, acct)
 
 
 async def human_delay(delay_range: tuple[int, int] = (3, 15), joke: bool = False) -> None:

@@ -96,7 +96,7 @@ def _context_trace(cfg: Config) -> dict:
              "chunks": ContextCards entries}. Steps/chunks only include
     sources that actually exist so the UI never renders empty trace rows.
     """
-    me = db.get_setting("me") or {}
+    me = db.get_me()
     parts = [f"ACCOUNT: @{me.get('username', cfg.x.username or 'unknown')} "
              f"({me.get('followers', '?')} followers, mode={cfg.x.mode})"]
     steps = [{"id": "account", "primary": "Reading your account",

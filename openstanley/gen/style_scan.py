@@ -35,7 +35,7 @@ async def scan_account(cfg, x_client, max_posts: int = 800) -> dict:
     via `asyncio.to_thread`-style thread + `asyncio.run`, or call it from the
     server where its sync tail is acceptable.
     """
-    me = db.get_setting("me") or await x_client.me()
+    me = db.get_me() or await x_client.me()
     username = me.get("username") or cfg.x.username
     db.log("scan", f"deep scan starting for @{username} (cap {max_posts})")
 

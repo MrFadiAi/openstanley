@@ -43,7 +43,7 @@ Cadence & Formats
 
 
 def _account_data() -> str:
-    me = db.get_setting("me") or {}
+    me = db.get_me()
     parts = [f"@{me.get('username','?')} — {me.get('followers','?')} followers"]
     own = db.own_posts(40)
     if own:

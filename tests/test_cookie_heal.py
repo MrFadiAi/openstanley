@@ -279,7 +279,7 @@ def test_xcookie_write_not_auto_retried(monkeypatch, heal_state, clock, logs, tm
     monkeypatch.setattr(safety, "human_delay", _no_delay)
     # counters live in the shared test DB — keep the cap check deterministic
     monkeypatch.setattr(safety, "check_and_record",
-                        lambda kind, caps: recorded.append(kind))
+                        lambda kind, caps, acct=None: recorded.append(kind))
 
     class _FakeTwikitClient:
         def __init__(self, lang: str):

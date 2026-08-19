@@ -1,4 +1,10 @@
-"""SQLite persistence layer — all state lives in data/openstanley.db."""
+"""SQLite persistence layer — all state lives in data/openstanley.db.
+
+v0.5.0 multi-account: an `accounts` registry scopes every content table.
+Rows in scoped tables carry account_id; helpers take an optional `acct`
+parameter (defaulting to the ACTIVE account from settings). App-level
+tables (settings, chat_messages, agent_log, accounts) are NOT scoped.
+"""
 from __future__ import annotations
 
 import json
@@ -11,12 +17,23 @@ from typing import Any, Optional
 
 DB_PATH = Path(os.environ.get("OPENSTANLEY_TEST_DB")
                or (Path(__file__).resolve().parent.parent.parent / "data" / "openstanley.db"))
-_lock = threading.Lock()
+# RLock: scoped helpers may resolve the ACTIVE account (a settings read)
+# while already holding the lock — same thread, reentrant by design
+_lock = threading.RLock()
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    handle TEXT DEFAULT '',
+    created_at TEXT,
+    status TEXT DEFAULT 'active',         -- active | archived
+    cookies_json TEXT DEFAULT ''           -- per-account X cookies (never logged)
+);
+
 CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    x_id TEXT UNIQUE,
+    account_id INTEGER NOT NULL DEFAULT 1,
+    x_id TEXT,
     author_handle TEXT,
     is_own INTEGER DEFAULT 0,
     created_at TEXT,
@@ -29,14 +46,14 @@ CREATE TABLE IF NOT EXISTS posts (
     engagement REAL DEFAULT 0,
     topics TEXT DEFAULT '',
     raw_json TEXT,
-    metrics_json TEXT                   -- LATEST metrics capture (history lives in metric_snapshots)
+    metrics_json TEXT,                    -- LATEST metrics capture (history lives in metric_snapshots)
+    UNIQUE (account_id, x_id)
 );
-CREATE INDEX IF NOT EXISTS idx_posts_own ON posts(is_own, created_at);
-CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_handle);
 
 -- append-only time series (v0.3.6 analytics ground truth — never rewritten)
 CREATE TABLE IF NOT EXISTS metric_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL DEFAULT 1,
     post_x_id TEXT NOT NULL,
     captured_at TEXT NOT NULL,
     likes INTEGER DEFAULT 0,
@@ -44,17 +61,16 @@ CREATE TABLE IF NOT EXISTS metric_snapshots (
     replies INTEGER DEFAULT 0,
     impressions INTEGER DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_metric_snap_post ON metric_snapshots(post_x_id, captured_at);
 
 CREATE TABLE IF NOT EXISTS identity_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL DEFAULT 1,
     captured_at TEXT NOT NULL,
     followers INTEGER DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS idx_identity_snap_time ON identity_snapshots(captured_at);
 
 CREATE TABLE IF NOT EXISTS voice_profile (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
+    account_id INTEGER PRIMARY KEY,
     rubric TEXT DEFAULT '',
     examples_json TEXT DEFAULT '[]',
     updated_at TEXT
@@ -62,6 +78,7 @@ CREATE TABLE IF NOT EXISTS voice_profile (
 
 CREATE TABLE IF NOT EXISTS ideas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL DEFAULT 1,
     title TEXT NOT NULL,
     angle TEXT,
     format TEXT DEFAULT 'one-liner',
@@ -74,8 +91,9 @@ CREATE TABLE IF NOT EXISTS ideas (
 
 CREATE TABLE IF NOT EXISTS drafts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL DEFAULT 1,
     idea_id INTEGER,
-    kind TEXT DEFAULT 'post',        -- post|reply
+    kind TEXT DEFAULT 'post',        -- post|reply|quote
     text TEXT NOT NULL,
     thread_json TEXT,                -- JSON list for threads, null for single
     status TEXT DEFAULT 'draft',     -- draft|approved|rejected|published|failed
@@ -83,15 +101,17 @@ CREATE TABLE IF NOT EXISTS drafts (
     scheduled_at TEXT,
     x_id TEXT,
     meta_json TEXT,
+    image TEXT,
+    quote_of TEXT,                   -- quoted tweet x_id
     created_at TEXT,
     published_at TEXT,
     FOREIGN KEY (idea_id) REFERENCES ideas(id)
 );
-CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
 
 CREATE TABLE IF NOT EXISTS engagements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    x_id TEXT UNIQUE,
+    account_id INTEGER NOT NULL DEFAULT 1,
+    x_id TEXT,
     kind TEXT,                        -- mention|reply-to-me|notification
     author_handle TEXT,
     author_name TEXT,
@@ -99,18 +119,21 @@ CREATE TABLE IF NOT EXISTS engagements (
     draft_id INTEGER,
     status TEXT DEFAULT 'new',        -- new|drafted|replied|ignored
     created_at TEXT,
-    seen_at TEXT
+    seen_at TEXT,
+    UNIQUE (account_id, x_id)
 );
 
--- mention inbox (v0.3.9): every incoming @-mention, deduped by x_id;
+-- mention inbox (v0.3.9): every incoming @-mention, deduped per account;
 -- handled=1 exactly when a reply draft exists for it
 CREATE TABLE IF NOT EXISTS seen_mentions (
-    x_id TEXT PRIMARY KEY,
+    account_id INTEGER NOT NULL DEFAULT 1,
+    x_id TEXT,
     author TEXT,
     text TEXT,
     created_at TEXT,
     first_seen TEXT,
-    handled INTEGER DEFAULT 0
+    handled INTEGER DEFAULT 0,
+    PRIMARY KEY (account_id, x_id)
 );
 
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
@@ -134,6 +157,7 @@ CREATE TABLE IF NOT EXISTS agent_log (
 
 CREATE TABLE IF NOT EXISTS eval_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL DEFAULT 1,
     ts TEXT,
     label TEXT DEFAULT 'manual',      -- manual | ab:with-brain | ab:no-brain
     real_llm INTEGER DEFAULT 0,
@@ -148,14 +172,31 @@ CREATE TABLE IF NOT EXISTS eval_runs (
 
 CREATE TABLE IF NOT EXISTS eval_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL DEFAULT 1,
     run_id INTEGER,
     suite TEXT,
     score REAL,
     details_json TEXT,
     FOREIGN KEY (run_id) REFERENCES eval_runs(id)
 );
-CREATE INDEX IF NOT EXISTS idx_eval_results_run ON eval_results(run_id);
+
+-- indexes are created in _migrate() AFTER table rebuilds — a fresh SCHEMA run
+-- on a pre-v0.5 DB would otherwise index columns that do not exist yet
 """
+
+INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_posts_own ON posts(account_id, is_own, created_at);
+CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_handle);
+CREATE INDEX IF NOT EXISTS idx_metric_snap_post ON metric_snapshots(account_id, post_x_id, captured_at);
+CREATE INDEX IF NOT EXISTS idx_identity_snap_time ON identity_snapshots(account_id, captured_at);
+CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_eval_results_run ON eval_results(account_id, run_id);
+"""
+
+# tables whose rows are scoped by account_id (v0.5.0)
+SCOPED_TABLES = ("posts", "drafts", "ideas", "engagements", "seen_mentions",
+                 "metric_snapshots", "identity_snapshots", "voice_profile",
+                 "eval_runs", "eval_results")
 
 
 def _now() -> str:
@@ -178,7 +219,8 @@ def init_db() -> None:
 
 
 def _migrate(c: sqlite3.Connection) -> None:
-    """Idempotent column migrations for DBs created before v0.3."""
+    """Idempotent migrations. v0.5.0: account scoping — old rows land in
+    account 1 (the bootstrap account), nothing is dropped."""
     cols = {r["name"] for r in c.execute("PRAGMA table_info(drafts)").fetchall()}
     if "image" not in cols:
         c.execute("ALTER TABLE drafts ADD COLUMN image TEXT")
@@ -192,6 +234,253 @@ def _migrate(c: sqlite3.Connection) -> None:
     ccols = {r["name"] for r in c.execute("PRAGMA table_info(chat_messages)").fetchall()}
     if "chat_id" not in ccols:
         c.execute("ALTER TABLE chat_messages ADD COLUMN chat_id INTEGER")
+
+    # ---- v0.5.0 multi-account migration ----
+    _migrate_accounts(c)
+
+    # constraint rebuilds: uniqueness moved from x_id alone to (account_id, x_id)
+    _rebuild_table(c, "posts", """
+        CREATE TABLE posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL DEFAULT 1,
+            x_id TEXT,
+            author_handle TEXT,
+            is_own INTEGER DEFAULT 0,
+            created_at TEXT,
+            text TEXT,
+            impressions INTEGER DEFAULT 0,
+            likes INTEGER DEFAULT 0,
+            reposts INTEGER DEFAULT 0,
+            replies INTEGER DEFAULT 0,
+            bookmarks INTEGER DEFAULT 0,
+            engagement REAL DEFAULT 0,
+            topics TEXT DEFAULT '',
+            raw_json TEXT,
+            metrics_json TEXT,
+            UNIQUE (account_id, x_id))""")
+    _rebuild_table(c, "engagements", """
+        CREATE TABLE engagements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL DEFAULT 1,
+            x_id TEXT,
+            kind TEXT,
+            author_handle TEXT,
+            author_name TEXT,
+            text TEXT,
+            draft_id INTEGER,
+            status TEXT DEFAULT 'new',
+            created_at TEXT,
+            seen_at TEXT,
+            UNIQUE (account_id, x_id))""")
+    _rebuild_table(c, "seen_mentions", """
+        CREATE TABLE seen_mentions (
+            account_id INTEGER NOT NULL DEFAULT 1,
+            x_id TEXT,
+            author TEXT,
+            text TEXT,
+            created_at TEXT,
+            first_seen TEXT,
+            handled INTEGER DEFAULT 0,
+            PRIMARY KEY (account_id, x_id))""")
+    _rebuild_table(c, "voice_profile", """
+        CREATE TABLE voice_profile (
+            account_id INTEGER PRIMARY KEY,
+            rubric TEXT DEFAULT '',
+            examples_json TEXT DEFAULT '[]',
+            updated_at TEXT)""")
+
+    # simple column adds for the remaining scoped tables
+    for table in ("drafts", "ideas", "metric_snapshots", "identity_snapshots",
+                  "eval_runs", "eval_results"):
+        tcols = {r["name"] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}
+        if "account_id" not in tcols:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN account_id INTEGER NOT NULL DEFAULT 1")
+
+    # scoped indexes (fresh shapes); old unscoped ones get dropped first —
+    # CREATE IF NOT EXISTS would silently keep the wrong definition
+    for stale in ("idx_posts_own", "idx_metric_snap_post", "idx_identity_snap_time",
+                  "idx_drafts_status", "idx_eval_results_run"):
+        c.execute(f"DROP INDEX IF EXISTS {stale}")
+    c.executescript(INDEXES)
+
+
+def _rebuild_table(c: sqlite3.Connection, table: str, create_sql: str) -> None:
+    """Rebuild a table whose old shape lacks account_id / has the wrong
+    uniqueness constraint. Only fires when the old shape is detected; the
+    copy stamps every existing row with account_id=1 (bootstrap account)
+    and keeps every column the new shape still has."""
+    cols = {r["name"] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}
+    if "account_id" in cols:
+        return  # already migrated (or created fresh by SCHEMA)
+    c.execute(f"ALTER TABLE {table} RENAME TO {table}__old")
+    c.execute(create_sql)
+    new_cols = [r["name"] for r in c.execute(f"PRAGMA table_info({table})").fetchall()]
+    old_cols = [r["name"] for r in c.execute(f"PRAGMA table_info({table}__old)").fetchall()]
+    shared = [col for col in new_cols if col in old_cols and col != "account_id"]
+    select_cols = ", ".join(shared)
+    c.execute(f"INSERT INTO {table} (account_id, {select_cols}) "
+              f"SELECT 1, {select_cols} FROM {table}__old")
+    c.execute(f"DROP TABLE {table}__old")
+
+
+def _migrate_accounts(c: sqlite3.Connection) -> None:
+    """Seed the accounts registry — the pre-v0.5 single install becomes
+    account 1, keeping the handle X knew it by (when we have one)."""
+    row = c.execute("SELECT COUNT(*) AS n FROM accounts").fetchone()
+    if row["n"] == 0:
+        handle = ""
+        try:
+            me = json.loads(c.execute(
+                "SELECT value FROM settings WHERE key='me'").fetchone()["value"])
+            handle = str(me.get("username") or "")
+        except (TypeError, ValueError, KeyError, sqlite3.Error):
+            pass
+        c.execute("INSERT INTO accounts (id, handle, created_at, status, cookies_json) "
+                  "VALUES (1, ?, ?, 'active', '')", (handle, _now()))
+
+
+# ---------- accounts (v0.5.0) ----------
+
+def active_account() -> int:
+    """The account all loops/UI operate on right now (settings-backed)."""
+    try:
+        return max(1, int(get_setting("active_account_id", 1) or 1))
+    except (TypeError, ValueError):
+        return 1
+
+
+def set_active_account(account_id: int) -> bool:
+    with _lock, connect() as c:
+        row = c.execute("SELECT id FROM accounts WHERE id=? AND status='active'",
+                        (account_id,)).fetchone()
+        if row is None:
+            return False
+        c.execute(
+            "INSERT INTO settings (key, value) VALUES ('active_account_id', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (json.dumps(int(account_id)),))
+    return True
+
+
+def _acct(acct: Optional[int]) -> int:
+    return active_account() if acct is None else int(acct)
+
+
+def get_account(account_id: int) -> Optional[dict]:
+    with _lock, connect() as c:
+        row = c.execute("SELECT id, handle, created_at, status, cookies_json "
+                        "FROM accounts WHERE id=?", (account_id,)).fetchone()
+    if row is None:
+        return None
+    d = dict(row)
+    d["cookies_json"] = d.pop("cookies_json") or ""
+    d["cookies_set"] = bool(d["cookies_json"])
+    return d
+
+
+def list_accounts() -> list[dict]:
+    """Registry view: handle, follower snapshot, own-post count (no secrets)."""
+    with _lock, connect() as c:
+        rows = c.execute("SELECT id, handle, created_at, status, cookies_json "
+                         "FROM accounts ORDER BY id").fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            cookies = d.pop("cookies_json") or ""
+            (followers,) = c.execute(
+                "SELECT followers FROM identity_snapshots WHERE account_id=? "
+                "ORDER BY captured_at DESC, id DESC LIMIT 1", (d["id"],)).fetchone() or (None,)
+            (posts_n,) = c.execute(
+                "SELECT COUNT(*) FROM posts WHERE account_id=? AND is_own=1",
+                (d["id"],)).fetchone()
+            d.update({"cookies_set": bool(cookies),
+                      "cookies_masked": mask_cookies(cookies),
+                      "followers": followers, "own_posts": posts_n,
+                      "active": d["id"] == active_account()})
+            out.append(d)
+    return out
+
+
+def create_account(handle: str, cookies_json: str = "") -> int:
+    handle = (handle or "").strip().lstrip("@")
+    with _lock, connect() as c:
+        cur = c.execute(
+            "INSERT INTO accounts (handle, created_at, status, cookies_json) "
+            "VALUES (?,?, 'active', ?)", (handle, _now(), cookies_json or ""))
+        return cur.lastrowid
+
+
+def set_account_handle(account_id: int, handle: str) -> bool:
+    handle = (handle or "").strip().lstrip("@")
+    with _lock, connect() as c:
+        cur = c.execute("UPDATE accounts SET handle=? WHERE id=?",
+                        (handle, account_id))
+        return cur.rowcount > 0
+
+
+def account_cookies(account_id: int) -> str:
+    """DB-stored cookies for one account ('' when none). Env .env bootstrap
+    fallback for account 1 is resolved by the caller (server/client layer)."""
+    with _lock, connect() as c:
+        row = c.execute("SELECT cookies_json FROM accounts WHERE id=?",
+                        (account_id,)).fetchone()
+    return (row["cookies_json"] or "") if row else ""
+
+
+def set_account_cookies(account_id: int, cookies_json: str) -> bool:
+    with _lock, connect() as c:
+        cur = c.execute("UPDATE accounts SET cookies_json=? WHERE id=?",
+                        (cookies_json or "", account_id))
+        return cur.rowcount > 0
+
+
+def mask_cookies(cookies_json: str) -> Optional[str]:
+    """Masked hint for GET views — never the values (scrubbed like the TG token)."""
+    if not cookies_json:
+        return None
+    try:
+        data = json.loads(cookies_json)
+        token = str(data.get("auth_token") or "")
+    except (ValueError, TypeError):
+        token = ""
+    if len(token) > 4:
+        return f"••••{token[-4:]}"
+    return "(set)"
+
+
+def dump_account(account_id: int) -> dict:
+    """All scoped rows for one account (for archiving before deletion)."""
+    with _lock, connect() as c:
+        out: dict[str, list] = {}
+        for table in SCOPED_TABLES:
+            rows = c.execute(
+                f"SELECT * FROM {table} WHERE account_id=?", (account_id,)).fetchall()
+            out[table] = [dict(r) for r in rows]
+    return out
+
+
+def delete_account_rows(account_id: int, keep_account: bool = False) -> None:
+    """Remove one account's scoped rows (and the account row itself unless
+    keep_account — used when resetting a broken connect)."""
+    with _lock, connect() as c:
+        for table in SCOPED_TABLES:
+            c.execute(f"DELETE FROM {table} WHERE account_id=?", (account_id,))
+        if not keep_account:
+            c.execute("DELETE FROM accounts WHERE id=?", (account_id,))
+
+
+# ---------- per-account identity ("me") ----------
+
+def set_me(me: dict, acct: Optional[int] = None) -> None:
+    """Account 1 IS the legacy pre-v0.5 account — its identity lives in the
+    original 'me' settings key; other accounts get 'me:<id>'."""
+    a = _acct(acct)
+    set_setting("me" if a == 1 else f"me:{a}", me)
+
+
+def get_me(acct: Optional[int] = None) -> dict:
+    a = _acct(acct)
+    return get_setting("me" if a == 1 else f"me:{a}") or {}
 
 
 def log(loop: str, message: str, level: str = "info") -> None:
@@ -222,7 +511,7 @@ def set_setting(key: str, value: Any) -> None:
         )
 
 
-# ---------- chat (OpenStanley agent) ----------
+# ---------- chat (OpenStanley agent; app-level, chat_id-scoped) ----------
 
 def add_chat_message(role: str, content: str, meta: dict | None = None,
                      chat_id: int | None = None) -> int:
@@ -271,7 +560,7 @@ def chat_history_for_chat(chat_id: int, limit: int = 40) -> list[dict]:
 
 # ---------- posts ----------
 
-def upsert_post(p: dict) -> None:
+def upsert_post(p: dict, acct: Optional[int] = None) -> None:
     # Algorithm-weighted engagement (X 2025-26 weights: reply ≈27-75x like, RT ≈2x like).
     # Pragmatic skew 1:3:8 (likes:reposts:replies) — full 1:2:54 ratio overweights
     # single-viral-reply posts for ranking a personal corpus.
@@ -280,15 +569,15 @@ def upsert_post(p: dict) -> None:
     rate = (eng / impressions) if impressions > 0 else 0.0
     with _lock, connect() as c:
         c.execute(
-            """INSERT INTO posts (x_id, author_handle, is_own, created_at, text,
+            """INSERT INTO posts (account_id, x_id, author_handle, is_own, created_at, text,
                impressions, likes, reposts, replies, bookmarks, engagement, topics, raw_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-               ON CONFLICT(x_id) DO UPDATE SET
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(account_id, x_id) DO UPDATE SET
                  impressions=excluded.impressions, likes=excluded.likes,
                  reposts=excluded.reposts, replies=excluded.replies,
                  bookmarks=excluded.bookmarks, engagement=excluded.engagement""",
             (
-                p.get("x_id"), p.get("author_handle", ""), int(p.get("is_own", 0)),
+                _acct(acct), p.get("x_id"), p.get("author_handle", ""), int(p.get("is_own", 0)),
                 p.get("created_at"), p.get("text", ""),
                 int(p.get("impressions", 0)), int(p.get("likes", 0)),
                 int(p.get("reposts", 0)), int(p.get("replies", 0)),
@@ -298,48 +587,53 @@ def upsert_post(p: dict) -> None:
         )
 
 
-def own_posts(limit: int = 500) -> list[dict]:
+def own_posts(limit: int = 500, acct: Optional[int] = None) -> list[dict]:
     with _lock, connect() as c:
         rows = c.execute(
-            "SELECT * FROM posts WHERE is_own=1 ORDER BY created_at DESC LIMIT ?", (limit,)
+            "SELECT * FROM posts WHERE account_id=? AND is_own=1 "
+            "ORDER BY created_at DESC LIMIT ?", (_acct(acct), limit)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def niche_posts(limit: int = 400) -> list[dict]:
+def niche_posts(limit: int = 400, acct: Optional[int] = None) -> list[dict]:
     with _lock, connect() as c:
         rows = c.execute(
-            "SELECT * FROM posts WHERE is_own=0 AND engagement > 0 "
-            "ORDER BY engagement DESC LIMIT ?", (limit,)
+            "SELECT * FROM posts WHERE account_id=? AND is_own=0 AND engagement > 0 "
+            "ORDER BY engagement DESC LIMIT ?", (_acct(acct), limit)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def posts_needing_metrics(hours: int = 72, limit: int = 100) -> list[dict]:
+def posts_needing_metrics(hours: int = 72, limit: int = 100,
+                          acct: Optional[int] = None) -> list[dict]:
     cutoff = (datetime.now() - timedelta(hours=hours)).isoformat(timespec="seconds")
     with _lock, connect() as c:
         rows = c.execute(
-            "SELECT * FROM posts WHERE is_own=1 AND created_at > ? AND x_id IS NOT NULL "
-            "ORDER BY created_at DESC LIMIT ?", (cutoff, limit)
+            "SELECT * FROM posts WHERE account_id=? AND is_own=1 AND created_at > ? "
+            "AND x_id IS NOT NULL ORDER BY created_at DESC LIMIT ?",
+            (_acct(acct), cutoff, limit)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
 # ---------- voice ----------
 
-def save_voice(rubric: str, examples: list[dict]) -> None:
+def save_voice(rubric: str, examples: list[dict], acct: Optional[int] = None) -> None:
     with _lock, connect() as c:
         c.execute(
-            "INSERT INTO voice_profile (id, rubric, examples_json, updated_at) VALUES (1,?,?,?) "
-            "ON CONFLICT(id) DO UPDATE SET rubric=excluded.rubric, "
-            "examples_json=excluded.examples_json, updated_at=excluded.updated_at",
-            (rubric, json.dumps(examples, ensure_ascii=False), _now()),
+            "INSERT INTO voice_profile (account_id, rubric, examples_json, updated_at) "
+            "VALUES (?,?,?,?) ON CONFLICT(account_id) DO UPDATE SET "
+            "rubric=excluded.rubric, examples_json=excluded.examples_json, "
+            "updated_at=excluded.updated_at",
+            (_acct(acct), rubric, json.dumps(examples, ensure_ascii=False), _now()),
         )
 
 
-def load_voice() -> Optional[dict]:
+def load_voice(acct: Optional[int] = None) -> Optional[dict]:
     with _lock, connect() as c:
-        row = c.execute("SELECT * FROM voice_profile WHERE id=1").fetchone()
+        row = c.execute("SELECT * FROM voice_profile WHERE account_id=?",
+                        (_acct(acct),)).fetchone()
     if row is None:
         return None
     d = dict(row)
@@ -349,35 +643,40 @@ def load_voice() -> Optional[dict]:
 
 # ---------- ideas ----------
 
-def add_idea(title: str, angle: str, fmt: str, source: str, score: float = 0.0) -> int:
+def add_idea(title: str, angle: str, fmt: str, source: str, score: float = 0.0,
+             acct: Optional[int] = None) -> int:
     with _lock, connect() as c:
         cur = c.execute(
-            "INSERT INTO ideas (title, angle, format, source, score, created_at) VALUES (?,?,?,?,?,?)",
-            (title, angle, fmt, source, score, _now()),
+            "INSERT INTO ideas (account_id, title, angle, format, source, score, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (_acct(acct), title, angle, fmt, source, score, _now()),
         )
         return cur.lastrowid
 
 
-def fresh_ideas(limit: int = 20) -> list[dict]:
+def fresh_ideas(limit: int = 20, acct: Optional[int] = None) -> list[dict]:
     with _lock, connect() as c:
         rows = c.execute(
-            "SELECT * FROM ideas WHERE status='new' ORDER BY score DESC, created_at DESC LIMIT ?",
-            (limit,),
+            "SELECT * FROM ideas WHERE account_id=? AND status='new' "
+            "ORDER BY score DESC, created_at DESC LIMIT ?",
+            (_acct(acct), limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def idea_count() -> int:
+def idea_count(acct: Optional[int] = None) -> int:
     with _lock, connect() as c:
-        (n,) = c.execute("SELECT COUNT(*) FROM ideas WHERE status='new'").fetchone()
+        (n,) = c.execute("SELECT COUNT(*) FROM ideas WHERE account_id=? AND status='new'",
+                         (_acct(acct),)).fetchone()
     return n
 
 
-def mark_idea(idea_id: int, status: str) -> None:
+def mark_idea(idea_id: int, status: str, acct: Optional[int] = None) -> None:
     with _lock, connect() as c:
         c.execute(
-            "UPDATE ideas SET status=?, used_at=CASE WHEN ?='used' THEN ? ELSE used_at END WHERE id=?",
-            (status, status, _now(), idea_id),
+            "UPDATE ideas SET status=?, used_at=CASE WHEN ?='used' THEN ? ELSE used_at END "
+            "WHERE id=? AND account_id=?",
+            (status, status, _now(), idea_id, _acct(acct)),
         )
 
 
@@ -388,19 +687,20 @@ def add_draft(text: str, idea_id: Optional[int] = None, kind: str = "post",
               meta: Optional[dict] = None, image: Optional[str] = None,
               quote_of: Optional[str] = None,
               scheduled_at: Optional[str] = None,
-              status: str = "draft") -> int:
+              status: str = "draft", acct: Optional[int] = None) -> int:
     with _lock, connect() as c:
         cur = c.execute(
-            "INSERT INTO drafts (idea_id, kind, text, thread_json, status, temperature, meta_json, image, quote_of, scheduled_at, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (idea_id, kind, text, json.dumps(thread) if thread else None,
+            "INSERT INTO drafts (account_id, idea_id, kind, text, thread_json, status, "
+            "temperature, meta_json, image, quote_of, scheduled_at, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (_acct(acct), idea_id, kind, text, json.dumps(thread) if thread else None,
              status, temperature, json.dumps(meta or {}, ensure_ascii=False),
              image, quote_of, scheduled_at, _now()),
         )
         return cur.lastrowid
 
 
-def update_draft(draft_id: int, **fields: Any) -> None:
+def update_draft(draft_id: int, acct: Optional[int] = None, **fields: Any) -> None:
     allowed = {"text", "thread_json", "status", "scheduled_at", "x_id", "published_at",
                "meta_json", "image", "quote_of", "kind", "temperature"}
     sets, vals = [], []
@@ -414,14 +714,17 @@ def update_draft(draft_id: int, **fields: Any) -> None:
     if not sets:
         return
     vals.append(draft_id)
+    vals.append(_acct(acct))
     with _lock, connect() as c:
-        c.execute(f"UPDATE drafts SET {', '.join(sets)} WHERE id=?", vals)
+        c.execute(f"UPDATE drafts SET {', '.join(sets)} WHERE id=? AND account_id=?", vals)
 
 
-def drafts_by_status(status: str, limit: int = 100) -> list[dict]:
+def drafts_by_status(status: str, limit: int = 100,
+                     acct: Optional[int] = None) -> list[dict]:
     with _lock, connect() as c:
         rows = c.execute(
-            "SELECT * FROM drafts WHERE status=? ORDER BY created_at DESC LIMIT ?", (status, limit)
+            "SELECT * FROM drafts WHERE account_id=? AND status=? "
+            "ORDER BY created_at DESC LIMIT ?", (_acct(acct), status, limit)
         ).fetchall()
     out = []
     for r in rows:
@@ -432,12 +735,13 @@ def drafts_by_status(status: str, limit: int = 100) -> list[dict]:
     return out
 
 
-def next_scheduled() -> Optional[dict]:
+def next_scheduled(acct: Optional[int] = None) -> Optional[dict]:
     with _lock, connect() as c:
         row = c.execute(
-            "SELECT * FROM drafts WHERE status='approved' AND scheduled_at IS NOT NULL "
-            "AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 1",
-            (_now(),),
+            "SELECT * FROM drafts WHERE account_id=? AND status='approved' "
+            "AND scheduled_at IS NOT NULL AND scheduled_at <= ? "
+            "ORDER BY scheduled_at LIMIT 1",
+            (_acct(acct), _now()),
         ).fetchone()
     if row is None:
         return None
@@ -447,10 +751,12 @@ def next_scheduled() -> Optional[dict]:
     return d
 
 
-def get_draft(draft_id: int) -> Optional[dict]:
-    """Fetch one draft of any status, with parsed thread/meta."""
+def get_draft(draft_id: int, acct: Optional[int] = None) -> Optional[dict]:
+    """Fetch one draft of any status (active-account scoped), with parsed
+    thread/meta."""
     with _lock, connect() as c:
-        row = c.execute("SELECT * FROM drafts WHERE id=?", (draft_id,)).fetchone()
+        row = c.execute("SELECT * FROM drafts WHERE id=? AND account_id=?",
+                        (draft_id, _acct(acct))).fetchone()
     if row is None:
         return None
     d = dict(row)
@@ -459,31 +765,37 @@ def get_draft(draft_id: int) -> Optional[dict]:
     return d
 
 
-def dashboard_stats() -> dict:
+def dashboard_stats(acct: Optional[int] = None) -> dict:
+    a = _acct(acct)
     with _lock, connect() as c:
         counts = {}
         for status in ("draft", "approved", "published", "rejected", "failed"):
             (counts[status],) = c.execute(
-                "SELECT COUNT(*) FROM drafts WHERE status=? AND kind='post'", (status,)
-            ).fetchone()
-        (own_count,) = c.execute("SELECT COUNT(*) FROM posts WHERE is_own=1").fetchone()
-        (niche_count,) = c.execute("SELECT COUNT(*) FROM posts WHERE is_own=0").fetchone()
-        (eng_new,) = c.execute("SELECT COUNT(*) FROM engagements WHERE status='new'").fetchone()
+                "SELECT COUNT(*) FROM drafts WHERE account_id=? AND status=? AND kind='post'",
+                (a, status)).fetchone()
+        (own_count,) = c.execute(
+            "SELECT COUNT(*) FROM posts WHERE account_id=? AND is_own=1", (a,)).fetchone()
+        (niche_count,) = c.execute(
+            "SELECT COUNT(*) FROM posts WHERE account_id=? AND is_own=0", (a,)).fetchone()
+        (eng_new,) = c.execute(
+            "SELECT COUNT(*) FROM engagements WHERE account_id=? AND status='new'",
+            (a,)).fetchone()
     return {
         "drafts": counts, "own_posts": own_count, "niche_posts": niche_count,
-        "new_engagements": eng_new, "ideas_bank": idea_count(),
+        "new_engagements": eng_new, "ideas_bank": idea_count(a),
     }
 
 
 # ---------- harness (eval runs) ----------
 
 def add_eval_run(label: str = "manual", real_llm: bool = False,
-                 use_brain: bool = True, config: dict | None = None) -> int:
+                 use_brain: bool = True, config: dict | None = None,
+                 acct: Optional[int] = None) -> int:
     with _lock, connect() as c:
         cur = c.execute(
-            "INSERT INTO eval_runs (ts, label, real_llm, use_brain, status, config_json) "
-            "VALUES (?,?,?,?, 'running', ?)",
-            (_now(), label, int(real_llm), int(use_brain),
+            "INSERT INTO eval_runs (account_id, ts, label, real_llm, use_brain, status, config_json) "
+            "VALUES (?,?,?,?,?, 'running', ?)",
+            (_acct(acct), _now(), label, int(real_llm), int(use_brain),
              json.dumps(config or {}, ensure_ascii=False)),
         )
         return cur.lastrowid
@@ -509,24 +821,27 @@ def update_eval_run(run_id: int, **fields: Any) -> None:
 
 
 def add_eval_result(run_id: int, suite: str, score: float,
-                    details: dict | None = None) -> None:
+                    details: dict | None = None, acct: Optional[int] = None) -> None:
     with _lock, connect() as c:
         c.execute(
-            "INSERT INTO eval_results (run_id, suite, score, details_json) VALUES (?,?,?,?)",
-            (run_id, suite, round(float(score), 1),
+            "INSERT INTO eval_results (account_id, run_id, suite, score, details_json) "
+            "VALUES (?,?,?,?,?)",
+            (_acct(acct), run_id, suite, round(float(score), 1),
              json.dumps(details or {}, ensure_ascii=False, default=str)),
         )
 
 
-def get_eval_run(run_id: int) -> Optional[dict]:
+def get_eval_run(run_id: int, acct: Optional[int] = None) -> Optional[dict]:
     with _lock, connect() as c:
-        row = c.execute("SELECT * FROM eval_runs WHERE id=?", (run_id,)).fetchone()
+        row = c.execute("SELECT * FROM eval_runs WHERE id=? AND account_id=?",
+                        (run_id, _acct(acct))).fetchone()
         if row is None:
             return None
         run = dict(row)
         results = c.execute(
-            "SELECT suite, score, details_json FROM eval_results WHERE run_id=? "
-            "ORDER BY id", (run_id,)).fetchall()
+            "SELECT suite, score, details_json FROM eval_results "
+            "WHERE run_id=? AND account_id=? ORDER BY id",
+            (run_id, _acct(acct))).fetchall()
     run["real_llm"] = bool(run["real_llm"])
     run["use_brain"] = bool(run["use_brain"])
     run["deltas"] = json.loads(run.pop("deltas_json") or "null")
@@ -538,11 +853,12 @@ def get_eval_run(run_id: int) -> Optional[dict]:
     return run
 
 
-def list_eval_runs(limit: int = 50) -> list[dict]:
+def list_eval_runs(limit: int = 50, acct: Optional[int] = None) -> list[dict]:
     with _lock, connect() as c:
         rows = c.execute(
             "SELECT id, ts, label, real_llm, use_brain, status, total, deltas_json "
-            "FROM eval_runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            "FROM eval_runs WHERE account_id=? ORDER BY id DESC LIMIT ?",
+            (_acct(acct), limit)).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -554,12 +870,12 @@ def list_eval_runs(limit: int = 50) -> list[dict]:
     return out
 
 
-def previous_eval_run(run_id: int) -> Optional[dict]:
+def previous_eval_run(run_id: int, acct: Optional[int] = None) -> Optional[dict]:
     """The most recent completed run with a LOWER id (delta baseline).
     A/B rows (any 'ab*' label — pair marker or arms) never shift it."""
     with _lock, connect() as c:
         row = c.execute(
-            "SELECT id FROM eval_runs WHERE id < ? AND status='done' "
-            "AND label NOT LIKE 'ab%' ORDER BY id DESC LIMIT 1", (run_id,)
-        ).fetchone()
-    return get_eval_run(row["id"]) if row else None
+            "SELECT id FROM eval_runs WHERE id < ? AND account_id=? AND status='done' "
+            "AND label NOT LIKE 'ab%' ORDER BY id DESC LIMIT 1",
+            (run_id, _acct(acct))).fetchone()
+    return get_eval_run(row["id"], acct=acct) if row else None

@@ -279,7 +279,7 @@ async def heal_cookies(xc: Any = None,
         xc._cookies = compact
         xc._client = None
     if token_rotated:
-        db.set_setting("me", None)
+        db.set_me(None)
 
     STATE.stale = False
     STATE.heal_ok = True

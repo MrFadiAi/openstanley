@@ -98,6 +98,15 @@ class CookieConnect(BaseModel):
     username: str | None = None
 
 
+class AccountCreate(BaseModel):
+    handle: str
+    cookies_json: str | None = None   # optional — can be pasted later
+
+
+class AccountCookies(BaseModel):
+    cookies_json: str
+
+
 class CapSettings(BaseModel):
     max_posts_per_day: int | None = None
     max_replies_per_day: int | None = None
@@ -178,7 +187,8 @@ async def mention_draft_ep(x_id: str):
     """Draft a reply to one mention on demand (Inbox [draft reply] button)."""
     from ..gen import mentions as mentions_mod
     with db.connect() as c:
-        row = c.execute("SELECT * FROM seen_mentions WHERE x_id=?", (x_id,)).fetchone()
+        row = c.execute("SELECT * FROM seen_mentions WHERE account_id=? AND x_id=?",
+                        (db.active_account(), x_id)).fetchone()
     if not row:
         raise HTTPException(404, f"unknown mention {x_id}")
     did = await asyncio.to_thread(mentions_mod.draft_mention_reply,
@@ -1402,11 +1412,99 @@ async def style_profile_ep():
             "updated_at": p.get("updated_at")}
 
 
+# ---------------- accounts (v0.5.0 multi-account) ----------------
+
+@app.get("/api/accounts")
+async def accounts_ep():
+    """Registry view — handles, follower snapshot, post count. No secrets:
+    cookies are write-only (masked hint, values never returned)."""
+    return {"active_account_id": db.active_account(), "accounts": db.list_accounts()}
+
+
+@app.post("/api/accounts")
+async def create_account_ep(body: AccountCreate):
+    handle = (body.handle or "").strip().lstrip("@")
+    if not handle:
+        raise HTTPException(400, "handle required")
+    cookies = ""
+    if body.cookies_json:
+        try:
+            parsed = json.loads(body.cookies_json)
+        except json.JSONDecodeError as e:
+            raise HTTPException(400, f"cookies_json parse error: {e}") from e
+        if not isinstance(parsed, dict) or "auth_token" not in parsed:
+            raise HTTPException(400, "cookies must be a JSON object with at least 'auth_token'")
+        cookies = body.cookies_json
+    acct_id = db.create_account(handle, cookies)
+    db.log("accounts", f"created account #{acct_id} (@{handle})")
+    return {"ok": True, "account_id": acct_id, "handle": handle}
+
+
+@app.post("/api/accounts/{account_id}/activate")
+async def activate_account_ep(account_id: int):
+    if not db.set_active_account(account_id):
+        raise HTTPException(404, f"no active account {account_id}")
+    _rebuild_agent()  # cookie client picks up the new account's cookies
+    db.log("accounts", f"switched active account → #{account_id} "
+                       f"(@{db.get_account(account_id)['handle'] or 'no handle yet'})")
+    return {"ok": True, "active_account_id": db.active_account()}
+
+
+@app.post("/api/accounts/{account_id}/cookies")
+async def set_account_cookies_ep(account_id: int, body: AccountCookies):
+    """Write-only cookie storage for one account (masked in GETs, never logged)."""
+    try:
+        parsed = json.loads(body.cookies_json)
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"cookies_json parse error: {e}") from e
+    if not isinstance(parsed, dict) or "auth_token" not in parsed:
+        raise HTTPException(400, "cookies must be a JSON object with at least 'auth_token'")
+    if not db.set_account_cookies(account_id, body.cookies_json):
+        raise HTTPException(404, f"no account {account_id}")
+    db.log("accounts", f"cookies updated for account #{account_id} (values not logged)")
+    return {"ok": True, "cookies_set": True,
+            "cookies_masked": db.mask_cookies(body.cookies_json)}
+
+
+@app.delete("/api/accounts/{account_id}")
+async def delete_account_ep(account_id: int):
+    """Archive one account to data/accounts/archive-<handle>-<date>/ then
+    remove its rows. The last remaining account cannot be deleted."""
+    account = db.get_account(account_id)
+    if not account:
+        raise HTTPException(404, f"no account {account_id}")
+    remaining = [a for a in db.list_accounts() if a["id"] != account_id]
+    if not remaining:
+        raise HTTPException(409, "cannot delete the only account")
+    from ..x.client import resolve_cookies  # cookies never enter the archive
+    handle = account["handle"] or f"account-{account_id}"
+    archive_dir = ROOT / "data" / "accounts" / \
+        f"archive-{handle}-{datetime.now().strftime('%Y%m%d')}"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    dump = db.dump_account(account_id)
+    (archive_dir / "dump.json").write_text(
+        json.dumps({"account": {k: v for k, v in account.items()
+                                if k not in ("cookies_json", "cookies_set")},
+                    **dump}, ensure_ascii=False, indent=1, default=str),
+        encoding="utf-8")
+    db.delete_account_rows(account_id)
+    if db.active_account() == account_id:
+        db.set_active_account(remaining[0]["id"])
+        _rebuild_agent()
+    db.log("accounts", f"archived + removed account #{account_id} (@{handle}) "
+                       f"→ {archive_dir.name}")
+    return {"ok": True, "archived_to": str(archive_dir.relative_to(ROOT)),
+            "active_account_id": db.active_account()}
+
+
 # ---------------- X connect (cookie wizard) ----------------
 
 @app.post("/api/x/cookie-connect")
 async def cookie_connect(body: CookieConnect):
-    """Validate cookies JSON against real X, and if OK switch mode to cookie."""
+    """Validate cookies JSON against real X, and if OK switch mode to cookie.
+
+    v0.5.0: cookies persist into the ACTIVE account's row (DB is the source
+    of truth; .env stays a bootstrap fallback for account 1)."""
     import json as _json
     try:
         cookies = _json.loads(body.cookies_json)
@@ -1421,7 +1519,8 @@ async def cookie_connect(body: CookieConnect):
         "min_delay_s": cfg.x.min_delay_s,
         "max_delay_s": cfg.x.max_delay_s,
     }
-    probe = XCookie(body.cookies_json, caps=caps)
+    acct = db.active_account()
+    probe = XCookie(body.cookies_json, caps=caps, account_id=acct)
     try:
         me = await probe.me()  # validates cookies by calling c.user()
     except HTTPException:
@@ -1429,41 +1528,45 @@ async def cookie_connect(body: CookieConnect):
     except Exception as e:  # noqa: BLE001
         db.log("system", f"cookie connect failed: {str(e)[:200]}", level="error")
         raise HTTPException(400, f"Cookies rejected by X: {str(e)[:300]}") from e
-    # success → persist cookies to .env and switch mode
-    import os as _os
+    # success → persist into the account row and switch mode
     single_line = _json.dumps(cookies, separators=(",", ":"))
-    env_path = ROOT / ".env"
-    _write_env(env_path, "OPENSTANLEY_X_COOKIES", single_line)
-    _os.environ[cfg.x.cookies_env] = single_line  # live process, no restart needed
+    db.set_account_cookies(acct, single_line)
+    db.set_account_handle(acct, me["username"])
     _set_config_mode("cookie")
-    db.set_setting("me", me)
+    db.set_me(me)
     db.log("system", f"connected @{me['username']} via cookies (followers={me.get('followers')})")
     # rebuild agent client so all loops use cookie mode now
     _rebuild_agent()
-    return {"ok": True, "username": me["username"], "followers": me.get("followers"), "mode": "cookie"}
+    return {"ok": True, "account_id": acct, "username": me["username"],
+            "followers": me.get("followers"), "mode": "cookie"}
 
 
 @app.get("/api/x/status")
 async def x_status():
     from ..core.safety import usage
     from ..x import cookie_heal
+    from ..x.client import resolve_cookies
     caps = {
         "max_posts_per_day": cfg.x.max_posts_per_day,
         "max_replies_per_day": cfg.x.max_replies_per_day,
         "min_delay_s": cfg.x.min_delay_s,
         "max_delay_s": cfg.x.max_delay_s,
     }
-    me = db.get_setting("me") or {}
+    acct = db.active_account()
+    me = db.get_me(acct)
+    account = db.get_account(acct) or {}
     heal = cookie_heal.status()
     return {
+        "account_id": acct,
         "mode": cfg.x.mode,
-        "username": me.get("username", cfg.x.username),
+        "username": me.get("username") or account.get("handle") or cfg.x.username,
         "followers": me.get("followers"),
-        "cookies_set": bool(cfg.x.cookies),
+        "cookies_set": bool(resolve_cookies(cfg, acct)),
+        "cookies_masked": db.mask_cookies(db.account_cookies(acct)),
         "cookies_stale": heal["stale"],
         "last_heal": heal["last_heal"],
         "heal_ok": heal["heal_ok"],
-        "safety": {"caps": caps, "usage": usage()},
+        "safety": {"caps": caps, "usage": usage(acct)},
     }
 
 

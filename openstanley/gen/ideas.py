@@ -132,9 +132,10 @@ def _novel(tokens: set[str], known: list[set[str]]) -> bool:
 
 def _bank_tokens() -> list[set[str]]:
     """Token sets of every banked idea — ANY status: a used or discarded idea
-    still represents an angle we've already covered."""
+    still represents an angle we've already covered (ACTIVE account)."""
     with db.connect() as c:
-        rows = c.execute("SELECT title, angle FROM ideas").fetchall()
+        rows = c.execute("SELECT title, angle FROM ideas WHERE account_id=?",
+                         (db.active_account(),)).fetchall()
     return [_tokens(f"{r['title']} {r['angle'] or ''}") for r in rows]
 
 

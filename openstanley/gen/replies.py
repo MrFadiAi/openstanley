@@ -46,7 +46,9 @@ Rules:
 
 
 async def pull_engagements(cfg: Config, x_client) -> int:
-    """Fetch mentions/notifications → engagements table. Returns count of new."""
+    """Fetch mentions/notifications → engagements table (ACTIVE account).
+    Returns count of new."""
+    acct = db.active_account()
     mentions = await x_client.mentions(limit=30)
     new = 0
     for m in mentions:
@@ -54,9 +56,9 @@ async def pull_engagements(cfg: Config, x_client) -> int:
             with db.connect() as c:
                 before = c.total_changes
                 c.execute(
-                    "INSERT OR IGNORE INTO engagements (x_id, kind, author_handle, author_name, text, status, created_at, seen_at) "
-                    "VALUES (?,?,?,?,?,'new',?,?)",
-                    (m.get("x_id"), m.get("kind", "mention"), m.get("author_handle", ""),
+                    "INSERT OR IGNORE INTO engagements (account_id, x_id, kind, author_handle, author_name, text, status, created_at, seen_at) "
+                    "VALUES (?,?,?,?,?,?,'new',?,?)",
+                    (acct, m.get("x_id"), m.get("kind", "mention"), m.get("author_handle", ""),
                      m.get("author_name", ""), m.get("text", ""),
                      m.get("created_at"), db._now()),
                 )
@@ -69,11 +71,13 @@ async def pull_engagements(cfg: Config, x_client) -> int:
 
 
 def draft_replies(cfg: Config, limit: int = 8) -> list[int]:
-    """Draft on-voice replies for new engagements. Returns draft ids."""
+    """Draft on-voice replies for new engagements (ACTIVE account)."""
+    acct = db.active_account()
     with db.connect() as c:
         rows = c.execute(
-            "SELECT * FROM engagements WHERE status='new' ORDER BY created_at DESC LIMIT ?",
-            (limit,),
+            "SELECT * FROM engagements WHERE account_id=? AND status='new' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (acct, limit),
         ).fetchall()
     if not rows:
         return []
@@ -116,9 +120,11 @@ def draft_replies(cfg: Config, limit: int = 8) -> list[int]:
 
 def _existing_reply_targets() -> set[str]:
     """x_ids we already have a reply draft for (any status — never double-reply)."""
+    acct = db.active_account()
     with db.connect() as c:
         rows = c.execute(
-            "SELECT meta_json FROM drafts WHERE kind='reply'", ()).fetchall()
+            "SELECT meta_json FROM drafts WHERE account_id=? AND kind='reply'",
+            (acct,)).fetchall()
     out = set()
     for r in rows:
         try:
@@ -209,4 +215,5 @@ def draft_niche_replies(cfg: Config, limit: int = 3) -> list[int]:
 
 def mark_replied(engagement_id: int) -> None:
     with db.connect() as c:
-        c.execute("UPDATE engagements SET status='replied' WHERE id=?", (engagement_id,))
+        c.execute("UPDATE engagements SET status='replied' WHERE id=? AND account_id=?",
+                  (engagement_id, db.active_account()))

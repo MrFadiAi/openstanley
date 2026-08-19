@@ -56,7 +56,7 @@ class Agent:
 
     async def import_history(self) -> dict:
         me = await self.x.me()
-        db.set_setting("me", me)
+        db.set_me(me)
         db.log("import", f"importing history for @{me['username']}")
         own = await self.x.user_tweets(me["username"], limit=self.cfg.x.import_count)
         for p in own:
@@ -76,7 +76,7 @@ class Agent:
 
     async def study(self) -> dict:
         """Nightly: refresh niche data + fill the story bank."""
-        me = db.get_setting("me") or await self.x.me()
+        me = db.get_me() or await self.x.me()
         niche_new = 0
         queries = self.cfg.agent.evergreen_themes + [f"from:{a}" for a in self.cfg.agent.niche_accounts]
         for q in queries[:5]:
