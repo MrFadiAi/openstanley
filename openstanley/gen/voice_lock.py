@@ -41,7 +41,14 @@ from .lang import detect
 from .llm import chat, extract_json, LLMError
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-VOICE_MD = ROOT / "data" / "brain" / "voice.md"
+
+
+def voice_md_path(acct: int | None = None) -> Path:
+    """voice.md lives inside the ACCOUNT's brain dir (v0.5.0) — written by
+    that account's deep scan, read by that account's voice lock. Called at
+    request time (never at import) — the DB may not exist yet during boot."""
+    from . import brain as _brain
+    return _brain.brain_dir(acct) / "voice.md"
 
 # --- tuning constants --------------------------------------------------------
 
@@ -168,10 +175,11 @@ def _parse_voice_md(text: str) -> dict:
     return rules
 
 
-def load_persona_rules() -> dict:
-    """Persona rules from data/brain/voice.md (mtime-cached); neutral fallback."""
+def load_persona_rules(acct: int | None = None) -> dict:
+    """Persona rules from the account's brain voice.md (mtime-cached);
+    neutral fallback."""
     global _warned_missing
-    path = VOICE_MD
+    path = voice_md_path(acct)
     key = str(path)
     try:
         mtime = path.stat().st_mtime_ns
@@ -193,7 +201,7 @@ def load_persona_rules() -> dict:
     return rules
 
 
-def write_voice_md(stats: dict) -> Optional[Path]:
+def write_voice_md(stats: dict, acct: int | None = None) -> Optional[Path]:
     """Derive voice.md keys from scan stats (compute_stats output).
 
     Called by the deep scan so the lock's rules are always scan-derived.
@@ -235,10 +243,11 @@ def write_voice_md(stats: dict) -> Optional[Path]:
         f"misspelling_band: {m_lo}-{m_hi}",
         "",
     ])
-    VOICE_MD.parent.mkdir(parents=True, exist_ok=True)
-    VOICE_MD.write_text(content, encoding="utf-8")
-    _rules_cache.pop(str(VOICE_MD), None)
-    return VOICE_MD
+    path = voice_md_path(acct)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    _rules_cache.pop(str(path), None)
+    return path
 
 
 # --- config access -----------------------------------------------------------

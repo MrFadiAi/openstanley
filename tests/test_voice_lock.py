@@ -49,7 +49,8 @@ def persona(tmp_path, monkeypatch):
     def _write(content: str = PERSONA_MD) -> None:
         p = tmp_path / "voice.md"
         p.write_text(content, encoding="utf-8")
-        monkeypatch.setattr(voice_lock, "VOICE_MD", p)
+        monkeypatch.setattr(voice_lock, "voice_md_path",
+                            lambda acct=None: p)
     _write()
     return _write
 
@@ -143,7 +144,8 @@ def test_voice_md_absent_falls_back_to_neutral_and_warns_once(
         tmp_path, monkeypatch):
     _clean_db()
     monkeypatch.setattr(voice_lock, "_warned_missing", False)
-    monkeypatch.setattr(voice_lock, "VOICE_MD", tmp_path / "missing.md")
+    monkeypatch.setattr(voice_lock, "voice_md_path",
+                        lambda acct=None: tmp_path / "missing.md")
     rules = voice_lock.load_persona_rules()
     assert rules["source"] == "neutral" and rules["lowercase_first"] is False
     # neutral rules do not punish casing (unknown → unchecked)
@@ -159,7 +161,8 @@ def test_voice_md_absent_falls_back_to_neutral_and_warns_once(
 
 
 def test_write_voice_md_derives_scan_keys(tmp_path, monkeypatch):
-    monkeypatch.setattr(voice_lock, "VOICE_MD", tmp_path / "voice.md")
+    monkeypatch.setattr(voice_lock, "voice_md_path",
+                        lambda acct=None: tmp_path / "voice.md")
     stats = {
         "avg_length_chars": 100,
         "emoji": {"per_post": 0.0, "top": []},

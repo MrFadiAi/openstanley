@@ -12,7 +12,7 @@ from ...gen.algorithm import score_draft
 
 
 def run(ctx: EvalContext) -> dict:
-    profile = db.get_setting("style_profile") or {}
+    profile = db.get_acct_setting("style_profile") or {}
     topics = (profile.get("stats") or {}).get("topics") or []
     posts = sample_posts(ctx, temps=("safe", "bold", "experimental"))
     scored = []

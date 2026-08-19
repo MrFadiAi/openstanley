@@ -85,7 +85,7 @@ async def scan_account(cfg, x_client, max_posts: int = 800) -> dict:
         "username": username,
         "updated_at": db._now(),
     }
-    db.set_setting("style_profile", profile)
+    db.set_acct_setting("style_profile", profile)
     # scan-derived persona keys for the voice lock (v0.4.0)
     if write_voice_md(stats):
         db.log("scan", "voice.md rewritten from scan stats — voice lock rules refreshed")
@@ -239,7 +239,7 @@ def _llm_summary(cfg, stats: dict, posts: list[dict]) -> str:
 
 
 def load_profile() -> Optional[dict]:
-    return db.get_setting("style_profile")
+    return db.get_acct_setting("style_profile")
 
 
 def style_prompt_block() -> str:

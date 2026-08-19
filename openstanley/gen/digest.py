@@ -99,10 +99,35 @@ def _parse_iso(ts: str | None) -> Optional[datetime]:
         return None
 
 
-def digest_dir() -> Path:
-    """Where digest markdown files live (env-overridable for tests)."""
+def digest_dir(acct: int | None = None) -> Path:
+    """Where digest markdown files live: data/accounts/<id>/digests/
+    (v0.5.0). Env-overridable for tests (sandbox then serves all accounts)."""
     p = os.environ.get(DIGEST_DIR_ENV)
-    return Path(p) if p else ROOT / "data" / "digests"
+    if p:
+        return Path(p)
+    from . import brain as _brain
+    root = _brain.account_dir(acct) / "digests"
+    _migrate_legacy_digests(root)
+    return root
+
+
+def _migrate_legacy_digests(new_root: Path) -> None:
+    """One-time v0.5.0 move: data/digests/ belongs to (bootstrap) account 1.
+    Never fires when the env sandbox is active or the target already exists."""
+    legacy = ROOT / "data" / "digests"
+    if os.environ.get(DIGEST_DIR_ENV):
+        return
+    if not legacy.exists() or new_root.exists() or new_root == legacy:
+        return
+    import shutil
+    if _brain_account_root_is_real():
+        shutil.move(str(legacy), str(new_root))
+        db.log("digest", "migrated data/digests/ → data/accounts/1/digests/ (v0.5.0)")
+
+
+def _brain_account_root_is_real() -> bool:
+    from . import brain as _brain
+    return _brain.ACCOUNTS_ROOT == _brain.ROOT / "data" / "accounts"
 
 
 # ---------- section builders (DB / brain files only) ----------
@@ -565,7 +590,7 @@ def deliver(cfg: Config, day: str | date | None = None, lang: str | None = None,
     text = render_text(digest, lang)
     path = store_digest(digest, markdown)
 
-    last = db.get_setting("digest_last") or {}
+    last = db.get_acct_setting("digest_last") or {}
     already_sent = bool(last.get("sent")) and last.get("day") == digest.day
     should_send = force or not already_sent
     sent, status_code, error = False, None, None
@@ -586,7 +611,7 @@ def deliver(cfg: Config, day: str | date | None = None, lang: str | None = None,
               "at": datetime.now().isoformat(timespec="seconds"),
               "status_code": status_code, "error": error,
               "tg_sent": tg_sent, "file": str(path)}
-    db.set_setting("digest_last", record)
+    db.set_acct_setting("digest_last", record)
     db.log("digest", f"daily digest for {digest.day} — stored"
                      f"{' and delivered' if (sent or tg_sent) else ''}"
                      f"{f' (send failed: {error})' if error else ''}")

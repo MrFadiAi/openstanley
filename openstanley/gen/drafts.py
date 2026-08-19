@@ -98,7 +98,7 @@ def score_draft_row_lite(draft: dict) -> dict:
 
 def _language_rotation() -> str | None:
     """Pick draft language by the account's measured mix (None = let voice decide)."""
-    profile = db.get_setting("style_profile") or {}
+    profile = db.get_acct_setting("style_profile") or {}
     mix = (profile.get("stats") or {}).get("language_mix") or {}
     ar, en = mix.get("ar", 0), mix.get("en", 0)
     if ar > 0.25 and en > 0.25:  # genuinely bilingual → rotate proportionally

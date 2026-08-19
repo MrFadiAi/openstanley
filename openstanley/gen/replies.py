@@ -140,7 +140,7 @@ def _pick_niche_targets(cfg: Config, limit: int = 5) -> list[dict]:
     """High-engagement niche posts matched by account relevance."""
     already = _existing_reply_targets()
     niche_accounts = set(cfg.agent.niche_accounts or [])
-    profile = db.get_setting("style_profile") or {}
+    profile = db.get_acct_setting("style_profile") or {}
     topics = set((profile.get("stats") or {}).get("topics") or [])
     scored = []
     for p in db.niche_posts(limit=80):

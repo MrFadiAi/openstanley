@@ -298,7 +298,7 @@ async def replenish(cfg: Config, min_bank: int = DEFAULT_MIN_BANK,
         db.add_idea(idea["title"], idea["angle"], idea["fmt"], idea["source"],
                     idea["score"])
     if added:
-        db.set_setting("ideas_last_replenish", {
+        db.set_acct_setting("ideas_last_replenish", {
             "at": datetime.now().isoformat(timespec="seconds"),
             "added": len(added), "sources": sources})
         db.log("ideas", f"replenished +{len(added)} from {', '.join(sources)} "
@@ -310,4 +310,4 @@ async def replenish(cfg: Config, min_bank: int = DEFAULT_MIN_BANK,
 def bank_health() -> dict:
     """Count + last replenish record — feeds the Ideas page health chip."""
     return {"count": db.idea_count(),
-            "last": db.get_setting("ideas_last_replenish") or {}}
+            "last": db.get_acct_setting("ideas_last_replenish") or {}}

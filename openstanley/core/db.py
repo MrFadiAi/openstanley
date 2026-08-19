@@ -483,6 +483,22 @@ def get_me(acct: Optional[int] = None) -> dict:
     return get_setting("me" if a == 1 else f"me:{a}") or {}
 
 
+def _acct_setting(key: str, acct: Optional[int]) -> str:
+    """Settings key for per-account data living in the app-level settings
+    table (style_profile, strategy, …). Account 1 keeps the legacy key."""
+    a = _acct(acct)
+    return key if a == 1 else f"{key}:{a}"
+
+
+def get_acct_setting(key: str, default: Any = None,
+                     acct: Optional[int] = None) -> Any:
+    return get_setting(_acct_setting(key, acct), default)
+
+
+def set_acct_setting(key: str, value: Any, acct: Optional[int] = None) -> None:
+    set_setting(_acct_setting(key, acct), value)
+
+
 def log(loop: str, message: str, level: str = "info") -> None:
     with _lock, connect() as c:
         c.execute(

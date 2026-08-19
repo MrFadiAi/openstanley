@@ -665,7 +665,7 @@ async def get_settings():
             digest_mod.webhook_url()),
         "digest_webhook_set": bool(digest_mod.webhook_url()),
         "digest_hour": digest_mod.digest_hour(cfg),
-        "digest_last_sent": (db.get_setting("digest_last") or {}).get("at"),
+        "digest_last_sent": (db.get_acct_setting("digest_last") or {}).get("at"),
         # v0.4.4 telegram — token masked like the webhook, never the value
         "tg_bot_token": telegram_mod.mask_token(telegram_mod.bot_token()),
         "tg_bot_set": len(telegram_mod.bot_token()) >= telegram_mod.TOKEN_MIN_LEN,
@@ -1249,7 +1249,7 @@ async def harness_compare_ep(body: HarnessCompareBody):
 
 @app.get("/api/strategy")
 async def get_strategy():
-    return db.get_setting("strategy") or {"text": None, "exists": False}
+    return db.get_acct_setting("strategy") or {"text": None, "exists": False}
 
 
 @app.post("/api/strategy")
@@ -1436,7 +1436,9 @@ async def create_account_ep(body: AccountCreate):
             raise HTTPException(400, "cookies must be a JSON object with at least 'auth_token'")
         cookies = body.cookies_json
     acct_id = db.create_account(handle, cookies)
-    db.log("accounts", f"created account #{acct_id} (@{handle})")
+    from ..gen import brain as brain_mod
+    brain_mod.ensure(acct_id)  # fresh EMPTY brain — seeds only, no other account's memory
+    db.log("accounts", f"created account #{acct_id} (@{handle}) — brain seeded fresh")
     return {"ok": True, "account_id": acct_id, "handle": handle}
 
 
@@ -1487,6 +1489,12 @@ async def delete_account_ep(account_id: int):
                                 if k not in ("cookies_json", "cookies_set")},
                     **dump}, ensure_ascii=False, indent=1, default=str),
         encoding="utf-8")
+    # the account's whole world moves with it (brain, digests) when present
+    from ..gen import brain as brain_mod
+    src_dir = brain_mod.account_dir(account_id)
+    if src_dir.exists() and src_dir != archive_dir:
+        import shutil
+        shutil.move(str(src_dir), str(archive_dir / "account"))
     db.delete_account_rows(account_id)
     if db.active_account() == account_id:
         db.set_active_account(remaining[0]["id"])

@@ -158,7 +158,7 @@ def _crowding(reply_count: int) -> tuple[float, list[str]]:
 def _niche_terms(cfg: Config) -> set[str]:
     """Brain's niche map: style-profile topics + evergreen theme words."""
     terms: set[str] = set()
-    profile = db.get_setting("style_profile") or {}
+    profile = db.get_acct_setting("style_profile") or {}
     for t in (profile.get("stats") or {}).get("topics") or []:
         for w in re.findall(r"[a-z؀-ۿ]{3,}", str(t).lower()):
             terms.add(w)

@@ -39,9 +39,9 @@ PNG_1PX = bytes.fromhex(
 def _brain_sandbox(tmp_path, monkeypatch):
     """Every test in this module runs against a fresh sandboxed brain dir."""
     sandbox = tmp_path / "brain"
-    monkeypatch.setattr(brain, "BRAIN_DIR", sandbox)
-    monkeypatch.setattr(brain, "FILES_DIR", sandbox / "files")
-    monkeypatch.setattr(brain, "PHOTOS_DIR", sandbox / "photos")
+    # v0.5.0: brains live under ACCOUNTS_ROOT/<id>/brain — sandbox the anchor
+    monkeypatch.setattr(brain, "ACCOUNTS_ROOT", tmp_path / "accounts")
+    sandbox = brain.brain_dir()
     brain.ensure()
     yield
 

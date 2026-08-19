@@ -89,9 +89,7 @@ class ParseRejectAPI:
 def _sandbox(tmp_path, monkeypatch):
     """Brain in tmp, reflection inert, fresh TG state — the LLM never runs."""
     from openstanley.gen import brain
-    monkeypatch.setattr(brain, "BRAIN_DIR", tmp_path / "brain")
-    monkeypatch.setattr(brain, "FILES_DIR", tmp_path / "brain" / "files")
-    monkeypatch.setattr(brain, "PHOTOS_DIR", tmp_path / "brain" / "photos")
+    monkeypatch.setattr(brain, "ACCOUNTS_ROOT", tmp_path / "accounts")
     brain.ensure()
     monkeypatch.setattr(brain, "maybe_reflect_chat_async", lambda cfg: False)
     tg._reset_rate()

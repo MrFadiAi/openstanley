@@ -1,6 +1,6 @@
 """The Brain — OpenStanley's self-maintained memory, written BY OpenStanley itself.
 
-data/brain/ holds plain, git-friendly markdown files:
+Each ACCOUNT owns its whole brain under data/accounts/<id>/brain/ (v0.5.0):
   instructions.md  — OpenStanley's own operating manual (persona, workflow, priorities)
   rules.md         — numbered learned DO/DON'T rules (source + date, retireable)
   strategies.md    — what's working: theses + experiment log with outcomes
@@ -12,7 +12,9 @@ data/brain/ holds plain, git-friendly markdown files:
 generation prompt — this is what makes the agent improve over time instead of
 starting fresh each session. `reflect(trigger)` is the self-improvement step:
 an LLM reviews recent chats/metrics/scan output and proposes structured edits
-which are applied deterministically and journaled.
+which are applied deterministically and journaled. All functions take an
+optional `acct` (default: the ACTIVE account) — one account's memory is never
+visible to another's prompts.
 """
 from __future__ import annotations
 
@@ -28,9 +30,11 @@ from ..core import db
 from .llm import chat as llm_chat, extract_json, LLMError
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-BRAIN_DIR = ROOT / "data" / "brain"
-FILES_DIR = BRAIN_DIR / "files"
-PHOTOS_DIR = BRAIN_DIR / "photos"
+# v0.5.0: brains are PER ACCOUNT — data/accounts/<id>/brain/. The anchor is
+# ACCOUNTS_ROOT (tests swap it for a sandbox); account 1 is the migrated
+# legacy install (its files moved from data/brain/ on first run).
+ACCOUNTS_ROOT = ROOT / "data" / "accounts"
+LEGACY_BRAIN_DIR = ROOT / "data" / "brain"
 
 BUDGET_CHARS = 1500  # hard cap for brain_context()
 
@@ -82,6 +86,26 @@ def sanitize(content: str) -> str:
             "credentials live in .env only"
         )
     return content
+
+
+# ---------- per-account layout (v0.5.0) ----------
+
+def account_dir(acct: int | None = None) -> Path:
+    """data/accounts/<id> — one account's whole world (brain, digests, …)."""
+    a = db.active_account() if acct is None else int(acct)
+    return ACCOUNTS_ROOT / str(a)
+
+
+def brain_dir(acct: int | None = None) -> Path:
+    return account_dir(acct) / "brain"
+
+
+def _files_dir(acct: int | None = None) -> Path:
+    return brain_dir(acct) / "files"
+
+
+def _photos_dir(acct: int | None = None) -> Path:
+    return brain_dir(acct) / "photos"
 
 
 # ---------- structure ----------
@@ -144,10 +168,30 @@ FILE_STUB = """# {title}
 """
 
 
-def ensure() -> None:
-    """Create data/brain/ with seeded defaults on first run. Idempotent."""
-    FILES_DIR.mkdir(parents=True, exist_ok=True)
-    PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+def _migrate_legacy_brain() -> bool:
+    """One-time v0.5.0 move: the pre-multi-account data/brain/ belongs to
+    (bootstrap) account 1. Returns True when a move happened. Never fires in
+    test sandboxes (they anchor ACCOUNTS_ROOT away from the real data dir) —
+    a swapped anchor must never swallow the REAL brain."""
+    if ACCOUNTS_ROOT != ROOT / "data" / "accounts":
+        return False  # anchor swapped (test sandbox) — hands off real data
+    if not LEGACY_BRAIN_DIR.exists() or brain_dir(1).exists():
+        return False
+    import shutil
+    brain_dir(1).parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(LEGACY_BRAIN_DIR), str(brain_dir(1)))
+    return True
+
+
+def ensure(acct: int | None = None) -> None:
+    """Create the account's brain dir with seeded defaults on first run.
+    Idempotent. A fresh account starts EMPTY (seed stubs only) — nothing
+    from other accounts ever leaks in (the user's hard requirement)."""
+    if _migrate_legacy_brain():
+        db.log("brain", "migrated data/brain/ → data/accounts/1/brain/ (v0.5.0)")
+    root = brain_dir(acct)
+    _files_dir(acct).mkdir(parents=True, exist_ok=True)
+    _photos_dir(acct).mkdir(parents=True, exist_ok=True)
     seeds = {
         "instructions.md": SEED_INSTRUCTIONS,
         "rules.md": SEED_RULES,
@@ -155,11 +199,11 @@ def ensure() -> None:
         "journal.md": SEED_JOURNAL,
     }
     for name, content in seeds.items():
-        p = BRAIN_DIR / name
+        p = root / name
         if not p.exists():
             _atomic_write(p, content)
     for stem in SEED_FILES:
-        p = FILES_DIR / f"{stem}.md"
+        p = _files_dir(acct) / f"{stem}.md"
         if not p.exists():
             _atomic_write(p, FILE_STUB.format(title=stem.replace("-", " ").title()))
 
@@ -177,33 +221,34 @@ def _now() -> str:
 
 # ---------- part addressing ----------
 
-def _resolve(part: str) -> Path:
-    """Map a part name to a safe path inside BRAIN_DIR. Raises on traversal."""
+def _resolve(part: str, acct: int | None = None) -> Path:
+    """Map a part name to a safe path inside the account's brain dir.
+    Raises on traversal."""
     part = (part or "").strip().strip("/")
     if not part or ".." in part or part.startswith("."):
         raise FileNotFoundError(f"unknown brain part {part!r}")
     if part in MD_PARTS:
-        return BRAIN_DIR / f"{part}.md"
+        return brain_dir(acct) / f"{part}.md"
     m = re.fullmatch(r"files/([A-Za-z0-9_\-]+)", part)
     if m:
-        return FILES_DIR / f"{m.group(1)}.md"
+        return _files_dir(acct) / f"{m.group(1)}.md"
     if part == "photos":
-        return PHOTOS_DIR
+        return _photos_dir(acct)
     raise FileNotFoundError(f"unknown brain part {part!r}")
 
 
-def read(part: str) -> str:
-    p = _resolve(part)
+def read(part: str, acct: int | None = None) -> str:
+    p = _resolve(part, acct)
     if p.is_dir():
         raise IsADirectoryError("photos part is a directory — use list_photos()")
     if not p.exists():
-        ensure()
+        ensure(acct)
     return p.read_text(encoding="utf-8")
 
 
-def write(part: str, content: str) -> None:
+def write(part: str, content: str, acct: int | None = None) -> None:
     """Sanitized, atomic write of a brain part."""
-    p = _resolve(part)
+    p = _resolve(part, acct)
     if p.is_dir():
         raise IsADirectoryError("photos part is a directory")
     _atomic_write(p, sanitize(content))
@@ -226,14 +271,14 @@ def _summary(part: str, text: str) -> str:
     return "(empty)"
 
 
-def inventory() -> list[dict]:
+def inventory(acct: int | None = None) -> list[dict]:
     """[{name, type, size, modified, summary}] for every brain part."""
-    ensure()
+    ensure(acct)
     parts: list[dict] = []
     order = ("instructions", "rules", "strategies") + \
         tuple(f"files/{s}" for s in sorted(SEED_FILES)) + ("journal",)
     for part in order:
-        p = _resolve(part)
+        p = _resolve(part, acct)
         if not p.exists():
             continue
         text = p.read_text(encoding="utf-8")
@@ -243,7 +288,7 @@ def inventory() -> list[dict]:
                         .isoformat(timespec="seconds"),
             "summary": _summary(part, text),
         })
-    photos = list_photos()
+    photos = list_photos(acct)
     parts.append({
         "name": "photos", "type": "photos",
         "size": sum(ph["size"] for ph in photos),
@@ -289,12 +334,12 @@ def render_rule(rule: dict) -> str:
             f"{rule['status']})\n{rule['text']}\n")
 
 
-def add_rule(text: str, source: str) -> int:
+def add_rule(text: str, source: str, acct: int | None = None) -> int:
     """Append a new numbered rule. Returns its id. Sanitized."""
     text = sanitize(text.strip())
     if not text:
         raise ValueError("empty rule")
-    raw = read("rules")
+    raw = read("rules", acct)
     rules = parse_rules(raw)
     next_id = max((r["id"] for r in rules), default=0) + 1
     date = _now()[:10]
@@ -302,13 +347,13 @@ def add_rule(text: str, source: str) -> int:
                          "status": "active", "text": text})
     # drop a placeholder comment when writing the first real rule
     raw = re.sub(r"<!--[^>]*no rules learned yet[^>]*-->\s*", "", raw)
-    _atomic_write(_resolve("rules"), raw.rstrip() + "\n\n" + block)
+    _atomic_write(_resolve("rules", acct), raw.rstrip() + "\n\n" + block)
     return next_id
 
 
-def retire_rule(rule_id: int) -> bool:
+def retire_rule(rule_id: int, acct: int | None = None) -> bool:
     """Flip a rule to retired (kept, struck through in the UI)."""
-    raw = read("rules")
+    raw = read("rules", acct)
     rules = parse_rules(raw)
     hit = next((r for r in rules if r["id"] == rule_id), None)
     if not hit or hit["status"] == "retired":
@@ -316,7 +361,7 @@ def retire_rule(rule_id: int) -> bool:
     old = render_rule(hit)
     hit["status"] = "retired"
     new = render_rule(hit)
-    _atomic_write(_resolve("rules"), raw.replace(old, new, 1))
+    _atomic_write(_resolve("rules", acct), raw.replace(old, new, 1))
     return True
 
 
@@ -327,7 +372,8 @@ JOURNAL_HEADER_RE = re.compile(
 )
 
 
-def journal_append(trigger: str, body: str, changes: Optional[list[str]] = None) -> None:
+def journal_append(trigger: str, body: str, changes: Optional[list[str]] = None,
+                   acct: int | None = None) -> None:
     """Append one dated entry. `trigger` is reflect:chat / user-edit / …"""
     body = sanitize(body.strip() or "(no notes)")
     lines = [f"## {_now()[:10]} {_now()[11:16]} · {trigger}", body]
@@ -335,8 +381,8 @@ def journal_append(trigger: str, body: str, changes: Optional[list[str]] = None)
         ch = str(ch).strip()
         if ch:
             lines.append(f"- {ch}")
-    p = _resolve("journal")
-    ensure()
+    p = _resolve("journal", acct)
+    ensure(acct)
     prev = p.read_text(encoding="utf-8")
     _atomic_write(p, prev.rstrip() + "\n\n" + "\n".join(lines) + "\n")
 
@@ -392,36 +438,37 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def brain_context(budget: int = BUDGET_CHARS) -> str:
+def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
     """Compact digest for prompts: instructions + active rules + top strategies
-    + pillar summaries, hard-capped at `budget` chars."""
+    + pillar summaries, hard-capped at `budget` chars — from the ACTIVE
+    account's brain only (never another account's memory)."""
     if _context_off.get():
         return ""
-    ensure()
+    ensure(acct)
     # fair-share budgets scaled to the total
     shares = (500, 420, 320, 260)  # instructions, rules, strategies, pillars
     blocks: list[str] = []
 
-    instr = read("instructions")
+    instr = read("instructions", acct)
     # skip the manual's title; keep persona/workflow/priorities essence
     instr_body = "\n".join(ln for ln in instr.splitlines()
                            if not ln.startswith("# "))
     blocks.append(_clip(instr_body, shares[0]))
 
-    rules = [r for r in parse_rules(read("rules")) if r["status"] == "active"]
+    rules = [r for r in parse_rules(read("rules", acct)) if r["status"] == "active"]
     if rules:
         rule_lines = [f"R{r['id']}: {r['text']}" for r in rules]
         blocks.append(_clip("RULES (learned — obey):\n" + "\n".join(rule_lines),
                             shares[1]))
 
-    strat = read("strategies")
+    strat = read("strategies", acct)
     # keep "Working theses" section essence + last experiment lines
     strat_lines = [ln for ln in strat.splitlines()
                    if ln.strip() and not ln.startswith("#")][:12]
     if any(l.strip() and not l.startswith("- (none") for l in strat_lines):
         blocks.append(_clip("STRATEGIES:\n" + "\n".join(strat_lines), shares[2]))
 
-    pillars_path = FILES_DIR / "content-pillars.md"
+    pillars_path = _files_dir(acct) / "content-pillars.md"
     if pillars_path.exists():
         pillars = [ln for ln in pillars_path.read_text(encoding="utf-8").splitlines()
                    if ln.strip() and not ln.startswith("#") and "(OpenStanley writes"
@@ -499,7 +546,7 @@ def _material_metrics() -> str:
 
 
 def _material_scan() -> str:
-    profile = db.get_setting("style_profile") or {}
+    profile = db.get_acct_setting("style_profile") or {}
     if not profile:
         return "(no style profile yet — this was a first scan)"
     s = profile.get("stats") or {}
@@ -555,19 +602,20 @@ def _scan_fallback_files(stats: dict, profile: dict) -> list[tuple[str, str]]:
             ("audience-personas", "\n".join(personas) + "\n")]
 
 
-def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
+def reflect(cfg, trigger: str, payload: Optional[dict] = None,
+            acct: int | None = None) -> dict:
     """Run one reflection: LLM proposes edits → applied deterministically.
 
     Returns {"ok", "applied": {added_rules, retired_rules, strategy_updates,
     instructions_updated}, "journal_entry"}. Raises LLMError only when the
     LLM itself fails (callers treat it as best-effort).
     """
-    ensure()
+    ensure(acct)
     if trigger not in MATERIALS:
         raise ValueError(f"unknown reflect trigger {trigger!r}")
     payload = payload or {}
     material = payload.get("material") or MATERIALS[trigger]()
-    current_rules = [r for r in parse_rules(read("rules")) if r["status"] == "active"]
+    current_rules = [r for r in parse_rules(read("rules", acct)) if r["status"] == "active"]
     rules_ctx = "\n".join(f"R{r['id']}: {r['text']}" for r in current_rules) \
         or "(none yet)"
     user = (f"TRIGGER: {trigger}\n\nCURRENT ACTIVE RULES:\n{rules_ctx}\n\n"
@@ -590,7 +638,7 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
     if delta and delta.lower() not in ("none", "n/a", "-"):
         try:
             delta = sanitize(delta)
-            p = _resolve("instructions")
+            p = _resolve("instructions", acct)
             txt = p.read_text(encoding="utf-8")
             marker = "## Learned adjustments"
             entry = f"- {_now()[:10]} ({trigger}) — {delta}"
@@ -612,7 +660,7 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
         if not text:
             continue
         try:
-            rid = add_rule(text, source=trigger)
+            rid = add_rule(text, source=trigger, acct=acct)
             applied["added_rules"].append(rid)
             changes.append(f"added R{rid}: {text[:90]}")
         except BrainSecurityError:
@@ -626,7 +674,7 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
             rid = int(rid)
         except (TypeError, ValueError):
             continue
-        if retire_rule(rid):
+        if retire_rule(rid, acct=acct):
             applied["retired_rules"].append(rid)
             changes.append(f"retired R{rid}")
 
@@ -641,7 +689,7 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
         outcome = str(su.get("outcome") or "new").strip()
         try:
             line = f"- {_now()[:10]} · {title} — {note} [{outcome}]"
-            p = _resolve("strategies")
+            p = _resolve("strategies", acct)
             txt = p.read_text(encoding="utf-8")
             marker = "## Experiment log"
             if marker in txt:
@@ -665,7 +713,7 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
         if stem not in SEED_FILES or not content:
             continue
         try:
-            _atomic_write(_resolve(f"files/{stem}"), sanitize(content))
+            _atomic_write(_resolve(f"files/{stem}", acct), sanitize(content))
             applied["file_updates"].append(stem)
             changes.append(f"file {stem}: {content.splitlines()[0][:80]}")
         except BrainSecurityError:
@@ -674,13 +722,13 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
     # 4.6 scan trigger guarantees the niche/persona docs reflect the scan
     # even when the LLM proposes no file_updates (deterministic, stats-derived)
     if trigger == "scan":
-        profile = db.get_setting("style_profile") or {}
+        profile = db.get_acct_setting("style_profile") or {}
         stats = profile.get("stats") or {}
         if stats:
             done = set(applied["file_updates"])
             for stem, content in _scan_fallback_files(stats, profile):
                 if stem not in done:
-                    _atomic_write(_resolve(f"files/{stem}"), sanitize(content))
+                    _atomic_write(_resolve(f"files/{stem}", acct), sanitize(content))
                     applied["file_updates"].append(stem)
                     changes.append(f"file {stem}: refreshed from scan stats")
 
@@ -689,11 +737,11 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None) -> dict:
         f"reflected on {trigger}; no changes warranted"
     if payload.get("note"):
         entry = f"{payload['note']} — {entry}"
-    journal_append(f"reflect:{trigger}", entry, changes)
+    journal_append(f"reflect:{trigger}", entry, changes, acct=acct)
     if applied["dropped_tainted"]:
         journal_append(f"reflect:{trigger}",
                        "dropped a proposed edit that looked secret-like "
-                       "(never stored).")
+                       "(never stored).", acct=acct)
 
     # 6. advance the chat watermark
     if trigger == "chat":
@@ -748,27 +796,27 @@ PHOTO_SIDECAR_NOTE = """# {name}
 
 
 def save_photo(data: bytes, filename: str, caption: str = "",
-               usage: str = "") -> dict:
+               usage: str = "", acct: int | None = None) -> dict:
     """Save an uploaded image + sidecar .md note. Returns the photo record."""
     sanitize(f"{filename} {caption} {usage}")  # captions too — no secrets
     ext = Path(filename).suffix.lower()
     if ext not in PHOTO_EXTS:
         raise ValueError(f"unsupported photo type {ext} (png/jpg/webp/gif)")
-    ensure()
+    ensure(acct)
     stem = Path(filename).stem
     stem = re.sub(r"[^A-Za-z0-9_\-]", "_", stem)[:40] or "photo"
     name = f"{stem}_{_secrets.token_hex(4)}{ext}"
-    (PHOTOS_DIR / name).write_bytes(data)
-    _atomic_write(PHOTOS_DIR / f"{name}.md", PHOTO_SIDECAR_NOTE.format(
+    (_photos_dir(acct) / name).write_bytes(data)
+    _atomic_write(_photos_dir(acct) / f"{name}.md", PHOTO_SIDECAR_NOTE.format(
         name=name, date=_now(), caption=caption.strip() or "(none)",
         usage=f"- usage context: {usage.strip()}" if usage.strip() else ""))
     db.log("brain", f"photo saved: {name} ({len(data)} bytes)")
-    return photo_record(name)
+    return photo_record(name, acct)
 
 
-def photo_record(name: str) -> dict:
-    p = PHOTOS_DIR / name
-    sidecar = PHOTOS_DIR / f"{name}.md"
+def photo_record(name: str, acct: int | None = None) -> dict:
+    p = _photos_dir(acct) / name
+    sidecar = _photos_dir(acct) / f"{name}.md"
     caption = ""
     if sidecar.exists():
         m = re.search(r"(?m)^- caption:\s*(.*)$", sidecar.read_text(encoding="utf-8"))
@@ -780,17 +828,17 @@ def photo_record(name: str) -> dict:
             "caption": caption, "url": f"/api/brain/photos/{name}"}
 
 
-def list_photos() -> list[dict]:
-    ensure()
-    return [photo_record(p.name) for p in sorted(PHOTOS_DIR.iterdir())
+def list_photos(acct: int | None = None) -> list[dict]:
+    ensure(acct)
+    return [photo_record(p.name, acct) for p in sorted(_photos_dir(acct).iterdir())
             if p.suffix.lower() in PHOTO_EXTS]
 
 
-def photo_path(name: str) -> Path:
+def photo_path(name: str, acct: int | None = None) -> Path:
     """Safe path for serving a photo. Raises on traversal/unknown names."""
     if "/" in name or "\\" in name or ".." in name:
         raise FileNotFoundError("bad photo name")
-    p = PHOTOS_DIR / name
+    p = _photos_dir(acct) / name
     if p.suffix.lower() not in PHOTO_EXTS or not p.exists():
         raise FileNotFoundError(f"no such photo {name!r}")
     return p
@@ -798,33 +846,33 @@ def photo_path(name: str) -> Path:
 
 # ---------- brain snapshot for evals (used by the harness A/B mode) ----------
 
-def has_meaningful_brain() -> bool:
+def has_meaningful_brain(acct: int | None = None) -> bool:
     """True once the brain carries learned content beyond the seed stubs."""
-    ensure()
-    rules = [r for r in parse_rules(read("rules")) if r["status"] == "active"]
-    strat = read("strategies")
+    ensure(acct)
+    rules = [r for r in parse_rules(read("rules", acct)) if r["status"] == "active"]
+    strat = read("strategies", acct)
     real_strat = any(l.strip() and not l.startswith("#")
                      and "(none" not in l for l in strat.splitlines())
     return bool(rules) or real_strat
 
 
-def to_dict() -> dict:
+def to_dict(acct: int | None = None) -> dict:
     """Whole brain as a dict (for tests + harness inspection)."""
-    ensure()
-    out = {p: read(p) for p in MD_PARTS}
-    out["files"] = {f"{s}.md": read(f"files/{s}") for s in SEED_FILES}
-    out["photos"] = list_photos()
+    ensure(acct)
+    out = {p: read(p, acct) for p in MD_PARTS}
+    out["files"] = {f"{s}.md": read(f"files/{s}", acct) for s in SEED_FILES}
+    out["photos"] = list_photos(acct)
     return out
 
 
-def from_dict(snapshot: dict) -> None:
+def from_dict(snapshot: dict, acct: int | None = None) -> None:
     """Restore brain files from a snapshot (tests only — sanitized)."""
-    ensure()
+    ensure(acct)
     for k, v in snapshot.items():
         if k == "files":
             for fname, content in v.items():
-                _atomic_write(FILES_DIR / Path(fname).name, sanitize(content))
+                _atomic_write(_files_dir(acct) / Path(fname).name, sanitize(content))
         elif k == "photos":
             continue
         elif k in MD_PARTS:
-            _atomic_write(_resolve(k), sanitize(v))
+            _atomic_write(_resolve(k, acct), sanitize(v))

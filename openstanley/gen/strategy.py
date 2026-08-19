@@ -76,7 +76,7 @@ def _account_data() -> str:
 
 def build_strategy(cfg: Config, force: bool = False) -> dict:
     """Generate + persist the strategy one-pager. Returns the strategy dict."""
-    existing = db.get_setting("strategy")
+    existing = db.get_acct_setting("strategy")
     if existing and not force:
         return existing
     import dataclasses
@@ -92,7 +92,7 @@ def build_strategy(cfg: Config, force: bool = False) -> dict:
         "generated_at": db.__dict__.get("_now", lambda: "")() or None,
     }
     _sync_brain_docs(strategy["sections"])
-    db.set_setting("strategy", strategy)
+    db.set_acct_setting("strategy", strategy)
     db.log("system", "strategy one-pager generated")
     return strategy
 

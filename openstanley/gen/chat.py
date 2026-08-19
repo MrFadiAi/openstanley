@@ -111,7 +111,7 @@ def _context_trace(cfg: Config) -> dict:
         chunks.append({"title": "Voice rubric", "body": str(vp.get("rubric", vp))[:200],
                        "source": "voice profile", "badge": "VOICE", "relevance": 94})
 
-    profile = db.get_setting("style_profile")
+    profile = db.get_acct_setting("style_profile")
     if profile:
         stats = profile.get("stats") or {}
         parts.append(
@@ -148,7 +148,7 @@ def _context_trace(cfg: Config) -> dict:
         steps.append({"id": "drafts", "primary": "Reviewing drafts + calendar",
                       "secondary": f"{len(d_pending)}+{len(d_sched)}"})
 
-    strategy = db.get_setting("strategy")
+    strategy = db.get_acct_setting("strategy")
     if strategy:
         parts.append("STRATEGY (summary):\n" + json.dumps(strategy, ensure_ascii=False)[:400])
         steps.append({"id": "strategy", "primary": "Loading your strategy",

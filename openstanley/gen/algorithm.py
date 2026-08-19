@@ -300,7 +300,7 @@ def score_draft(text: str, *, kind: str = "post", image: bool = False,
 
     if best_hours is None:
         from ..core import db
-        profile = db.get_setting("style_profile") or {}
+        profile = db.get_acct_setting("style_profile") or {}
         bh = (profile.get("stats") or {}).get("posting_times", {}).get("best_hours")
         if bh:
             best_hours = set(bh)
@@ -361,7 +361,7 @@ def score_draft_row(d: dict) -> dict:
 
 def _account_topics() -> list[str]:
     from ..core import db
-    profile = db.get_setting("style_profile") or {}
+    profile = db.get_acct_setting("style_profile") or {}
     topics = (profile.get("stats") or {}).get("topics") or []
     if topics:
         return topics

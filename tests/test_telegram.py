@@ -120,9 +120,9 @@ def _warn_count() -> int:
 def _tg_sandbox(tmp_path, monkeypatch):
     """Fresh brain dir, fresh poller/session/rate state, settings restored."""
     sandbox = tmp_path / "brain"
-    monkeypatch.setattr(brain, "BRAIN_DIR", sandbox)
-    monkeypatch.setattr(brain, "FILES_DIR", sandbox / "files")
-    monkeypatch.setattr(brain, "PHOTOS_DIR", sandbox / "photos")
+    # v0.5.0: brains live under ACCOUNTS_ROOT/<id>/brain — sandbox the anchor
+    monkeypatch.setattr(brain, "ACCOUNTS_ROOT", tmp_path / "accounts")
+    sandbox = brain.brain_dir()
     brain.ensure()
     # reflection fires a daemon-thread LLM call every 10th chat message —
     # not under test here, keep it inert
