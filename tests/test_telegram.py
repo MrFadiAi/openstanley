@@ -200,7 +200,7 @@ def test_status_command_reports_state(monkeypatch):
     text = fake.sent()[0][1]
     assert "@fadi" in text and "1234" in text
     assert "autopilot" in text.lower()
-    assert f"idea bank: {bank}" in text
+    assert "<b>idea bank</b>" in text and str(bank) in text   # bold on the wire
     assert "dryrun" in text
 
 
@@ -221,6 +221,27 @@ def test_ideas_and_drafts_commands(monkeypatch):
     assert f"#{d1}" in drafts_text and f"#{d2}" in drafts_text
     assert "@alice" in drafts_text            # target chip
     assert "voice 82%" in drafts_text         # voice chip
+
+
+def test_command_replies_share_one_template(monkeypatch):
+    """Audit invariant (FIX_BRIEF_TG_STYLE): every list-bearing command uses
+    the same shape — a bold header line, `· ` bullet lines, ids bolded, and
+    no decorative emoji leading lines."""
+    _enable()
+    db.set_setting("me", {"username": "fadi", "followers": 10})
+    db.add_idea("an idea", "angle", "one-liner", "study", 7.5)
+    did = db.add_draft(text="a draft whose preview is long enough to read well here")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    for i, cmd in enumerate(("/status", "/ideas", "/drafts")):
+        tg.handle_update(CFG, _upd(i + 1, CHAT, cmd))
+    texts = [t for _c, t in fake.sent()]
+    assert len(texts) == 3
+    for text in texts:
+        assert text.startswith("<b>")                   # bold header, on the wire
+        assert "\n· " in text                           # · bullet lines
+        assert not re.search(r"^[\U0001F300-\U0001FAFF]", text, re.MULTILINE)
+    assert f"<b>#{did}</b>" in texts[2]                 # ids are bolded
 
 
 def test_digest_command_renders_today(monkeypatch):
@@ -333,7 +354,7 @@ def test_chat_candidates_saved_as_drafts(monkeypatch):
     _stub_voice(monkeypatch)
     tg._sessions.clear()
     out = "".join(tg.chat_reply_tg_stream(CFG, CHAT, "draft me a post"))
-    m = re.search(r"saved as draft #(\d+) — /approve \1 to publish", out)
+    m = re.search(r"Saved as draft #(\d+) — /approve \1 to publish", out)
     assert m, out
     d = db.get_draft(int(m.group(1)))
     assert d["text"] == post
@@ -341,7 +362,7 @@ def test_chat_candidates_saved_as_drafts(monkeypatch):
     assert d["meta"]["source"] == "chat"                # web-UI draft path
     assert out.count(post) == 1                         # prose never duplicated
     assert tg._sessions[CHAT][-1]["content"].endswith(
-        f"saved as draft #{m.group(1)} — /approve {m.group(1)} to publish")
+        f"Saved as draft #{m.group(1)} — /approve {m.group(1)} to publish")
 
 
 def test_chat_multiple_candidates_each_saved(monkeypatch):
@@ -354,7 +375,7 @@ def test_chat_multiple_candidates_each_saved(monkeypatch):
     _stub_voice(monkeypatch)
     tg._sessions.clear()
     out = "".join(tg.chat_reply_tg_stream(CFG, CHAT, "draft two posts"))
-    ids = re.findall(r"saved as draft #(\d+)", out)
+    ids = re.findall(r"Saved as draft #(\d+)", out)
     assert len(ids) == 2 and ids[0] != ids[1]
     assert db.get_draft(int(ids[0]))["text"] == p1
     assert db.get_draft(int(ids[1]))["text"] == p2

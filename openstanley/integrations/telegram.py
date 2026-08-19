@@ -117,9 +117,128 @@ def _get_updates(token: str, offset: int) -> httpx.Response:
                       timeout=POLL_TIMEOUT_S + HTTP_TIMEOUT_S)
 
 
+def _entities_rejected(r: httpx.Response) -> bool:
+    """Telegram's 400 for HTML it can't parse ('can't parse entities')."""
+    if getattr(r, "status_code", None) != 400:
+        return False
+    try:
+        return "can't parse entities" in str(r.text).lower()
+    except Exception:  # noqa: BLE001 — a probe must never raise
+        return False
+
+
+def _api_send_text(token: str, chat_id: int, text: str) -> httpx.Response:
+    """sendMessage with HTML formatting; if Telegram rejects the entities,
+    retried ONCE with parse_mode removed — formatting must never cost
+    delivery."""
+    r = _api(token, "sendMessage",
+             {"chat_id": chat_id, "text": _format_tg(text), "parse_mode": "HTML"})
+    if _entities_rejected(r):
+        r = _api(token, "sendMessage", {"chat_id": chat_id, "text": _clip(text)})
+    return r
+
+
+def _api_edit_text(token: str, chat_id: int, message_id: int,
+                   text: str) -> httpx.Response:
+    """editMessageText with the same formatting + plain-retry contract."""
+    r = _api(token, "editMessageText",
+             {"chat_id": chat_id, "message_id": message_id,
+              "text": _format_tg(text), "parse_mode": "HTML"})
+    if _entities_rejected(r):
+        r = _api(token, "editMessageText",
+                 {"chat_id": chat_id, "message_id": message_id,
+                  "text": _clip(text)})
+    return r
+
+
 def _clip(text: str, limit: int = MSG_LIMIT) -> str:
     text = text or ""
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+# ---------------- markdown → Telegram HTML ----------------
+#
+# Hermes-style rich messages: bold labels, bullets, code, links — not walls of
+# emoji. HTML (not MarkdownV2) because it needs no escape-everything traps.
+# Contract: whatever the LLM emitted, the output must be something Telegram
+# accepts — stray & < > are escaped BEFORE tags are inserted, and unbalanced
+# markers stay literal instead of becoming half a tag.
+
+TG_MSG_LIMIT = 4096            # Telegram's hard ceiling for one message
+
+_MD_CODE_BLOCK_RE = re.compile(r"```[a-zA-Z0-9_+-]*[ \t]*\n?(.*?)```", re.DOTALL)
+_MD_CODE_RE = re.compile(r"`([^`\n]+)`")
+_MD_BOLD_RE = re.compile(r"\*\*([^*\n]+)\*\*")
+_MD_ITALIC_RE = re.compile(r"\*(?!\s)([^*\n]+?)(?<!\s)\*")
+_MD_LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
+_MD_QUOTE_RE = re.compile(r"^&gt;[ \t]?")
+_MD_BULLET_RE = re.compile(r"^[-*][ \t]+")
+
+_BLOCK_TAG = "\x00B{}\x00"     # placeholder tokens for stashed code (the
+_CODE_TAG = "\x00C{}\x00"      # \x00 byte never occurs in real message text)
+
+
+def _esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _md_to_tg_html(text: str) -> str:
+    """Markdown-ish LLM output → Telegram HTML. Converts **bold**, *italic*,
+    `code`, fenced ```blocks``` (→ <pre>, language tag dropped), [links](url),
+    > quote blocks (→ <blockquote>, post candidates keep their own voice) and
+    normalises -/* bullets to the house `·`. Everything else is escaped."""
+    blocks: list[str] = []
+
+    def _stash_block(m: re.Match) -> str:
+        blocks.append(f"<pre>{_esc(m.group(1))}</pre>")
+        return _BLOCK_TAG.format(len(blocks) - 1)
+
+    text = _MD_CODE_BLOCK_RE.sub(_stash_block, text or "")
+
+    codes: list[str] = []
+
+    def _stash_code(m: re.Match) -> str:
+        codes.append(f"<code>{_esc(m.group(1))}</code>")
+        return _CODE_TAG.format(len(codes) - 1)
+
+    text = _MD_CODE_RE.sub(_stash_code, text)
+
+    text = _esc(text)
+    text = _MD_LINK_RE.sub(r'<a href="\2">\1</a>', text)
+    text = _MD_BOLD_RE.sub(r"<b>\1</b>", text)
+    text = _MD_ITALIC_RE.sub(r"<i>\1</i>", text)
+    for i, c in enumerate(codes):
+        text = text.replace(_CODE_TAG.format(i), c)
+
+    # quote lines → one <blockquote> per contiguous group; bullets → `· `
+    src = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(src):
+        q = _MD_QUOTE_RE.match(src[i])
+        if not q:
+            out.append(_MD_BULLET_RE.sub("· ", src[i]))
+            i += 1
+            continue
+        group: list[str] = []
+        while i < len(src) and (m := _MD_QUOTE_RE.match(src[i])):
+            group.append(_MD_BULLET_RE.sub("· ", src[i][m.end():]))
+            i += 1
+        out.append("<blockquote>" + "\n".join(group) + "</blockquote>")
+    text = "\n".join(out)
+
+    for i, b in enumerate(blocks):
+        text = text.replace(_BLOCK_TAG.format(i), b)
+    return text
+
+
+def _format_tg(text: str) -> str:
+    """One outbound text, send-ready: clipped at the SOURCE (so a clip can
+    never cut a tag in half), markdown → HTML, and a plain-text fallback when
+    tag overhead would push the message past Telegram's 4096 ceiling."""
+    clipped = _clip(text)
+    html = _md_to_tg_html(clipped)
+    return html if len(html) <= TG_MSG_LIMIT else clipped
 
 
 def _scrub(text: str, token: str) -> str:
@@ -156,7 +275,7 @@ def send_message(chat_id: int, text: str) -> dict:
                level="warn")
         return {"ok": False, "status_code": None, "error": "rate limited"}
     try:
-        r = _api(token, "sendMessage", {"chat_id": chat_id, "text": _clip(text)})
+        r = _api_send_text(token, chat_id, text)
         ok = 200 <= r.status_code < 300
         if not ok:
             db.log("telegram", f"sendMessage to chat {chat_id} failed "
@@ -218,20 +337,17 @@ def send_stream(chat_id: int, text_stream) -> dict:
             if (chunks_since_edit >= STREAM_EDIT_EVERY
                     and elapsed >= STREAM_EDIT_MIN_S):
                 try:
-                    _api(token, "editMessageText",
-                         {"chat_id": chat_id, "message_id": msg_id,
-                          "text": _clip("".join(buf))})
+                    _api_edit_text(token, chat_id, msg_id, "".join(buf))
                     last_edit_t = now
                     chunks_since_edit = 0
                 except Exception:  # noqa: BLE001 — a dropped edit is cosmetic
                     pass
         # final edit — always the complete text
-        full = _clip("".join(buf))
+        full = "".join(buf)
         if msg_id is None:
             return _send_and_capture(token, chat_id, full)
         try:
-            _api(token, "editMessageText",
-                 {"chat_id": chat_id, "message_id": msg_id, "text": full})
+            _api_edit_text(token, chat_id, msg_id, full)
         except Exception:  # noqa: BLE001
             pass
         return {"ok": True, "status_code": 200, "message_id": msg_id,
@@ -243,10 +359,8 @@ def send_stream(chat_id: int, text_stream) -> dict:
         try:
             if buf:
                 if msg_id is None:
-                    return _send_and_capture(token, chat_id, _clip("".join(buf)))
-                _api(token, "editMessageText",
-                     {"chat_id": chat_id, "message_id": msg_id,
-                      "text": _clip("".join(buf))})
+                    return _send_and_capture(token, chat_id, "".join(buf))
+                _api_edit_text(token, chat_id, msg_id, "".join(buf))
         except Exception:  # noqa: BLE001
             pass
         return {"ok": False, "status_code": None,
@@ -260,7 +374,7 @@ def _stream_done(buf: list[str]) -> bool:
 
 
 def _send_and_capture(token: str, chat_id: int, text: str) -> dict:
-    r = _api(token, "sendMessage", {"chat_id": chat_id, "text": _clip(text)})
+    r = _api_send_text(token, chat_id, text)
     ok = 200 <= r.status_code < 300
     mid = None
     if ok:
@@ -296,11 +410,13 @@ def notify_new_drafts(draft_ids: list[int]) -> dict:
     rows = [d for d in (db.get_draft(i) for i in draft_ids) if d]
     if not rows:
         return {"ok": False, "sent": 0, "chats": 0, "error": "no drafts"}
-    lines = [f"🟡 {len(rows)} new draft(s) need your approval:"]
+    n = len(rows)
+    lines = [f"🟡 {n} draft needs your approval:" if n == 1
+             else f"🟡 {n} drafts need your approval:"]
     lines += (f"· {draft_line(d, with_kind=True)}" for d in rows[:DRAFTS_PAGE])
     if len(rows) > DRAFTS_PAGE:
         lines.append(f"· +{len(rows) - DRAFTS_PAGE} more — /drafts")
-    lines.append("Reply /approve <id> or /reject <id>, or open the dashboard.")
+    lines.append("Reply /approve <id> or /reject <id> — or open the dashboard.")
     return notify("\n".join(lines))
 
 
@@ -359,8 +475,9 @@ def _history_turn(chat_id: int, user_message: str) -> str:
 
 
 def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
-    """Streaming TG chat: the dashboard streaming engine (per-chat session,
-    voice tuning, tools, follow-up) yielding text chunks. Side effects match
+    """Streaming TG chat: the dashboard streaming engine with the TG persona
+    (chat_mod._system_tg — clean assistant voice, X voice scoped to quoted
+    post candidates), per-chat session, tools, follow-up. Side effects match
     chat_reply_stream: session memory, DB persistence, brain reflect — plus
     post candidates are saved as real drafts (TG has no save button), each
     announced with a /approve line. Publishing still only happens through
@@ -378,7 +495,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     full: list[str] = []
     try:
         for tok in chat_mod.llm_chat_stream(
-                llm_cfg, system=chat_mod._system(cfg, user_message),
+                llm_cfg, system=chat_mod._system_tg(cfg, user_message),
                 user=_history_turn(chat_id, user_message)):
             full.append(tok)
             yield tok
@@ -409,7 +526,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
                    level="warn")
     if draft_ids:
         clean += "\n" + "\n".join(
-            f"📝 saved as draft #{d} — /approve {d} to publish" for d in draft_ids)
+            f"📝 Saved as draft #{d} — /approve {d} to publish" for d in draft_ids)
 
     _remember(chat_id, "assistant", clean)
     brain_mod.maybe_reflect_chat_async(cfg)  # every 10th message → reflect
@@ -445,7 +562,7 @@ def _target_chip(d: dict) -> str:
 def draft_line(d: dict, with_kind: bool = False) -> str:
     text = " ".join((d.get("text") or "").split())
     text = text if len(text) <= PREVIEW_CHARS else text[: PREVIEW_CHARS - 1] + "…"
-    head = f"#{d['id']}" + (f" [{d.get('kind') or 'post'}]" if with_kind else "")
+    head = f"**#{d['id']}**" + (f" [{d.get('kind') or 'post'}]" if with_kind else "")
     chips = " · ".join(c for c in (_target_chip(d), _voice_chip(d.get("meta") or {}))
                        if c)
     return f"{head} “{text}”{(' · ' + chips) if chips else ''}"
@@ -461,18 +578,20 @@ def _cmd_status(cfg: Config) -> str:
     smoke = db.get_setting("smoke_last") or {}
     bank = ideas_mod.bank_health()
     caps = usage()
+    ap_line = (f"· **autopilot** on — phase {ap.get('phase')}, "
+               f"next {ap.get('next_tick')}" if ap.get("enabled")
+               else "· **autopilot** off")
+    bank_line = f"· **idea bank** {bank['count']} idea(s)"
+    if (bank.get("last") or {}).get("at"):
+        bank_line += f" · replenished {bank['last']['at'][:10]}"
     lines = [
-        f"🪪 @{me.get('username', cfg.x.username or 'unknown')}"
+        f"**Status — @{me.get('username', cfg.x.username or 'unknown')}**"
         f" ({me.get('followers', '?')} followers, mode={cfg.x.mode})",
-        f"🧭 autopilot {'ON' if ap.get('enabled') else 'off'}"
-        + (f" — phase {ap.get('phase')}, next {ap.get('next_tick')}"
-           if ap.get("enabled") else ""),
-        f"🩺 health check: {smoke.get('status', 'never')}",
-        f"💡 idea bank: {bank['count']} idea(s)"
-        + (f", replenished {(bank.get('last') or {}).get('at', '?')[:10]}"
-           if (bank.get("last") or {}).get("at") else ""),
-        f"🛡 today: {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} posts, "
-        f"{caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
+        ap_line,
+        f"· **health check** {smoke.get('status', 'never')}",
+        bank_line,
+        f"· **today** {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} posts"
+        f" · {caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
     ]
     return "\n".join(lines)
 
@@ -480,22 +599,21 @@ def _cmd_status(cfg: Config) -> str:
 def _cmd_ideas() -> str:
     ideas = db.fresh_ideas(IDEAS_PAGE)
     if not ideas:
-        return "Idea bank is empty — run the study loop (/status shows bank)."
-    return "💡 Top ideas:\n" + "\n".join(
-        f"{i}. {idea['title']} (score {idea['score']})"
-        for i, idea in enumerate(ideas, 1))
+        return "Idea bank is empty — /study refills it."
+    return "**Idea bank — top angles**\n" + "\n".join(
+        f"· {idea['title']} (score {idea['score']})" for idea in ideas)
 
 
 def _cmd_drafts() -> str:
     drafts = db.drafts_by_status("draft", DRAFTS_PAGE)
     if not drafts:
         return "Nothing waiting — the approval queue is clear."
-    return "⏳ Waiting for approval:\n" + "\n".join(
-        draft_line(d, with_kind=True) for d in drafts
-    ) + "\n/approve <id> · /reject <id>"
+    return ("**Waiting for approval**\n"
+            + "\n".join(f"· {draft_line(d, with_kind=True)}" for d in drafts)
+            + "\n/approve <id> · /reject <id> — or open the dashboard.")
 
 
-STUDY_LOOPS = (("import", "📥"), ("study", "📚"), ("scan", "🔬"), ("learn", "🧠"))
+STUDY_LOOPS = ("import", "study", "scan", "learn")
 STUDY_LOOP_TIMEOUT_S = 15 * 60  # per-loop ceiling — a hung loop must never park the poller thread
 
 
@@ -511,36 +629,36 @@ def _cmd_study(cfg: Config) -> str:
         from ..server.__main__ import run_loop_core
         lines: list[str] = []
         ok_all = True
-        for name, label in STUDY_LOOPS:
+        for name in STUDY_LOOPS:
             try:
                 res = await asyncio.wait_for(run_loop_core(name),
                                              timeout=STUDY_LOOP_TIMEOUT_S) or {}
             except asyncio.TimeoutError:
                 ok_all = False
-                lines.append(f"{label} {name}: timed out after {STUDY_LOOP_TIMEOUT_S}s")
+                lines.append(f"· **{name}** timed out after {STUDY_LOOP_TIMEOUT_S}s")
                 continue
             except Exception as e:  # noqa: BLE001 — one loop failing must not drop the rest
                 ok_all = False
-                lines.append(f"{label} {name}: failed — {e}")
+                lines.append(f"· **{name}** failed — {e}")
                 continue
             if name == "import":
                 me = res.get("me") or {}
-                lines.append(f"{label} import: {res.get('own', '?')} own + {res.get('niche', '?')} niche"
+                lines.append(f"· **import** {res.get('own', '?')} own + {res.get('niche', '?')} niche"
                              + (f" · @{me.get('username')} ({me.get('followers')} followers)" if me else ""))
             elif name == "study":
-                lines.append(f"{label} study: +{res.get('niche_new', 0)} niche · bank {res.get('bank', '?')}")
+                lines.append(f"· **study** +{res.get('niche_new', 0)} niche · bank {res.get('bank', '?')}")
             elif name == "scan":
-                lines.append(f"{label} scan: {res.get('posts_scanned', 0)} posts · voice {res.get('voice', '?')}")
+                lines.append(f"· **scan** {res.get('posts_scanned', 0)} posts · voice {res.get('voice', '?')}")
             else:
-                lines.append(f"{label} learn: refreshed {res.get('refreshed', 0)} posts")
+                lines.append(f"· **learn** refreshed {res.get('refreshed', 0)} posts")
         return lines, ok_all
 
     try:
         lines, ok_all = asyncio.run(_chain())
     except Exception as e:  # noqa: BLE001 — the chain itself (not one loop) died
         return f"study chain failed: {e}"
-    tail = ("\n\n✅ brain updated — everything I know about you is fresh." if ok_all
-            else "\n\n⚠️ study chain finished with errors — see the lines above.")
+    tail = ("\n\n✅ Brain updated — everything I know about you is fresh." if ok_all
+            else "\n\n⚠️ Study finished with errors — see the lines above.")
     return "\n".join(lines) + tail
 
 
@@ -572,7 +690,8 @@ def approve_draft_tg(cfg: Config, draft_id: int) -> str:
         meta["scheduled_reason"] = reason
     db.update_draft(draft_id, status="approved", scheduled_at=sched, meta_json=meta)
     db.log("telegram", f"draft {draft_id} approved from TG → {sched}")
-    return f"✅ #{draft_id} approved — scheduled {sched[:16].replace('T', ' ')}\n({reason})"
+    return (f"✅ Draft #{draft_id} approved — scheduled "
+            f"{sched[:16].replace('T', ' ')}\n({reason})")
 
 
 def _next_static_slot(cfg: Config) -> str:
@@ -592,7 +711,7 @@ def reject_draft_tg(draft_id: int) -> str:
         return f"No draft #{draft_id} to reject — /drafts lists them."
     db.update_draft(draft_id, status="rejected")
     db.log("telegram", f"draft {draft_id} rejected from TG")
-    return f"🗑 #{draft_id} rejected."
+    return f"🗑 Draft #{draft_id} rejected."
 
 
 def post_draft_tg(cfg: Config, text: str) -> str:

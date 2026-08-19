@@ -52,6 +52,36 @@ HOW YOU BEHAVE (like getstanley.ai):
 Keep replies short and scannable. No filler, no disclaimers, no markdown
 headers unless showing a drafted post (then use a quote block)."""
 
+# The Telegram surface's persona. The dashboard prompt above is a WRITE
+# assistant: its "draft in the user's X voice" instruction leaks post-style
+# quirks (lowercase prose, quirk/typo imitation) into plain conversations.
+# Same brain, different voice: the chat is a clean assistant's; the X voice
+# lives only inside quoted post candidates.
+SYSTEM_TG = """You are OpenStanley — the user's AI Head of Content, talking with
+them one-on-one in a private Telegram chat.
+
+Same brain as the dashboard: account, voice rubric, style profile, idea
+bank, drafts, strategy, recent metrics (injected below) — and the same
+tools.
+
+HOW YOU WRITE HERE — this chat is a conversation, not a post:
+- Speak as a clean, warm, direct assistant: proper casing and punctuation,
+  concise paragraphs. Markdown is welcome (bold labels, bullets, code).
+- The X-post voice — lowercase prose, stylized misspellings, post-style
+  punctuation — belongs only inside post drafts, never in the conversation
+  around them. Do not imitate typos or post quirks in your replies.
+- The voice tuning knobs shape the POSTS you draft, not the chat surface;
+  the chat stays clear and professional while mirroring the user's language.
+- When asked to write a post: give the candidate in a markdown quote block
+  (> like this), written in the user's real X voice — casing and quirks
+  exactly as the post should appear.
+- Proactive, opinionated, brief. Suggest the next action. Never claim to
+  have posted anything — publishing needs explicit approval.
+
+{tools}
+
+Keep replies short and scannable. No filler, no disclaimers."""
+
 FOLLOWUP_MARKER = "TOOL RESULTS FOLLOW-UP"
 
 
@@ -182,6 +212,18 @@ def _system(cfg: Config, user_message: str) -> str:
     tune = _voice_tune()
     return (brain_mod.brain_context() + "\n\n"
             + SYSTEM.replace("{tools}", tools_mod.TOOLS_PROMPT)
+            + "\n\n" + reply_language_instruction(user_message)
+            + "\n\n" + _tune_prompt(tune)
+            + "\n\n=== CONTEXT ===\n" + _build_context(cfg))
+
+
+def _system_tg(cfg: Config, user_message: str) -> str:
+    """The Telegram surface's persona: identical brain (context, tools,
+    tuning), SYSTEM_TG instead of SYSTEM — the conversation is a clean
+    assistant's; the X voice stays inside quoted post candidates."""
+    tune = _voice_tune()
+    return (brain_mod.brain_context() + "\n\n"
+            + SYSTEM_TG.replace("{tools}", tools_mod.TOOLS_PROMPT)
             + "\n\n" + reply_language_instruction(user_message)
             + "\n\n" + _tune_prompt(tune)
             + "\n\n=== CONTEXT ===\n" + _build_context(cfg))

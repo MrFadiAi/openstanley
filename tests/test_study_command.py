@@ -180,12 +180,12 @@ def test_cmd_study_runs_four_loops_in_order_with_real_numbers(monkeypatch):
     reply = tg._cmd_study(CFG)
     assert calls == ["import", "study", "scan", "learn"]    # the order
     lines = reply.splitlines()
-    assert lines[0].startswith("📥")
-    assert "📥 import: 12 own + 30 niche" in lines[0]       # real numbers
+    assert lines[0].startswith("· **import**")
+    assert "12 own + 30 niche" in lines[0]                  # real numbers
     assert "· @fadi (1234 followers)" in lines[0]           # me chip renders
-    assert any(l.startswith("📚 study: +3 niche · bank 18") for l in lines)
-    assert any(l.startswith("🔬 scan: 800 posts · voice rebuilt") for l in lines)
-    assert any(l.startswith("🧠 learn: refreshed 60 posts") for l in lines)
+    assert any(l.startswith("· **study** +3 niche · bank 18") for l in lines)
+    assert any(l.startswith("· **scan** 800 posts · voice rebuilt") for l in lines)
+    assert any(l.startswith("· **learn** refreshed 60 posts") for l in lines)
     assert "✅" in reply
 
 
@@ -195,9 +195,9 @@ def test_cmd_study_failing_scan_surfaces_error_and_continues(monkeypatch):
     reply = tg._cmd_study(CFG)
     assert calls == ["import", "study", "scan", "learn"]    # chain moved on
     assert "scan exploded" in reply                         # error surfaced
-    assert "🔬" in reply and "failed" in reply
-    assert "📥 import: 12 own" in reply                     # earlier lines kept
-    assert "🧠 learn: refreshed 60 posts" in reply          # later loop ran
+    assert "· **scan** failed — scan exploded" in reply
+    assert "· **import** 12 own" in reply                   # earlier lines kept
+    assert "· **learn** refreshed 60 posts" in reply        # later loop ran
     assert "✅" not in reply and "⚠️" in reply
     # the failure was logged through the shared core, like the dashboard path
     with db.connect() as c:
@@ -215,8 +215,8 @@ def test_hung_loop_times_out_and_chain_finishes(monkeypatch):
     monkeypatch.setattr(tg, "STUDY_LOOP_TIMEOUT_S", 0.05)
     reply = tg._cmd_study(CFG)
     assert "timed out" in reply
-    assert "📥 import" in reply                             # its line marks it
-    assert "🧠 learn: refreshed 60 posts" in reply          # the rest still ran
+    assert "· **import** timed out" in reply                # its line marks it
+    assert "· **learn** refreshed 60 posts" in reply        # the rest still ran
     assert "✅" not in reply and "⚠️" in reply
 
 
@@ -232,7 +232,7 @@ def test_study_update_replies_once_with_summary(monkeypatch):
     sent = fake.sent()
     assert len(sent) == 1                                   # exactly one reply
     assert sent[0][0] == CHAT
-    assert sent[0][1].startswith("📥")
+    assert sent[0][1].startswith("· <b>import</b>")         # bold on the wire
     assert "✅" in sent[0][1]
     assert calls == ["import", "study", "scan", "learn"]
 
@@ -255,7 +255,8 @@ def test_study_runs_inside_the_pollers_worker_thread(monkeypatch):
     asyncio.run(scenario())
     assert calls == ["import", "study", "scan", "learn"]    # ran in the worker
     sent = fake.sent()
-    assert len(sent) == 1 and sent[0][1].startswith("📥") and "✅" in sent[0][1]
+    assert len(sent) == 1 and "✅" in sent[0][1]
+    assert sent[0][1].startswith("· <b>import</b>")         # bold on the wire
     assert tg._state["offset"] == 51
 
 
