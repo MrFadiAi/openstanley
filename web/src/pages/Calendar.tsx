@@ -400,11 +400,10 @@ function ClearAllButton({
 }) {
   const { t } = useApp();
   const [open, setOpen] = useState(false);
-  if (count <= 0) return null;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="icon-sm" variant="ghost" title={label} aria-label={label}>
+        <Button size="icon-sm" variant="ghost" title={label} aria-label={label} disabled={count <= 0}>
           {icon}
         </Button>
       </DialogTrigger>
