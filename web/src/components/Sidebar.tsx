@@ -16,6 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useApp, type Tab } from '@/lib/app-context';
 import type { I18nKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { AccountSwitcher } from '@/components/AccountSwitcher';
 
 /*
  * Sidebar — rebuilt on the beautifului SidebarNav grammar (beautifului.dev,
@@ -90,8 +91,8 @@ export function Sidebar({ mode, inboxCount, ideasCount }: SidebarProps) {
 
   return (
     <aside className="flex h-full w-[236px] min-w-[236px] flex-col border-edge bg-panel p-2 sm:border-e">
-      {/* workspace row */}
-      <div className="mb-2 flex w-full items-center gap-2.5 rounded-control p-1.5">
+      {/* workspace row: brand + mode chip, account switcher beneath (v0.5.0) */}
+      <div className="mb-1.5 flex w-full items-center gap-2.5 rounded-control p-1.5">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-[8px] bg-accent text-[13px] font-extrabold text-white">
           X
         </span>
@@ -107,6 +108,9 @@ export function Sidebar({ mode, inboxCount, ideasCount }: SidebarProps) {
               : '…'}
           </span>
         </span>
+      </div>
+      <div className="mb-2">
+        <AccountSwitcher />
       </div>
 
       {/* quick search */}

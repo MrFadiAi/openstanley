@@ -1506,6 +1506,63 @@ async def delete_account_ep(account_id: int):
             "active_account_id": db.active_account()}
 
 
+class AccountBootstrap(BaseModel):
+    cookies_json: str
+
+
+@app.post("/api/accounts/bootstrap")
+async def account_bootstrap_ep(body: AccountBootstrap):
+    """Paste cookies → creates or selects THAT account (v0.5.0 connect flow).
+
+    Validates the cookies against real X via me(); the returned handle then
+    either re-selects an existing account (reconnect) or creates a fresh one
+    with a seeded empty brain. The account becomes active."""
+    import json as _json
+    try:
+        cookies = _json.loads(body.cookies_json)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(400, f"Cookies JSON parse error: {e}") from e
+    if not isinstance(cookies, dict) or "auth_token" not in cookies:
+        raise HTTPException(400, "Cookies must be a JSON object containing at least 'auth_token' (and ideally 'ct0').")
+    from ..x.client import XCookie
+    probe = XCookie(body.cookies_json, caps={
+        "max_posts_per_day": cfg.x.max_posts_per_day,
+        "max_replies_per_day": cfg.x.max_replies_per_day,
+        "min_delay_s": cfg.x.min_delay_s,
+        "max_delay_s": cfg.x.max_delay_s,
+    })
+    try:
+        me = await probe.me()  # identity check — whose cookies are these?
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        db.log("system", f"account bootstrap failed: {str(e)[:200]}", level="error")
+        raise HTTPException(400, f"Cookies rejected by X: {str(e)[:300]}") from e
+    handle = me["username"]
+    single_line = _json.dumps(cookies, separators=(",", ":"))
+    existing = next((a for a in db.list_accounts()
+                     if a["handle"].lower() == handle.lower()), None)
+    if existing:
+        acct = existing["id"]
+        action = "reconnected"
+    else:
+        from ..gen import brain as brain_mod
+        acct = db.create_account(handle, single_line)
+        brain_mod.ensure(acct)  # fresh EMPTY brain — nothing from other accounts
+        action = "created"
+    db.set_account_cookies(acct, single_line)
+    db.set_account_handle(acct, handle)
+    db.set_me(me, acct)
+    db.set_active_account(acct)
+    _set_config_mode("cookie")
+    _rebuild_agent()
+    db.log("accounts", f"{action} account #{acct} (@{handle}, "
+                       f"followers={me.get('followers')}) via cookie bootstrap")
+    return {"ok": True, "account_id": acct, "handle": handle, "action": action,
+            "followers": me.get("followers"), "mode": "cookie",
+            "active_account_id": db.active_account()}
+
+
 # ---------------- X connect (cookie wizard) ----------------
 
 @app.post("/api/x/cookie-connect")

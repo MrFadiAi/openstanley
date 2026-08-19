@@ -12,6 +12,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { PageHeader } from '@/components/PageHeader';
+import { AccountsCard } from '@/components/AccountsCard';
 import { TagInput } from '@/components/TagInput';
 import { useApp } from '@/lib/app-context';
 import {
@@ -124,6 +125,8 @@ export function SettingsPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-[760px] px-6 py-6">
         <PageHeader title={t('settings.title')} />
+
+        <AccountsCard />
 
         <div className="mb-4 rounded-xl border border-edge bg-panel p-5">
           {/* language */}

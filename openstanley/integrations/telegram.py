@@ -50,7 +50,8 @@ TOKEN_MIN_LEN = 10           # anything shorter is not a real bot token
 
 HELP_TEXT = (
     "I'm OpenStanley — your AI Head of Content, now on Telegram.\n\n"
-    "/status — identity, autopilot, health, bank, today's caps\n"
+    "/status — active account, autopilot, health, bank, today's caps\n"
+    "/account — list accounts · /account <id> switches the active one\n"
     "/ideas — top idea-bank angles\n"
     "/drafts — drafts waiting for your approval\n"
     "/approve <id> — approve a draft (it gets scheduled)\n"
@@ -574,6 +575,8 @@ def _cmd_status(cfg: Config) -> str:
     from ..gen import ideas as ideas_mod
 
     me = db.get_me()
+    account = db.get_account(db.active_account()) or {}
+    handle = me.get("username") or account.get("handle") or cfg.x.username or "unknown"
     ap = ap_mod.get_state()
     smoke = db.get_setting("smoke_last") or {}
     bank = ideas_mod.bank_health()
@@ -585,7 +588,7 @@ def _cmd_status(cfg: Config) -> str:
     if (bank.get("last") or {}).get("at"):
         bank_line += f" · replenished {bank['last']['at'][:10]}"
     lines = [
-        f"**Status — @{me.get('username', cfg.x.username or 'unknown')}**"
+        f"**Account #{db.active_account()} — @{handle}**"
         f" ({me.get('followers', '?')} followers, mode={cfg.x.mode})",
         ap_line,
         f"· **health check** {smoke.get('status', 'never')}",
@@ -594,6 +597,37 @@ def _cmd_status(cfg: Config) -> str:
         f" · {caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
     ]
     return "\n".join(lines)
+
+
+def _cmd_account(args: str) -> str:
+    """v0.5.0 — list accounts, or switch the active one (/account 2)."""
+    parts = args.split()
+    accounts = db.list_accounts()
+    if not parts:
+        lines = ["**Accounts**"]
+        for a in accounts:
+            mark = "✅" if a["active"] else "·"
+            fol = f", {a['followers']} followers" if a["followers"] is not None else ""
+            posts = f", {a['own_posts']} posts" if a["own_posts"] else ""
+            lines.append(f"{mark} #{a['id']}. @{a['handle'] or 'no handle yet'}{fol}{posts}")
+        lines.append(f"\nActive: #{db.active_account()} — /account <id> switches.")
+        return "\n".join(lines)
+    try:
+        target = int(parts[0])
+    except ValueError:
+        return "Usage: /account [id]"
+    if not db.set_active_account(target):
+        return f"No account #{target} — /account lists them."
+    try:  # rebuild the agent so cookie mode uses the new account's cookies
+        from ..server.__main__ import _rebuild_agent
+        _rebuild_agent()
+    except Exception as e:  # noqa: BLE001 — the switch itself already happened
+        db.log("telegram", f"account switch agent rebuild failed: {e}", level="warn")
+    account = db.get_account(target) or {}
+    db.log("accounts", f"TG switched active account → #{target}")
+    return (f"✅ Active account → #{target} "
+            f"(@{account.get('handle') or 'no handle yet'}) — everything now "
+            f"reads and writes this account. /status to confirm.")
 
 
 def _cmd_ideas() -> str:
@@ -779,6 +813,8 @@ def _handle_update(cfg: Config, upd: dict) -> None:
         reply = _cmd_digest(cfg)
     elif name == "study":
         reply = _cmd_study(cfg)
+    elif name == "account":
+        reply = _cmd_account(args)
     else:
         reply = f"Unknown command /{name} — /help lists what I can do."
     send_message(chat_id, reply)

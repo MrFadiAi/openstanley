@@ -333,11 +333,80 @@ export interface XStatus {
   mode: string;
   username: string | null;
   followers: number | null;
+  account_id?: number;
   cookies_set?: boolean;
+  cookies_masked?: string | null;
   cookies_stale?: boolean;
   last_heal?: string | null;
   heal_ok?: boolean | null;
   safety: { caps: SafetyCaps; usage: { posts?: number; replies?: number } } | null;
+}
+
+// ---------- accounts (v0.5.0 multi-account) ----------
+
+export interface Account {
+  id: number;
+  handle: string;
+  created_at: string | null;
+  status: string;
+  cookies_set: boolean;
+  cookies_masked: string | null;
+  followers: number | null;
+  own_posts: number;
+  active: boolean;
+}
+
+export interface AccountsResponse {
+  active_account_id: number;
+  accounts: Account[];
+}
+
+export interface AccountBootstrapResponse {
+  ok: boolean;
+  account_id: number;
+  handle: string;
+  action: 'created' | 'reconnected';
+  followers: number | null;
+  mode: string;
+  active_account_id: number;
+}
+
+export async function getAccounts(): Promise<AccountsResponse> {
+  return apiGet<AccountsResponse>('accounts');
+}
+
+export async function createAccount(
+  handle: string,
+  cookiesJson?: string,
+): Promise<{ ok: boolean; account_id: number; handle: string }> {
+  return apiPost('accounts', { handle, cookies_json: cookiesJson ?? null });
+}
+
+export async function activateAccount(id: number): Promise<{ ok: boolean }> {
+  return apiPost(`accounts/${id}/activate`, {});
+}
+
+export async function deleteAccount(
+  id: number,
+): Promise<{ ok: boolean; archived_to: string }> {
+  const r = await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+  if (!r.ok) {
+    throw new Error(`delete account failed (${r.status})`);
+  }
+  return r.json();
+}
+
+export async function setAccountCookies(
+  id: number,
+  cookiesJson: string,
+): Promise<{ ok: boolean; cookies_masked: string | null }> {
+  return apiPost(`accounts/${id}/cookies`, { cookies_json: cookiesJson });
+}
+
+export async function bootstrapAccount(
+  cookiesJson: string,
+): Promise<AccountBootstrapResponse> {
+  return apiPost('accounts/bootstrap', { cookies_json: cookiesJson });
 }
 
 // ---------- system smoke (v0.3.7 live self-check) ----------

@@ -31,6 +31,7 @@ import { useApp } from '@/lib/app-context';
 import {
   api,
   apiPost,
+  bootstrapAccount,
   getSmoke,
   runSmoke,
   type SmokeProbe,
@@ -276,12 +277,13 @@ export function ConnectPage() {
     setConnecting(true);
     void (async () => {
       try {
-        const r = await apiPost<{ ok: boolean; username: string; followers: number }>(
-          'x/cookie-connect',
-          { cookies_json: cookiesJson },
-        );
+        // v0.5.0 bootstrap: validate the cookies via me(), then create or
+        // re-select THAT account — each X account gets its own world
+        const r = await bootstrapAccount(cookiesJson);
         toast.success(
-          t('connect.connected', { username: r.username, followers: r.followers }),
+          r.action === 'created'
+            ? t('account.created', { id: r.account_id })
+            : t('account.switched', { handle: r.handle }),
         );
         setDialogOpen(false);
         setCookiesJson('');
@@ -343,6 +345,11 @@ export function ConnectPage() {
                 <Badge variant={status?.mode === 'dryrun' ? 'amber' : 'green'}>
                   {status?.mode ?? '?'}
                 </Badge>
+                {status?.account_id != null ? (
+                  <Badge variant="accent">
+                    #{status.account_id}
+                  </Badge>
+                ) : null}
                 {status?.username ? (
                   <Badge variant="accent">
                     <UserRound size={10} /> @{status.username}
