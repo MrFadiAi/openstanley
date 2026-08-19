@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -19,10 +19,12 @@ import {
   Plus,
   Settings2,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/lib/app-context';
@@ -384,6 +386,44 @@ function QueueCard({ draft }: { draft: Draft }) {
   );
 }
 
+
+// ---------------- confirm-gated clear-all ----------------
+
+function ClearAllButton({
+  icon, label, count, confirmTitle, onConfirm,
+}: {
+  icon: ReactNode;
+  label: string;
+  count: number;
+  confirmTitle: string;
+  onConfirm: () => Promise<number>;
+}) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  if (count <= 0) return null;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="icon-sm" variant="ghost" title={label} aria-label={label}>
+          {icon}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogTitle>{label}</DialogTitle>
+        <p className="text-[13px] leading-relaxed text-muted">{confirmTitle}</p>
+        <div className="mt-3 flex items-center gap-2">
+          <Button size="sm" variant="danger" onClick={() => { void onConfirm().then(() => setOpen(false)); }}>
+            {label}
+          </Button>
+          <DialogClose asChild>
+            <Button size="sm" variant="ghost">{t('common.cancel')}</Button>
+          </DialogClose>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ---------------- the page ----------------
 
 export function CalendarPage() {
@@ -523,6 +563,25 @@ export function CalendarPage() {
     [cal],
   );
 
+  const scheduledCount = useMemo(
+    () => Object.values(cal?.days ?? {}).flat().filter((i) => i.state !== 'published').length,
+    [cal],
+  );
+
+  const clearScheduled = async (): Promise<number> => {
+    const r = await apiPost<{ ok: boolean; deleted: number }>('drafts/clear-scheduled', {});
+    toast.success(t('calendar.cleared', { n: r.deleted }));
+    load();
+    return r.deleted;
+  };
+
+  const clearQueue = async (): Promise<number> => {
+    const r = await apiPost<{ ok: boolean; deleted: number }>('drafts/clear-queue', {});
+    toast.success(t('calendar.cleared', { n: r.deleted }));
+    load();
+    return r.deleted;
+  };
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="h-full px-6 py-6">
@@ -558,6 +617,13 @@ export function CalendarPage() {
                 <TabsTrigger value="month">{t('calendar.month')}</TabsTrigger>
               </TabsList>
             </Tabs>
+            <ClearAllButton
+              icon={<Trash2 size={14} />}
+              label={t('calendar.clearScheduled')}
+              count={scheduledCount}
+              confirmTitle={t('calendar.confirmClearScheduled', { n: scheduledCount })}
+              onConfirm={clearScheduled}
+            />
             <Popover>
               <PopoverAnchor asChild>
                 <Button size="icon-sm" variant="ghost" aria-label={t('calendar.postingTimes')}>
@@ -618,8 +684,17 @@ export function CalendarPage() {
               <div className="flex min-w-0 flex-col rounded-2xl border border-line bg-surface/60 p-4">
                 <div className="mb-1 flex items-baseline justify-between">
                   <h2 className="font-serif text-[19px]">{t('calendar.queue')}</h2>
-                  <span className="font-serif text-[12.5px] italic text-ink-3">
-                    {queue.length === 0 ? t('calendar.queueNone') : t('calendar.queueWaiting', { n: queue.length })}
+                  <span className="flex items-center gap-0.5">
+                    <span className="font-serif text-[12.5px] italic text-ink-3">
+                      {queue.length === 0 ? t('calendar.queueNone') : t('calendar.queueWaiting', { n: queue.length })}
+                    </span>
+                    <ClearAllButton
+                      icon={<Trash2 size={12} />}
+                      label={t('calendar.clearQueue')}
+                      count={queue.length}
+                      confirmTitle={t('calendar.confirmClearQueue', { n: queue.length })}
+                      onConfirm={clearQueue}
+                    />
                   </span>
                 </div>
                 <div className="mb-3 font-serif text-[52px] font-medium leading-none tabular-nums">

@@ -184,6 +184,11 @@ const en = {
   'calendar.pickTime': 'Pick a time',
   'calendar.postingTimes': 'Posting times',
   'calendar.changeSettings': 'Change in Settings',
+  'calendar.clearScheduled': 'Clear schedule',
+  'calendar.clearQueue': 'Clear queue',
+  'calendar.confirmClearScheduled': 'Remove all {n} scheduled posts? This cannot be undone.',
+  'calendar.confirmClearQueue': 'Remove all {n} queued drafts? This cannot be undone.',
+  'calendar.cleared': 'Removed {n}',
 
   // ---- inbox ----
   'inbox.title': 'Inbox',
@@ -793,6 +798,11 @@ const ar: Record<I18nKey, string> = {
   'calendar.pickTime': 'اختر وقتاً',
   'calendar.postingTimes': 'أوقات النشر',
   'calendar.changeSettings': 'غيّرها من الإعدادات',
+  'calendar.clearScheduled': 'مسح الجدول',
+  'calendar.clearQueue': 'مسح قائمة الانتظار',
+  'calendar.confirmClearScheduled': 'حذف كل المنشورات المجدولة ({n})؟ لا يمكن التراجع.',
+  'calendar.confirmClearQueue': 'حذف كل المسودات في الانتظار ({n})؟ لا يمكن التراجع.',
+  'calendar.cleared': 'حُذف {n}',
 
   // ---- inbox ----
   'inbox.title': 'الوارد',

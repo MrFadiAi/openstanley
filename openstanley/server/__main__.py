@@ -564,6 +564,22 @@ async def regen_draft(draft_id: int):
         raise HTTPException(500, str(e)) from e
 
 
+@app.post("/api/drafts/clear-scheduled")
+async def clear_scheduled_drafts():
+    """Calendar 'clear schedule' — delete all placed-but-unpublished drafts."""
+    n = db.delete_scheduled_drafts()
+    db.log("calendar", f"schedule cleared — {n} scheduled drafts deleted")
+    return {"ok": True, "deleted": n}
+
+
+@app.post("/api/drafts/clear-queue")
+async def clear_queued_drafts():
+    """Calendar 'clear queue' — delete every unscheduled draft."""
+    n = db.delete_queued_drafts()
+    db.log("calendar", f"queue cleared — {n} unscheduled drafts deleted")
+    return {"ok": True, "deleted": n}
+
+
 @app.post("/api/drafts/{draft_id}/reschedule")
 async def reschedule_draft(draft_id: int, body: Reschedule):
     d = db.get_draft(draft_id)

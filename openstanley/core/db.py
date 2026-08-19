@@ -716,6 +716,25 @@ def add_draft(text: str, idea_id: Optional[int] = None, kind: str = "post",
         return cur.lastrowid
 
 
+def delete_scheduled_drafts(acct: Optional[int] = None) -> int:
+    """Delete every scheduled-but-unpublished draft (the Calendar's placed
+    cards). Published history and rejected drafts are never touched."""
+    with _lock, connect() as c:
+        cur = c.execute(
+            "DELETE FROM drafts WHERE account_id=? AND status IN ('approved','draft') "
+            "AND scheduled_at IS NOT NULL", (_acct(acct),))
+        return cur.rowcount
+
+
+def delete_queued_drafts(acct: Optional[int] = None) -> int:
+    """Delete every unscheduled draft (the Calendar's Queue rail)."""
+    with _lock, connect() as c:
+        cur = c.execute(
+            "DELETE FROM drafts WHERE account_id=? AND status IN ('approved','draft') "
+            "AND scheduled_at IS NULL", (_acct(acct),))
+        return cur.rowcount
+
+
 def update_draft(draft_id: int, acct: Optional[int] = None, **fields: Any) -> None:
     allowed = {"text", "thread_json", "status", "scheduled_at", "x_id", "published_at",
                "meta_json", "image", "quote_of", "kind", "temperature"}
