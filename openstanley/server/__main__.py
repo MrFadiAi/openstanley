@@ -1453,8 +1453,19 @@ async def _verify_cookies_no_heal(canonical: str, account_id: int = 1,
         raise
     except Exception as e:  # noqa: BLE001
         db.log("system", f"{surface} failed: {str(e)[:200]}", level="error")
+        msg = str(e)
+        if "353" in msg or "csrf" in msg.lower():
+            # X answered the CSRF challenge, i.e. auth_token reached a live
+            # endpoint — the paste is missing ct0 (or holds a pre-relogin
+            # stale one). Same cure either way: copy BOTH cookies fresh from
+            # the same browser session and paste them together.
+            raise HTTPException(
+                400, f"Cookies rejected by X ({msg[:200]}): the auth_token "
+                     "looks fine, but ct0 is missing or stale — copy BOTH "
+                     "values from the same browser (F12 → Cookies → x.com) "
+                     "and paste them together, e.g. auth_token=…; ct0=…") from e
         raise HTTPException(
-            400, f"Cookies rejected by X: {str(e)[:300]} — the token is "
+            400, f"Cookies rejected by X: {msg[:300]} — the token is "
                  "invalid or expired; re-copy it from your browser") from e
 
 @app.get("/api/accounts")

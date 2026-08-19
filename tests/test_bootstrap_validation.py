@@ -95,6 +95,28 @@ def heal_spies(monkeypatch):
     return touches
 
 
+class _CsrfFailTwikit:
+    """twikit stand-in: user() dies with X's code-353 CSRF error — what a
+    bare auth_token paste (no ct0) produces on real X."""
+    def __init__(self, lang: str):
+        self._ck: dict = {}
+
+    def set_cookies(self, cookies: dict) -> None:  # SYNC in twikit 2.3.3
+        self._ck = cookies
+
+    async def user(self):
+        raise Exception('status: 403, message: "{"errors":[{"code":353,'
+                        '"message":"This request requires a matching csrf '
+                        'cookie and header."}]}"')
+
+
+@pytest.fixture()
+def csrf_fail_x(monkeypatch):
+    fake_mod = types.ModuleType("twikit")
+    fake_mod.Client = _CsrfFailTwikit
+    monkeypatch.setitem(sys.modules, "twikit", fake_mod)
+
+
 class _OkProbe:
     """XCookie-shaped stub for the VALID-token path — records the heal kwarg
     so tests can prove validation asked for a no-heal check."""
@@ -150,6 +172,20 @@ def test_bootstrap_fake_token_rejected_no_heal_no_write(client, auth_fail_x, hea
     assert "re-copy" in r.json()["detail"] or "rejected" in r.json()["detail"]
     assert db.account_cookies(1) == SENTINEL          # stored cookies untouched
     assert _accounts_snapshot() == before_accounts    # no ghost account created
+    assert heal_spies == {"handle_failure": 0, "heal_cookies": 0, "pull": 0}
+
+
+def test_bootstrap_csrf_353_gets_ct0_hint_not_token_blame(client, csrf_fail_x, heal_spies):
+    """code-353 = ct0 missing/stale, NOT a bad auth_token — the message must
+    say exactly that, or users re-copy a perfectly valid token forever."""
+    db.set_account_cookies(1, SENTINEL)
+    r = client.post("/api/accounts/bootstrap", json={"cookies_json": FAKE_TOKEN})
+    assert r.status_code == 400, r.text
+    detail = r.json()["detail"]
+    assert "ct0" in detail
+    assert "auth_token=…; ct0=…" in detail          # shows the paste format
+    assert "invalid or expired" not in detail       # must NOT blame the token
+    assert db.account_cookies(1) == SENTINEL        # nothing persisted
     assert heal_spies == {"handle_failure": 0, "heal_cookies": 0, "pull": 0}
 
 
