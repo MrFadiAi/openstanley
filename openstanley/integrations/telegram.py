@@ -485,7 +485,8 @@ def send_message(chat_id: int, text: str) -> dict:
 def send_photo(chat_id: int, image_name: str, caption: str = "") -> dict:
     """One outbound photo/document. Same contract as send_message: rate-
     limited, never raises. GIFs go as documents (TG won't render them as
-    photos); anything else as sendPhoto."""
+    photos); anything else as sendPhoto. A failure here never costs the
+    card — callers fall back to a text line."""
     token = bot_token()
     if not token:
         return {"ok": False, "status_code": None, "error": "no bot token"}
