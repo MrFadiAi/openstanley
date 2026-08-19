@@ -40,3 +40,15 @@ def _accounts_root_sandbox(tmp_path, monkeypatch):
     from openstanley.gen import brain
     monkeypatch.setattr(brain, "ACCOUNTS_ROOT", tmp_path / "accounts")
     yield
+
+
+def pytest_configure(config):
+    """Loud hermeticity guard: if the DB path ever resolves back to the real
+    data/openstanley.db (env regression, import-order change), fail the run
+    before a single test can write production settings."""
+    from openstanley.core import db as _db
+    p = str(_db.DB_PATH).replace("\\", "/")
+    assert "/tests/_data/" in p, (
+        f"HERMETICITY BROKEN: tests would run against {p} — "
+        "refusing to touch the real DB"
+    )
