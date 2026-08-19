@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { PageHeader } from '@/components/PageHeader';
 import { useApp } from '@/lib/app-context';
 import {
@@ -198,7 +197,8 @@ export function ConnectPage() {
   const [status, setStatus] = useState<XStatus | null>(null);
   const [profile, setProfile] = useState<StyleProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [cookiesJson, setCookiesJson] = useState('');
+  const [authToken, setAuthToken] = useState('');
+  const [ct0, setCt0] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [caps, setCaps] = useState({
@@ -278,15 +278,25 @@ export function ConnectPage() {
     void (async () => {
       try {
         // v0.5.0 bootstrap: validate the cookies via me(), then create or
-        // re-select THAT account — each X account gets its own world
-        const r = await bootstrapAccount(cookiesJson);
+        // re-select THAT account — each X account gets its own world.
+        // Two labeled fields → one payload: a bare auth_token alone hits
+        // X's code-353 csrf wall, so ct0 has its own field. A full cookie
+        // string / JSON pasted into the auth_token box still goes through
+        // as-is (the backend normalizes whatever shape it gets).
+        const a = authToken.trim();
+        const c = ct0.trim();
+        const payload = c && !a.includes('{') && !a.includes('=')
+          ? JSON.stringify({ auth_token: a, ct0: c })
+          : a;
+        const r = await bootstrapAccount(payload);
         toast.success(
           r.action === 'created'
             ? t('account.created', { id: r.account_id })
             : t('account.switched', { handle: r.handle }),
         );
         setDialogOpen(false);
-        setCookiesJson('');
+        setAuthToken('');
+        setCt0('');
         setTimeout(load, 600);
       } catch (e) {
         toast.error(t('connect.connectFailed', { msg: errMsg(e) }));
@@ -456,21 +466,49 @@ export function ConnectPage() {
                       <li>{t('connect.step4')}</li>
                       <li>{t('connect.step5')}</li>
                     </ol>
-                    <Textarea
-                      value={cookiesJson}
-                      onChange={(e) => setCookiesJson(e.target.value)}
-                      placeholder={t('connect.cookiesPlaceholder')}
-                      className="mb-1 font-mono text-[12.5px]"
-                      rows={4}
-                      dir="ltr"
-                    />
+                    <div className="mb-2">
+                      <label
+                        htmlFor="connect-auth-token"
+                        className="mb-1 block font-mono text-[12px] font-semibold text-muted"
+                      >
+                        {t('connect.authTokenLabel')}
+                      </label>
+                      <Input
+                        id="connect-auth-token"
+                        value={authToken}
+                        onChange={(e) => setAuthToken(e.target.value)}
+                        placeholder={t('connect.authTokenPlaceholder')}
+                        className="font-mono text-[12.5px]"
+                        dir="ltr"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                    <div className="mb-1">
+                      <label
+                        htmlFor="connect-ct0"
+                        className="mb-1 block font-mono text-[12px] font-semibold text-muted"
+                      >
+                        {t('connect.ct0Label')}
+                      </label>
+                      <Input
+                        id="connect-ct0"
+                        value={ct0}
+                        onChange={(e) => setCt0(e.target.value)}
+                        placeholder={t('connect.ct0Placeholder')}
+                        className="font-mono text-[12.5px]"
+                        dir="ltr"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
                   </DialogDescription>
                   <div className="mt-3 flex items-center gap-2">
                     <Button
                       variant="green"
                       size="sm"
                       onClick={connect}
-                      disabled={connecting || !cookiesJson.trim()}
+                      disabled={connecting || !authToken.trim()}
                     >
                       {connecting ? t('connect.connecting') : t('connect.connectBtn')}
                     </Button>
