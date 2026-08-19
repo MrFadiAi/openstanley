@@ -1,10 +1,8 @@
 # Best Posting Times
 
-Source: style profile scan 2026-08-19 (15 posts).
+Derived from style profile scan (2026-08-19, 16 posts):
 
-- **Best hours: 9, 13, 18** (account-local time; confirm timezone before scheduling absolute times per R2/R100)
-- Secondary signal: engagement clusters around morning debug/dev-ritual content and afternoon hot takes.
+- **Best hours: 9, 13, 18** (account local time — timezone still unresolved, see R2/R100)
+- Schedule priority: 13 > 18 > 9 based on observed activity clustering
 
-## Notes
-- Sample is small (15 posts); re-validate after 30+ posts.
-- Do not schedule absolute times until user timezone is confirmed and remembered.
+Note: sample is small (16 posts); re-verify after next 30 posts.

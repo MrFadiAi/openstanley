@@ -286,21 +286,22 @@ def test_chat_reuses_engine_with_capped_session(monkeypatch):
     _enable()
     seen: dict[str, str] = {}
 
-    def _fake_llm(llm_cfg, system, user):
+    def _fake_llm_stream(llm_cfg, system, user):
         seen["user"] = user
-        return "Roger that."
+        yield "Roger "
+        yield "that."
 
-    monkeypatch.setattr(chat_mod, "llm_chat", _fake_llm)
-    tg.chat_reply_tg(CFG, CHAT, "first question")
+    monkeypatch.setattr(chat_mod, "llm_chat_stream", _fake_llm_stream)
+    "".join(tg.chat_reply_tg_stream(CFG, CHAT, "first question"))
     assert "first question" in seen["user"]            # same engine turn shape
-    tg.chat_reply_tg(CFG, CHAT, "second question")
+    "".join(tg.chat_reply_tg_stream(CFG, CHAT, "second question"))
     assert "first question" in seen["user"]            # session memory held
     assert "ASSISTANT: Roger that." in seen["user"]
     for i in range(11):                                 # 13 turns = 26 messages
-        tg.chat_reply_tg(CFG, CHAT, f"msg {i}")
+        "".join(tg.chat_reply_tg_stream(CFG, CHAT, f"msg {i}"))
     assert len(tg._sessions[CHAT]) == tg.SESSION_CAP   # capped at 20
     seen.clear()
-    tg.chat_reply_tg(CFG, CHAT, "latest question")
+    "".join(tg.chat_reply_tg_stream(CFG, CHAT, "latest question"))
     assert "latest question" in seen["user"]
     assert "first question" not in seen["user"]        # oldest rolled out
 

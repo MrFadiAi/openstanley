@@ -169,6 +169,108 @@ def send_message(chat_id: int, text: str) -> dict:
                 "error": _scrub(str(e), token)[:200]}
 
 
+# ---------------- streaming chat ----------------
+
+STREAM_EDIT_MIN_S = 1.2     # throttle: never edit faster than this
+STREAM_EDIT_EVERY = 12      # …and at most one edit per N chunk groups
+STREAM_TYPING_PING_S = 4.0  # send chatAction "typing" this often while waiting
+
+
+def send_stream(chat_id: int, text_stream) -> dict:
+    """Progressive streaming for TG: sendMessage with the first chunk, then
+    editMessageText as more tokens arrive (throttled), final edit = the full
+    text. Falls back to one sendMessage if the initial send fails. Never
+    raises. text_stream yields str chunks."""
+    token = bot_token()
+    if not token:
+        return {"ok": False, "status_code": None, "error": "no bot token"}
+    buf: list[str] = []
+    msg_id: int | None = None
+    last_edit_t = 0.0
+    chunks_since_edit = 0
+    last_ping_t = time.time()
+    try:
+        for chunk in text_stream:
+            if not chunk:
+                continue
+            buf.append(chunk)
+            # keep the user informed while the first LLM tokens are slow
+            now = time.time()
+            if msg_id is None and now - last_ping_t >= STREAM_TYPING_PING_S:
+                try:
+                    _api(token, "sendChatAction",
+                         {"chat_id": chat_id, "action": "typing"})
+                except Exception:  # noqa: BLE001 — cosmetic, never fatal
+                    pass
+                last_ping_t = now
+            if msg_id is None and (len("".join(buf)) >= 24 or _stream_done(buf)):
+                sent = _send_and_capture(token, chat_id, "".join(buf))
+                if sent.get("ok"):
+                    msg_id = sent["message_id"]
+                    last_edit_t = time.time()
+                continue
+            if msg_id is None:
+                continue
+            chunks_since_edit += 1
+            now = time.time()
+            elapsed = now - last_edit_t
+            if (chunks_since_edit >= STREAM_EDIT_EVERY
+                    and elapsed >= STREAM_EDIT_MIN_S):
+                try:
+                    _api(token, "editMessageText",
+                         {"chat_id": chat_id, "message_id": msg_id,
+                          "text": _clip("".join(buf))})
+                    last_edit_t = now
+                    chunks_since_edit = 0
+                except Exception:  # noqa: BLE001 — a dropped edit is cosmetic
+                    pass
+        # final edit — always the complete text
+        full = _clip("".join(buf))
+        if msg_id is None:
+            return _send_and_capture(token, chat_id, full)
+        try:
+            _api(token, "editMessageText",
+                 {"chat_id": chat_id, "message_id": msg_id, "text": full})
+        except Exception:  # noqa: BLE001
+            pass
+        return {"ok": True, "status_code": 200, "message_id": msg_id,
+                "error": None}
+    except Exception as e:  # noqa: BLE001 — streaming must never raise
+        db.log("telegram", f"stream to chat {chat_id} aborted: "
+                           f"{_scrub(str(e), token)}", level="warn")
+        # still try to deliver whatever we accumulated
+        try:
+            if buf:
+                if msg_id is None:
+                    return _send_and_capture(token, chat_id, _clip("".join(buf)))
+                _api(token, "editMessageText",
+                     {"chat_id": chat_id, "message_id": msg_id,
+                      "text": _clip("".join(buf))})
+        except Exception:  # noqa: BLE001
+            pass
+        return {"ok": False, "status_code": None,
+                "error": _scrub(str(e), token)[:200]}
+
+
+def _stream_done(buf: list[str]) -> bool:
+    """Heuristic: first sentence/line complete → worth showing the bubble."""
+    text = "".join(buf)
+    return ("\n" in text) or ("." in text[-3:])
+
+
+def _send_and_capture(token: str, chat_id: int, text: str) -> dict:
+    r = _api(token, "sendMessage", {"chat_id": chat_id, "text": _clip(text)})
+    ok = 200 <= r.status_code < 300
+    mid = None
+    if ok:
+        try:
+            mid = int(r.json().get("result", {}).get("message_id"))
+        except Exception:  # noqa: BLE001
+            mid = None
+    return {"ok": ok, "status_code": r.status_code, "message_id": mid,
+            "error": None if ok else r.text[:200]}
+
+
 def notify(text: str) -> dict:
     """Broadcast to every allowed chat (digest cron + approval cards).
     Rate-limited per message; failures are logged, never raised."""
@@ -249,10 +351,10 @@ def _history_turn(chat_id: int, user_message: str) -> str:
     return f"(conversation so far)\n{hist_text}\n\n(user) {user_message}"
 
 
-def chat_reply_tg(cfg: Config, chat_id: int, user_message: str) -> str:
-    """One OpenStanley answer on TG — the dashboard engine's pieces (system
-    prompt + brain context, voice tuning, tool calls) over a per-chat
-    session. Blocking (one LLM call) — callers run it off the event loop."""
+def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
+    """Streaming TG chat: the dashboard streaming engine (per-chat session,
+    voice tuning, tools, follow-up) yielding text chunks. Side effects match
+    chat_reply_tg: session memory, DB persistence, brain reflect."""
     import dataclasses
 
     from ..gen import brain as brain_mod
@@ -263,12 +365,18 @@ def chat_reply_tg(cfg: Config, chat_id: int, user_message: str) -> str:
     _remember(chat_id, "user", user_message)
     llm_cfg = dataclasses.replace(cfg.llm, temperature=chat_mod._llm_temperature(),
                                   max_tokens=1200)
+    full: list[str] = []
     try:
-        reply = chat_mod.llm_chat(llm_cfg, system=chat_mod._system(cfg, user_message),
-                                  user=_history_turn(chat_id, user_message))
+        for tok in chat_mod.llm_chat_stream(
+                llm_cfg, system=chat_mod._system(cfg, user_message),
+                user=_history_turn(chat_id, user_message)):
+            full.append(tok)
+            yield tok
     except LLMError as e:
-        return f"(LLM error: {e})"
+        yield f"(LLM error: {e})"
+        return
 
+    reply = "".join(full)
     tool_results = chat_mod._run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
     if tool_results:
@@ -276,7 +384,8 @@ def chat_reply_tg(cfg: Config, chat_id: int, user_message: str) -> str:
                                  for r in tool_results)
     _remember(chat_id, "assistant", clean)
     brain_mod.maybe_reflect_chat_async(cfg)  # every 10th message → reflect
-    return clean
+    if clean != reply:
+        yield "\n" + clean[len(reply):] if clean.startswith(reply) else clean
 
 
 # ---------------- commands ----------------
@@ -497,7 +606,7 @@ def _handle_update(cfg: Config, upd: dict) -> None:
 
     cmd = parse_command(text)
     if cmd is None:
-        send_message(chat_id, chat_reply_tg(cfg, chat_id, text))
+        send_stream(chat_id, chat_reply_tg_stream(cfg, chat_id, text))
         return
     name, args = cmd
     if name in ("start", "help"):
