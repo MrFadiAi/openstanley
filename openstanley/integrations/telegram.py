@@ -353,35 +353,53 @@ def _cmd_drafts() -> str:
     ) + "\n/approve <id> · /reject <id>"
 
 
+STUDY_LOOPS = (("import", "📥"), ("study", "📚"), ("scan", "🔬"), ("learn", "🧠"))
+STUDY_LOOP_TIMEOUT_S = 15 * 60  # per-loop ceiling — a hung loop must never park the poller thread
+
+
 def _cmd_study(cfg: Config) -> str:
     """Full 'learn me' chain: import own+niche posts, study the niche, deep-scan
     voice, refresh metrics, reflect everything into the brain. Read-only on X.
-    Reuses the server's loop runner — same code path as the dashboard buttons."""
+    Reuses the server's loop runner core — same code path as the dashboard
+    buttons. One loop failing or timing out marks its line and the chain moves
+    on; the ✅ only appears when every loop succeeded."""
     import asyncio
 
-    async def _chain() -> list[str]:
-        from ..server.__main__ import _run_loop
-        out = []
-        for name, label in (("import", "📥"), ("study", "📚"), ("scan", "🔬"), ("learn", "🧠")):
-            r = await _run_loop(name)
-            res = (r.body if hasattr(r, "body") else r).get("result", {}) if not isinstance(r, dict) else r.get("result", {})
+    async def _chain() -> tuple[list[str], bool]:
+        from ..server.__main__ import run_loop_core
+        lines: list[str] = []
+        ok_all = True
+        for name, label in STUDY_LOOPS:
+            try:
+                res = await asyncio.wait_for(run_loop_core(name),
+                                             timeout=STUDY_LOOP_TIMEOUT_S) or {}
+            except asyncio.TimeoutError:
+                ok_all = False
+                lines.append(f"{label} {name}: timed out after {STUDY_LOOP_TIMEOUT_S}s")
+                continue
+            except Exception as e:  # noqa: BLE001 — one loop failing must not drop the rest
+                ok_all = False
+                lines.append(f"{label} {name}: failed — {e}")
+                continue
             if name == "import":
-                me = (res or {}).get("me") or {}
-                out.append(f"📥 import: {res.get('own', '?')} own + {res.get('niche', '?')} niche"
-                           + (f" · @{me.get('username')} ({me.get('followers')} followers)" if me else ""))
+                me = res.get("me") or {}
+                lines.append(f"{label} import: {res.get('own', '?')} own + {res.get('niche', '?')} niche"
+                             + (f" · @{me.get('username')} ({me.get('followers')} followers)" if me else ""))
             elif name == "study":
-                out.append(f"📚 study: +{(res or {}).get('niche_new', 0)} niche · bank {(res or {}).get('bank', '?')}")
+                lines.append(f"{label} study: +{res.get('niche_new', 0)} niche · bank {res.get('bank', '?')}")
             elif name == "scan":
-                out.append(f"🔬 scan: {(res or {}).get('posts_scanned', 0)} posts · voice {(res or {}).get('voice', '?')}")
+                lines.append(f"{label} scan: {res.get('posts_scanned', 0)} posts · voice {res.get('voice', '?')}")
             else:
-                out.append(f"🧠 learn: refreshed {(res or {}).get('refreshed', 0)} posts")
-        return out
+                lines.append(f"{label} learn: refreshed {res.get('refreshed', 0)} posts")
+        return lines, ok_all
 
     try:
-        lines = asyncio.run(_chain())
-        return "\n".join(lines) + "\n\n✅ brain updated — everything I know about you is fresh."
-    except Exception as e:  # noqa: BLE001
+        lines, ok_all = asyncio.run(_chain())
+    except Exception as e:  # noqa: BLE001 — the chain itself (not one loop) died
         return f"study chain failed: {e}"
+    tail = ("\n\n✅ brain updated — everything I know about you is fresh." if ok_all
+            else "\n\n⚠️ study chain finished with errors — see the lines above.")
+    return "\n".join(lines) + tail
 
 
 def _cmd_digest(cfg: Config) -> str:

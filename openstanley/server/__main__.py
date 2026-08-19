@@ -133,16 +133,26 @@ async def health():
 
 # ---------------- loops (manual trigger) ----------------
 
-async def _run_loop(name: str):
+async def run_loop_core(name: str) -> dict:
+    """One agent loop by name → its raw result dict. Shared core for the API
+    route below and the Telegram /study chain (identical code path); errors
+    are logged here, then raised to the caller."""
     fns = {"import": agent.import_history, "study": agent.study, "create": agent.create,
            "engage": agent.engage, "mentions": agent.mentions, "publish": agent.publish,
            "learn": agent.learn, "scan": agent.scan}
     try:
-        result = await fns[name]()
-        return JSONResponse({"ok": True, "loop": name, "result": result})
+        return await fns[name]()
     except Exception as e:  # noqa: BLE001
         db.log("api", f"loop {name} error: {e}", level="error")
+        raise
+
+
+async def _run_loop(name: str):
+    try:
+        result = await run_loop_core(name)
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(500, str(e)) from e
+    return JSONResponse({"ok": True, "loop": name, "result": result})
 
 
 @app.post("/api/loops/{name}")
