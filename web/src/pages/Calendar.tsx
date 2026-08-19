@@ -525,7 +525,7 @@ export function CalendarPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1180px] px-8 py-8">
+      <div className="h-full px-6 py-6">
         {/* header */}
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
