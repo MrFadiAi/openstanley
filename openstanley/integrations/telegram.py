@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import secrets
 import threading
 import time
 from collections import deque
@@ -64,6 +65,8 @@ HELP_TEXT = (
     "/drafts — drafts waiting for your approval\n"
     "/approve <id> — approve a draft (it gets scheduled)\n"
     "/reject <id> — reject a draft\n"
+    "/img <id> — attach a photo to a draft (send the photo with this caption,\n"
+    "           or just reply to a draft card with a photo)\n"
     "/post <text> — save your own text as a draft for review\n"
     "/digest — today's report, on demand\n"
     "/study — study your X account fully & refresh my brain\n"
@@ -1052,6 +1055,87 @@ def post_draft_tg(cfg: Config, text: str) -> str:
 
 # ---------------- update dispatch ----------------
 
+def _download_tg_photo(token: str, file_id: str) -> bytes:
+    """Largest photo → bytes. Two calls: getFile → GET file. Raises on any
+    failure — the caller turns it into a human message."""
+    r = _api(token, "getFile", {"file_id": file_id})
+    if not (200 <= r.status_code < 300):
+        raise RuntimeError(f"getFile HTTP {r.status_code}")
+    fp = (r.json().get("result") or {}).get("file_path")
+    if not fp:
+        raise RuntimeError("no file_path in getFile response")
+    fr = httpx.get(FILE_URL.format(token=token, path=fp), timeout=HTTP_TIMEOUT_S)
+    if not (200 <= fr.status_code < 300):
+        raise RuntimeError(f"download HTTP {fr.status_code}")
+    return fr.content
+
+
+def _save_tg_photo(token: str, msg: dict) -> str:
+    """Download the largest photo size and store it in MEDIA_DIR with the
+    standard media_<ts>_<hex> name. Returns the stored name."""
+    sizes = msg.get("photo") or []
+    biggest = max(sizes, key=lambda s: s.get("file_size") or 0)
+    if (biggest.get("file_size") or 0) > MAX_IMAGE_BYTES:
+        raise ValueError(f"photo too large (max {MAX_IMAGE_BYTES // (1024*1024)}MB)")
+    data = _download_tg_photo(token, biggest["file_id"])
+    name = f"media_{int(time.time())}_{secrets.token_hex(3)}.jpg"
+    MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    (MEDIA_DIR / name).write_bytes(data)
+    return name
+
+
+def _attach_photo(cfg: Config, chat_id: int, msg: dict, target: int | None,
+                  hint: str) -> None:
+    """Shared tail: attach the photo in `msg` to draft `target` (or reply
+    with `hint` when no target), and say what happened."""
+    token = bot_token()
+    if target is None:
+        send_message(chat_id, hint)
+        return
+    d = db.get_draft(target)
+    if not d or d.get("status") not in ("draft", "approved"):
+        send_message(chat_id, f"Draft #{target} isn't waiting — /drafts lists them.")
+        return
+    try:
+        name = _save_tg_photo(token, msg)
+    except ValueError as e:
+        send_message(chat_id, str(e))
+        return
+    except Exception as e:  # noqa: BLE001
+        db.log("telegram", f"photo download failed: {_scrub(str(e), token)}",
+               level="warn")
+        send_message(chat_id, "Couldn't fetch the photo from Telegram — try again.")
+        return
+    db.update_draft(target, image=name)
+    db.log("telegram", f"photo attached to draft #{target} ({name})")
+    send_message(chat_id, f"Attached to draft #{target} ✓")
+
+
+def _handle_photo(cfg: Config, chat_id: int, msg: dict) -> None:
+    """Photo arrived. Target draft: /img <id> caption > reply-to-card."""
+    cap = str(msg.get("caption") or "").strip()
+    cmd = parse_command(cap) if cap.startswith("/") else None
+    hint = ("Which draft? Send the photo again with a caption like "
+            "`/img 12` — /drafts lists the ids.")
+    if cmd and cmd[0] == "img":
+        target = _int_arg(cmd[1], "img")
+        if target < 0:
+            send_message(chat_id, "Use `/img <id>` — e.g. `/img 12`.")
+            return
+    else:
+        replied = (msg.get("reply_to_message") or {}).get("message_id")
+        ids = (_card_map.get(chat_id) or {}).get(replied) if replied else None
+        if ids is None:
+            _attach_photo(cfg, chat_id, msg, None, hint)
+            return
+        if len(ids) != 1:
+            send_message(chat_id, "That card lists several drafts — send the "
+                                  "photo with a caption like `/img 12`.")
+            return
+        target = ids[0]
+    _attach_photo(cfg, chat_id, msg, target, hint)
+
+
 def handle_update(cfg: Config, upd: dict) -> None:
     """One Telegram update → maybe one reply. Never raises."""
     try:
@@ -1064,15 +1148,24 @@ def _handle_update(cfg: Config, upd: dict) -> None:
     msg = upd.get("message") or upd.get("edited_message") or {}
     chat_id = int((msg.get("chat") or {}).get("id") or 0)
     text = str(msg.get("text") or "").strip()
-    if not chat_id or not text:
+    photo = msg.get("photo")
+    has_media = bool(photo or msg.get("document"))
+    if not chat_id or (not text and not has_media):
         return
     db.log("telegram", f"inbound from chat {chat_id}: "
-                       f"{text[:60]!r}", level="info")
+                       f"{(text or 'photo')[:60]!r}", level="info")
 
     denied = _auth_reply(chat_id)
     if denied is not None:
         if denied:  # empty string = stay silent
             send_message(chat_id, denied)
+        return
+
+    if not text and has_media:
+        if photo:
+            _handle_photo(cfg, chat_id, msg)
+        else:
+            send_message(chat_id, "Photos only, please — videos aren't supported yet.")
         return
 
     cmd = parse_command(text)

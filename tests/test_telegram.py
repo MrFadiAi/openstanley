@@ -72,6 +72,12 @@ class _R:
         return self._p
 
 
+class _RBytes:
+    def __init__(self, content: bytes):
+        self.status_code = 200
+        self.content = content
+
+
 class _FakeTGHttpx:
     """Records Bot API calls; serves scripted getUpdates batches, then empty.
     on_exhausted fires when the batches run dry (tests stop the loop there)."""
@@ -98,7 +104,13 @@ class _FakeTGHttpx:
             if self.on_exhausted:
                 self.on_exhausted()
             return _R(200, {"ok": True, "result": []})
+        if method == "getFile":
+            return _R(200, {"ok": True, "result": {"file_path": "photos/file_1.jpg"}})
         return _R(self.status, {"ok": True, "result": {"message_id": 4242}})
+
+    def get(self, url, timeout=None, **kw):
+        self.calls.append((url, "GET-file", {}))
+        return _RBytes(b"\xff\xd8 fake jpeg bytes")
 
     def sent(self) -> list[tuple[int, str]]:
         """(chat_id, text) of every sendMessage the fake saw."""
@@ -812,3 +824,87 @@ def test_sendphoto_failure_falls_back_to_text(tmp_path, monkeypatch):
     assert r["ok"]  # card still delivered
     texts = " ".join(t for _c, t in fake.sent())
     assert "image attached" in texts
+
+
+# ---------------- inbound photo attach (v0.6 round-trip) ----------------
+
+
+def _photo_update(caption: str = "", reply_to: int | None = None) -> dict:
+    msg = {"chat": {"id": CHAT},
+           "photo": [{"file_id": "f1", "file_size": 100},
+                     {"file_id": "f2", "file_size": 4000}],
+           "caption": caption}
+    if reply_to:
+        msg["reply_to_message"] = {"message_id": reply_to}
+    return {"update_id": 1, "message": msg}
+
+
+def test_photo_caption_img_attaches(tmp_path, monkeypatch):
+    _enable()
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    d = db.add_draft(text="target draft", acct=1)
+    tg._handle_update(CFG, _photo_update(caption=f"/img {d}"))
+    row = db.get_draft(d)
+    assert row["image"] and row["image"].startswith("media_")
+    assert (tmp_path / row["image"]).exists()
+    assert any("attached" in t.lower() for _c, t in fake.sent())
+
+
+def test_photo_reply_to_card_attaches(tmp_path, monkeypatch):
+    _enable()
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    d = db.add_draft(text="card draft", acct=1)
+    tg._card_map.clear()
+    tg._card_map[CHAT] = {777: [d]}
+    tg._handle_update(CFG, _photo_update(reply_to=777))
+    assert db.get_draft(d)["image"]
+
+
+def test_photo_reply_ambiguous_card_asks_for_caption(tmp_path, monkeypatch):
+    _enable()
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    d1, d2 = db.add_draft(text="a", acct=1), db.add_draft(text="b", acct=1)
+    tg._card_map.clear()
+    tg._card_map[CHAT] = {777: [d1, d2]}
+    tg._handle_update(CFG, _photo_update(reply_to=777))
+    assert db.get_draft(d1)["image"] is None
+    assert any("/img" in t for _c, t in fake.sent())
+
+
+def test_photo_no_target_gets_hint(tmp_path, monkeypatch):
+    _enable()
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._card_map.clear()
+    tg._handle_update(CFG, _photo_update())
+    assert any("/img" in t for _c, t in fake.sent())
+
+
+def test_photo_disallowed_chat_ignored(tmp_path, monkeypatch):
+    _enable()
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    upd = _photo_update()
+    upd["message"]["chat"]["id"] = 666999
+    tg._handle_update(CFG, upd)
+    attach_sends = [t for _c, t in fake.sent() if "attached" in t.lower()]
+    assert attach_sends == []
+
+
+def test_video_document_declined(tmp_path, monkeypatch):
+    _enable()
+    monkeypatch.setattr(tg, "MEDIA_DIR", tmp_path)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    upd = {"update_id": 1, "message": {"chat": {"id": CHAT},
+           "document": {"file_id": "f1", "mime_type": "video/mp4"}}}
+    tg._handle_update(CFG, upd)
+    assert any("photos only" in t.lower() for _c, t in fake.sent())
