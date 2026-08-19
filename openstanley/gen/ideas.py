@@ -130,12 +130,12 @@ def _novel(tokens: set[str], known: list[set[str]]) -> bool:
     return all(_overlap(tokens, k) < NOVELTY_OVERLAP for k in known)
 
 
-def _bank_tokens() -> list[set[str]]:
+def _bank_tokens(acct: int | None = None) -> list[set[str]]:
     """Token sets of every banked idea — ANY status: a used or discarded idea
-    still represents an angle we've already covered (ACTIVE account)."""
+    still represents an angle we've already covered."""
     with db.connect() as c:
         rows = c.execute("SELECT title, angle FROM ideas WHERE account_id=?",
-                         (db.active_account(),)).fetchall()
+                         (db._acct(acct),)).fetchall()
     return [_tokens(f"{r['title']} {r['angle'] or ''}") for r in rows]
 
 
@@ -184,9 +184,9 @@ def _post_idea(p: dict, source: str, rank: int = 0) -> dict | None:
             "source": source, "score": score, "tokens": tokens}
 
 
-def _outlier_ideas() -> list[dict]:
+def _outlier_ideas(acct: int | None = None) -> list[dict]:
     """Top-decile-by-rate niche posts (scan data) not yet represented in the bank."""
-    posts = db.niche_posts(limit=200)
+    posts = db.niche_posts(limit=200, acct=acct)
     cut = max(OUTLIER_MIN, int(len(posts) * OUTLIER_TOP_PCT))
     out = []
     for rank, p in enumerate(posts[:cut]):
@@ -196,10 +196,10 @@ def _outlier_ideas() -> list[dict]:
     return out
 
 
-def _journal_ideas() -> list[dict]:
+def _journal_ideas(acct: int | None = None) -> list[dict]:
     """Recent reflection insights that never became ideas."""
     try:
-        entries = brain_mod.parse_journal(brain_mod.read("journal"))
+        entries = brain_mod.parse_journal(brain_mod.read("journal", acct))
     except Exception:  # noqa: BLE001 — an unreadable journal must not break replenish
         return []
     out = []
@@ -229,14 +229,14 @@ async def _study_reads(cfg: Config, x) -> list[dict]:
     return posts
 
 
-def _evergreen_ideas(cfg: Config) -> list[dict]:
+def _evergreen_ideas(cfg: Config, acct: int | None = None) -> list[dict]:
     """Config themes × brain strategy statements → durable angles. Strategy
     statements are the bullet lines reflect() appends to the experiment log —
     prose intros and "(none" placeholders are not statements."""
     try:
         strat_lines = [
             s[2:].strip()
-            for s in (ln.strip() for ln in brain_mod.read("strategies").splitlines())
+            for s in (ln.strip() for ln in brain_mod.read("strategies", acct).splitlines())
             if s.startswith("- ") and not s[2:].strip().startswith("(none")
         ][:EVERGREEN_STRATEGIES]
     except Exception:  # noqa: BLE001 — no strategies file → no synthesis
@@ -255,17 +255,18 @@ def _evergreen_ideas(cfg: Config) -> list[dict]:
 
 
 async def replenish(cfg: Config, min_bank: int = DEFAULT_MIN_BANK,
-                    batch: int = DEFAULT_BATCH, x=None) -> dict:
+                    batch: int = DEFAULT_BATCH, x=None,
+                    acct: int | None = None) -> dict:
     """Fill the bank back toward `min_bank` when it dips below. Runs the
     source chain in priority order (a→d), deduping against the bank and
     within the batch by token containment. Returns
     {ran, added, sources, bank, bank_before}. Never raises on source failure."""
-    bank_before = db.idea_count()
+    bank_before = db.idea_count(acct)
     if bank_before >= min_bank:
         return {"ran": False, "added": 0, "sources": [],
                 "bank": bank_before, "bank_before": bank_before}
 
-    known = _bank_tokens()
+    known = _bank_tokens(acct)
     added: list[dict] = []
     sources: list[str] = []
 
@@ -283,8 +284,8 @@ async def replenish(cfg: Config, min_bank: int = DEFAULT_MIN_BANK,
                 return
             _accept(idea)
 
-    _drain(_outlier_ideas())                       # a) unmined scan outliers
-    _drain(_journal_ideas())                       # b) journal insights
+    _drain(_outlier_ideas(acct))                   # a) unmined scan outliers
+    _drain(_journal_ideas(acct))                   # b) journal insights
     if len(added) < batch // 2 and x is not None:  # c) fresh study reads
         try:
             fresh = await _study_reads(cfg, x)
@@ -292,22 +293,23 @@ async def replenish(cfg: Config, min_bank: int = DEFAULT_MIN_BANK,
             db.log("ideas", f"study read failed: {e}", level="warn")
             fresh = []
         _drain([i for i in (_post_idea(p, SOURCE_STUDY) for p in fresh) if i])
-    _drain(_evergreen_ideas(cfg))                  # d) evergreen synthesis
+    _drain(_evergreen_ideas(cfg, acct))            # d) evergreen synthesis
 
     for idea in added:
         db.add_idea(idea["title"], idea["angle"], idea["fmt"], idea["source"],
-                    idea["score"])
+                    idea["score"], acct=acct)
     if added:
         db.set_acct_setting("ideas_last_replenish", {
             "at": datetime.now().isoformat(timespec="seconds"),
-            "added": len(added), "sources": sources})
-        db.log("ideas", f"replenished +{len(added)} from {', '.join(sources)} "
-                        f"(bank {bank_before} → {db.idea_count()})")
+            "added": len(added), "sources": sources}, acct=acct)
+        db.log("ideas", f"[account {db._acct(acct)}] replenished +{len(added)} "
+                        f"from {', '.join(sources)} "
+                        f"(bank {bank_before} → {db.idea_count(acct)})")
     return {"ran": True, "added": len(added), "sources": sources,
-            "bank": db.idea_count(), "bank_before": bank_before}
+            "bank": db.idea_count(acct), "bank_before": bank_before}
 
 
-def bank_health() -> dict:
+def bank_health(acct: int | None = None) -> dict:
     """Count + last replenish record — feeds the Ideas page health chip."""
-    return {"count": db.idea_count(),
-            "last": db.get_acct_setting("ideas_last_replenish") or {}}
+    return {"count": db.idea_count(acct),
+            "last": db.get_acct_setting("ideas_last_replenish", acct=acct) or {}}

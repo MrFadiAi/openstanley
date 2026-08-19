@@ -45,10 +45,12 @@ Rules:
 - Return STRICT JSON: {{"reply": "..."}}"""
 
 
-async def pull_engagements(cfg: Config, x_client) -> int:
-    """Fetch mentions/notifications → engagements table (ACTIVE account).
+async def pull_engagements(cfg: Config, x_client,
+                           acct: int | None = None) -> int:
+    """Fetch mentions/notifications → engagements table (one account).
     Returns count of new."""
-    acct = db.active_account()
+    if acct is None:
+        acct = db.active_account()
     mentions = await x_client.mentions(limit=30)
     new = 0
     for m in mentions:
@@ -70,9 +72,11 @@ async def pull_engagements(cfg: Config, x_client) -> int:
     return new
 
 
-def draft_replies(cfg: Config, limit: int = 8) -> list[int]:
-    """Draft on-voice replies for new engagements (ACTIVE account)."""
-    acct = db.active_account()
+def draft_replies(cfg: Config, limit: int = 8,
+                  acct: int | None = None) -> list[int]:
+    """Draft on-voice replies for new engagements (one account)."""
+    if acct is None:
+        acct = db.active_account()
     with db.connect() as c:
         rows = c.execute(
             "SELECT * FROM engagements WHERE account_id=? AND status='new' "
@@ -105,10 +109,11 @@ def draft_replies(cfg: Config, limit: int = 8) -> list[int]:
                     "voice_match": voice_match(reply)}
             if vmeta:
                 meta["voice"] = vmeta
-            did = db.add_draft(text=reply, kind="reply", meta=meta)
+            did = db.add_draft(text=reply, kind="reply", meta=meta, acct=acct)
             with db.connect() as c:
-                c.execute("UPDATE engagements SET status='drafted', draft_id=? WHERE id=?",
-                          (did, e["id"]))
+                c.execute("UPDATE engagements SET status='drafted', draft_id=? "
+                          "WHERE id=? AND account_id=?",
+                          (did, e["id"], acct))
             ids.append(did)
         except LLMError as err:
             db.log("engage", f"reply draft failed: {err}", level="error")
@@ -118,9 +123,10 @@ def draft_replies(cfg: Config, limit: int = 8) -> list[int]:
 
 # ---------- scheduled niche replies (v0.3) ----------
 
-def _existing_reply_targets() -> set[str]:
+def _existing_reply_targets(acct: int | None = None) -> set[str]:
     """x_ids we already have a reply draft for (any status — never double-reply)."""
-    acct = db.active_account()
+    if acct is None:
+        acct = db.active_account()
     with db.connect() as c:
         rows = c.execute(
             "SELECT meta_json FROM drafts WHERE account_id=? AND kind='reply'",
@@ -136,14 +142,15 @@ def _existing_reply_targets() -> set[str]:
     return out
 
 
-def _pick_niche_targets(cfg: Config, limit: int = 5) -> list[dict]:
+def _pick_niche_targets(cfg: Config, limit: int = 5,
+                       acct: int | None = None) -> list[dict]:
     """High-engagement niche posts matched by account relevance."""
-    already = _existing_reply_targets()
+    already = _existing_reply_targets(acct)
     niche_accounts = set(cfg.agent.niche_accounts or [])
-    profile = db.get_acct_setting("style_profile") or {}
+    profile = db.get_acct_setting("style_profile", acct=acct) or {}
     topics = set((profile.get("stats") or {}).get("topics") or [])
     scored = []
-    for p in db.niche_posts(limit=80):
+    for p in db.niche_posts(limit=80, acct=acct):
         if p.get("x_id") in already or not p.get("text"):
             continue
         relevance = 0.0
@@ -157,14 +164,15 @@ def _pick_niche_targets(cfg: Config, limit: int = 5) -> list[dict]:
     return [p for rel, p in scored[:limit] if rel > 0]
 
 
-def draft_niche_replies(cfg: Config, limit: int = 3) -> list[int]:
+def draft_niche_replies(cfg: Config, limit: int = 3,
+                       acct: int | None = None) -> list[int]:
     """Draft SCHEDULED replies to niche targets → approval flow, never auto-send.
 
     v0.3.8: targets pass the engage quality gate FIRST — dead or crowded
     tweets are rejected before any LLM call, so cap budget is only spent
     on targets worth a reply.
     """
-    candidates = _pick_niche_targets(cfg, limit=limit * 3)
+    candidates = _pick_niche_targets(cfg, limit=limit * 3, acct=acct)
     kept, _rejected = engage_gate.filter_targets(cfg, candidates, datetime.now())
     targets = kept[:limit]
     if not targets:
@@ -206,14 +214,14 @@ def draft_niche_replies(cfg: Config, limit: int = 3) -> list[int]:
         did = db.add_draft(
             text=reply, kind="reply",
             scheduled_at=when.isoformat(timespec="seconds"),
-            meta=meta)
+            meta=meta, acct=acct)
         ids.append(did)
     if ids:
         db.log("engage", f"drafted {len(ids)} SCHEDULED niche replies (approval-gated)")
     return ids
 
 
-def mark_replied(engagement_id: int) -> None:
+def mark_replied(engagement_id: int, acct: int | None = None) -> None:
     with db.connect() as c:
         c.execute("UPDATE engagements SET status='replied' WHERE id=? AND account_id=?",
-                  (engagement_id, db.active_account()))
+                  (engagement_id, db._acct(acct)))

@@ -28,14 +28,15 @@ it's i'm don't do does did not no so just very really ما هذا من في عل
 التي الذي""".split())
 
 
-async def scan_account(cfg, x_client, max_posts: int = 800) -> dict:
+async def scan_account(cfg, x_client, max_posts: int = 800,
+                       acct: int | None = None) -> dict:
     """Deep-scan the connected account (async — shares the agent's event loop).
 
     The final LLM summary is a blocking httpx call; run this whole coroutine
     via `asyncio.to_thread`-style thread + `asyncio.run`, or call it from the
     server where its sync tail is acceptable.
     """
-    me = db.get_me() or await x_client.me()
+    me = db.get_me(acct) or await x_client.me()
     username = me.get("username") or cfg.x.username
     db.log("scan", f"deep scan starting for @{username} (cap {max_posts})")
 
@@ -69,7 +70,7 @@ async def scan_account(cfg, x_client, max_posts: int = 800) -> dict:
             posts.append(p)
 
     for p in posts:
-        db.upsert_post(p)
+        db.upsert_post(p, acct)
 
     stats = compute_stats(posts)
     summary = ""
@@ -85,9 +86,9 @@ async def scan_account(cfg, x_client, max_posts: int = 800) -> dict:
         "username": username,
         "updated_at": db._now(),
     }
-    db.set_acct_setting("style_profile", profile)
+    db.set_acct_setting("style_profile", profile, acct)
     # scan-derived persona keys for the voice lock (v0.4.0)
-    if write_voice_md(stats):
+    if write_voice_md(stats, acct):
         db.log("scan", "voice.md rewritten from scan stats — voice lock rules refreshed")
     db.log("scan", f"deep scan done: {len(posts)} posts scanned, "
                    f"languages={stats['language_mix']}")

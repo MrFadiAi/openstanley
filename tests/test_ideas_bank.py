@@ -255,7 +255,7 @@ def test_create_replenishes_before_drafting(monkeypatch):
     brain.write("strategies", STRATEGIES_MD)
     seen: dict[str, int] = {}
 
-    def _spy(cfg, count=None):
+    def _spy(cfg, count=None, acct=None):
         seen["bank"] = db.idea_count()
         return []
 
@@ -267,8 +267,8 @@ def test_create_replenishes_before_drafting(monkeypatch):
     assert res["drafts"] == 0 and res["bank_replenished"] >= 1
     with db.connect() as c:
         row = c.execute("SELECT message FROM agent_log WHERE loop='create' "
-                        "AND message LIKE 'bank low%'").fetchone()
-    assert row and row["message"].startswith("bank low (14) — replenished +")
+                        "AND message LIKE '%bank low (%'").fetchone()
+    assert row and "bank low (14) — replenished +" in row["message"]
 
 
 # ---------------- API + persistence ----------------

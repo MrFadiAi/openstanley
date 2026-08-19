@@ -39,12 +39,13 @@ Rules:
 VOICE_MATCH_THRESHOLD = 55
 
 
-def generate_drafts(cfg: Config, count: int = None) -> list[int]:
-    """Create `count` drafts from the freshest ideas. Returns draft ids."""
+def generate_drafts(cfg: Config, count: int = None,
+                     acct: int | None = None) -> list[int]:
+    """Create `count` drafts from the freshest ideas of ONE account."""
     count = count or cfg.agent.daily_draft_target
-    ideas = db.fresh_ideas(limit=count)
+    ideas = db.fresh_ideas(limit=count, acct=acct)
     if not ideas:
-        db.log("create", "no fresh ideas — run study loop first")
+        db.log("create", f"[account {db._acct(acct)}] no fresh ideas — run study loop first")
         return []
 
     temps = ["safe", "bold", "experimental"]
@@ -66,9 +67,9 @@ def generate_drafts(cfg: Config, count: int = None) -> list[int]:
             thread=draft.get("thread"), temperature=temp,
             image=draft.get("image"),
             quote_of=(draft.get("quote") or {}).get("x_id") if draft.get("quote") else None,
-            meta=_draft_meta(idea, draft, lang),
+            meta=_draft_meta(idea, draft, lang), acct=acct,
         )
-        db.mark_idea(idea["id"], "drafted")
+        db.mark_idea(idea["id"], "drafted", acct=acct)
         draft_ids.append(did)
     db.log("create", f"generated {len(draft_ids)} drafts")
     return draft_ids

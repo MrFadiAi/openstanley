@@ -86,29 +86,32 @@ def interval_minutes(cfg: Config) -> int:
 
 # ---------- phases ----------
 
-def _max_draft_id() -> int:
+def _max_draft_id(acct: int | None = None) -> int:
     with db.connect() as c:
-        row = c.execute("SELECT COALESCE(MAX(id), 0) AS m FROM drafts").fetchone()
+        row = c.execute(
+            "SELECT COALESCE(MAX(id), 0) AS m FROM drafts WHERE account_id=?",
+            (db._acct(acct),)).fetchone()
     return int(row["m"])
 
 
 async def _phase_engage(agent, cfg: Config) -> dict:
     """Engage, autopilot-style: draft replies; auto-approve ONLY when the
     human opted in. Otherwise every reply stays a draft in the Inbox."""
-    before = _max_draft_id()
+    acct = db.active_account()
+    before = _max_draft_id(acct)
     res = await agent.engage()
     if not cfg.agent.auto_approve_replies:
         res["approved_replies"] = 0
         db.log("autopilot", "engage: replies left as drafts (auto_approve off)")
         return res
     approved = 0
-    for d in db.drafts_by_status("draft", 100):
+    for d in db.drafts_by_status("draft", 100, acct=acct):
         if d["id"] > before and d["kind"] == "reply" and d.get("scheduled_at"):
-            db.update_draft(d["id"], status="approved")  # keeps proposed slot
+            db.update_draft(d["id"], acct=acct, status="approved")  # keeps proposed slot
             approved += 1
     res["approved_replies"] = approved
     if approved:
-        db.log("autopilot", f"engage: auto-approved {approved} scheduled replies")
+        db.log("autopilot", f"engage [account {acct}]: auto-approved {approved} scheduled replies")
     return res
 
 
@@ -117,24 +120,25 @@ async def _phase_mentions(agent, cfg: Config) -> dict:
     auto-approve ONLY when the human opted in (same gate as engage). A
     mention reply approved this way gets a near-term slot — conversation
     replies are worth more within the window."""
-    before = _max_draft_id()
+    acct = db.active_account()
+    before = _max_draft_id(acct)
     res = await agent.mentions()
     if not cfg.agent.auto_approve_replies:
         res["approved_replies"] = 0
         db.log("autopilot", "mentions: replies left as drafts (auto_approve off)")
         return res
     approved = 0
-    for d in db.drafts_by_status("draft", 100):
+    for d in db.drafts_by_status("draft", 100, acct=acct):
         if d["id"] > before and d["kind"] == "reply" \
                 and (d.get("meta") or {}).get("source") == "mention":
             when = d.get("scheduled_at") or \
                 (datetime.now() + timedelta(minutes=random.randint(3, 12))
                  ).isoformat(timespec="seconds")
-            db.update_draft(d["id"], status="approved", scheduled_at=when)
+            db.update_draft(d["id"], acct=acct, status="approved", scheduled_at=when)
             approved += 1
     res["approved_replies"] = approved
     if approved:
-        db.log("autopilot", f"mentions: auto-approved {approved} replies")
+        db.log("autopilot", f"mentions [account {acct}]: auto-approved {approved} replies")
     return res
 
 
@@ -159,8 +163,10 @@ async def _run_tick_locked(agent, cfg: Config) -> dict:
     st = get_state()
     phase = next_phase(st["ticks"])
     now = datetime.now()
-    ok, result, error = True, None, None
-    db.log("autopilot", f"tick #{st['ticks'] + 1}: phase '{phase}'")
+    acct = db.active_account()  # autopilot drives the ACTIVE account (v0.5.0 —
+    ok, result, error = True, None, None  # one at a time; switch between ticks)
+    db.log("autopilot", f"tick #{st['ticks'] + 1}: phase '{phase}' "
+                        f"[account {acct}]")
     try:
         if phase == "engage":
             result = await _phase_engage(agent, cfg)
@@ -183,4 +189,4 @@ async def _run_tick_locked(agent, cfg: Config) -> dict:
         phase=phase,
     )
     return {"ok": ok, "phase": phase, "result": result, "error": error,
-            "ticks": st["ticks"] + 1}
+            "ticks": st["ticks"] + 1, "account": acct}

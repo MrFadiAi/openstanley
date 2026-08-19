@@ -50,7 +50,7 @@ def fake_reflect(monkeypatch):
     """Record brain.reflect calls instead of hitting an LLM."""
     calls: list[dict] = []
 
-    def _rec(cfg, trigger, payload=None):
+    def _rec(cfg, trigger, payload=None, acct=None):
         calls.append({"trigger": trigger, "payload": payload})
         return {"ok": True, "trigger": trigger, "applied": {}, "journal_entry": ""}
 
@@ -158,10 +158,10 @@ def test_reflect_hash_gate_dedupes_identical_summaries(fake_reflect):
 
 def test_reflect_failure_leaves_gate_open(monkeypatch):
     """LLM down → hash NOT stored → the next refresh retries reflection."""
-    def _boom(cfg, trigger, payload=None):
+    def _boom(cfg, trigger, payload=None, acct=None):
         raise RuntimeError("llm unreachable")
 
-    def _ok(cfg, trigger, payload=None):
+    def _ok(cfg, trigger, payload=None, acct=None):
         return {"ok": True}
 
     monkeypatch.setattr(brain, "reflect", _boom)
@@ -286,17 +286,17 @@ def test_material_metrics_builder():
 def test_learn_loop_uses_metrics_refresh(monkeypatch):
     seen: dict = {}
 
-    async def fake_refresh(x, cfg, limit=60):
+    async def fake_refresh(x, cfg, limit=60, acct=None):
         seen["limit"] = limit
         return {"refreshed": 7, "followers": 421, "avg_engagement_rate": 0.12,
                 "reflected": True}
 
-    async def fake_reflect(trigger, cfg):
+    async def fake_reflect(trigger, cfg, acct=None):
         return "brain: ok"
 
     monkeypatch.setattr(metrics, "refresh_metrics", fake_refresh)  # module attr: learn() looks it up at call time
     monkeypatch.setattr(agent_mod.voice_mod, "build_voice",
-                        lambda cfg, force=False: None)
+                        lambda cfg, force=False, acct=None: None)
     monkeypatch.setattr(agent_mod, "_reflect", fake_reflect)
 
     agent = agent_mod.Agent(Config())

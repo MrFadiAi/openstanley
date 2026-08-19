@@ -86,7 +86,8 @@ def _is_own(c, x_id: str, author: str, me: str, acct: int) -> bool:
     return bool(row and row["is_own"])
 
 
-async def fetch_mentions(x, limit: int = FETCH_LIMIT) -> list[dict]:
+async def fetch_mentions(x, limit: int = FETCH_LIMIT,
+                         acct: int | None = None) -> list[dict]:
     """Pull mentions → store unseen ones. Returns the NEW normalized rows.
 
     Operates on the ACTIVE account. Skips own tweets; dedupes by x_id
@@ -94,7 +95,8 @@ async def fetch_mentions(x, limit: int = FETCH_LIMIT) -> list[dict]:
     replies to one of our posts (or carries a parent id), fetches the
     parent text as conversation context.
     """
-    acct = db.active_account()
+    if acct is None:
+        acct = db.active_account()
     me = db.get_me(acct).get("username") \
         or getattr(x, "username", "") or ""
     stored: list[dict] = []
@@ -163,9 +165,10 @@ def _rows(where: str, limit: int, acct: Optional[int] = None) -> list[dict]:
     return out
 
 
-def pending_mentions(limit: int = PENDING_CAP) -> list[dict]:
+def pending_mentions(limit: int = PENDING_CAP,
+                      acct: int | None = None) -> list[dict]:
     """Seen but not yet handled (handled = a draft reply exists). Newest first."""
-    return _rows("handled=0", limit)
+    return _rows("handled=0", limit, acct=acct)
 
 
 def recent_mentions(limit: int = PENDING_CAP) -> list[dict]:
@@ -211,7 +214,8 @@ def mentions_view(pending_only: bool = True, limit: int = PENDING_CAP) -> list[d
     return out
 
 
-def draft_mention_reply(cfg: Config, mention: dict) -> Optional[int]:
+def draft_mention_reply(cfg: Config, mention: dict,
+                       acct: int | None = None) -> Optional[int]:
     """Draft an on-voice reply to one mention. Returns draft id, or None.
 
     Marks the mention handled ONLY when a draft actually exists. Approval
@@ -251,8 +255,8 @@ def draft_mention_reply(cfg: Config, mention: dict) -> Optional[int]:
             "voice_match": voice_match(reply)}
     if vmeta:
         meta["voice"] = vmeta
-    did = db.add_draft(text=reply, kind="reply", meta=meta)
-    mark_handled(mention["x_id"])
+    did = db.add_draft(text=reply, kind="reply", meta=meta, acct=acct)
+    mark_handled(mention["x_id"], acct=acct)
     db.log("mentions", f"drafted reply to @{author} (draft {did}, approval-gated)")
     return did
 

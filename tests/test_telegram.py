@@ -673,7 +673,7 @@ def test_agent_create_loop_enqueues_tg_card(monkeypatch):
 
     monkeypatch.setattr(agent_mod.ideas_mod, "replenish", _no_replenish)
     monkeypatch.setattr(agent_mod.drafts_mod, "generate_drafts",
-                        lambda cfg: [d])
+                        lambda cfg, acct=None: [d])
 
     async def scenario():
         return await agent_mod.Agent(CFG).create()

@@ -71,25 +71,29 @@ def _hour_of(created_at: Optional[str]) -> Optional[int]:
 # ---------- snapshot writes (append-only) ----------
 
 def append_metric_snapshot(post_x_id: str, captured_at: str, likes: int,
-                           reposts: int, replies: int, impressions: int) -> None:
+                           reposts: int, replies: int, impressions: int,
+                           acct: int | None = None) -> None:
     with db._lock, db.connect() as c:
         c.execute(
-            "INSERT INTO metric_snapshots (post_x_id, captured_at, likes, "
-            "reposts, replies, impressions) VALUES (?,?,?,?,?,?)",
-            (post_x_id, captured_at, int(likes or 0), int(reposts or 0),
-             int(replies or 0), int(impressions or 0)),
+            "INSERT INTO metric_snapshots (account_id, post_x_id, captured_at, "
+            "likes, reposts, replies, impressions) VALUES (?,?,?,?,?,?,?)",
+            (db._acct(acct), post_x_id, captured_at, int(likes or 0),
+             int(reposts or 0), int(replies or 0), int(impressions or 0)),
         )
 
 
-def append_identity_snapshot(captured_at: str, followers: int) -> None:
+def append_identity_snapshot(captured_at: str, followers: int,
+                              acct: int | None = None) -> None:
     with db._lock, db.connect() as c:
         c.execute(
-            "INSERT INTO identity_snapshots (captured_at, followers) VALUES (?,?)",
-            (captured_at, int(followers or 0)),
+            "INSERT INTO identity_snapshots (account_id, captured_at, followers) "
+            "VALUES (?,?,?)",
+            (db._acct(acct), captured_at, int(followers or 0)),
         )
 
 
-def _set_latest_metrics(post: dict, captured_at: str, followers: int) -> None:
+def _set_latest_metrics(post: dict, captured_at: str, followers: int,
+                         acct: int | None = None) -> None:
     """posts.metrics_json = the latest capture (time series keeps the rest)."""
     payload = {
         "captured_at": captured_at,
@@ -101,18 +105,20 @@ def _set_latest_metrics(post: dict, captured_at: str, followers: int) -> None:
         "rate": _rate_of(post, followers),
     }
     with db._lock, db.connect() as c:
-        c.execute("UPDATE posts SET metrics_json=? WHERE x_id=?",
-                  (json.dumps(payload), post.get("x_id")))
+        c.execute("UPDATE posts SET metrics_json=? WHERE x_id=? AND account_id=?",
+                  (json.dumps(payload), post.get("x_id"), db._acct(acct)))
 
 
-def latest_followers() -> int:
+def latest_followers(acct: int | None = None) -> int:
     """Most recent follower count (identity snapshot > stored identity > 0)."""
     with db.connect() as c:
         row = c.execute("SELECT followers FROM identity_snapshots "
-                        "ORDER BY captured_at DESC, id DESC LIMIT 1").fetchone()
+                        "WHERE account_id=? "
+                        "ORDER BY captured_at DESC, id DESC LIMIT 1",
+                        (db._acct(acct),)).fetchone()
     if row:
         return int(row["followers"])
-    me = db.get_me()
+    me = db.get_me(acct)
     try:
         return int(me.get("followers") or 0)
     except (TypeError, ValueError):
@@ -162,21 +168,22 @@ def render_summary(summary: dict) -> str:
             f"[{top.get('rate', 0)} rate]: {top.get('text', '')[:110]}")
 
 
-async def refresh_metrics(x, cfg, limit: int = REFRESH_LIMIT) -> dict:
+async def refresh_metrics(x, cfg, limit: int = REFRESH_LIMIT,
+                         acct: int | None = None) -> dict:
     """Pull own recent tweets w/ metrics → posts upsert + time series +
     hash-gated brain reflection. Reads only; existing client methods only."""
-    me = db.get_me()
+    me = db.get_me(acct)
     try:
         fresh = await x.me()  # keeps followers current for identity series
         me = {**me, **fresh}
-        db.set_me(me)
+        db.set_me(me, acct)
     except Exception as e:  # noqa: BLE001 — stored identity is a fine fallback
         db.log("metrics", f"me() refresh failed, using stored identity: {e}",
                level="warn")
     followers = int(me.get("followers") or 0)
     captured_at = _now()
     if followers:
-        append_identity_snapshot(captured_at, followers)
+        append_identity_snapshot(captured_at, followers, acct)
 
     username = me.get("username") or getattr(x, "username", "") or ""
     own: list[dict] = []
@@ -184,32 +191,35 @@ async def refresh_metrics(x, cfg, limit: int = REFRESH_LIMIT) -> dict:
         own = await x.user_tweets(username, limit=limit)
     for p in own:
         p["is_own"] = 1
-        db.upsert_post(p)  # conflict path updates metrics, keeps created_at
+        db.upsert_post(p, acct)  # conflict path updates metrics, keeps created_at
         append_metric_snapshot(p.get("x_id"), captured_at,
                                p.get("likes", 0), p.get("reposts", 0),
-                               p.get("replies", 0), p.get("impressions", 0))
-        _set_latest_metrics(p, captured_at, followers)
+                               p.get("replies", 0), p.get("impressions", 0),
+                               acct)
+        _set_latest_metrics(p, captured_at, followers, acct)
 
     summary = _summarize(own, followers, captured_at)
-    reflected = await _maybe_reflect(cfg, summary)
-    db.log("metrics", f"refresh: {len(own)} posts captured, followers="
-                      f"{followers}, avg_rate={summary['avg_engagement_rate']}"
+    reflected = await _maybe_reflect(cfg, summary, acct)
+    db.log("metrics", f"[account {db._acct(acct)}] refresh: {len(own)} posts "
+                      f"captured, followers={followers}, "
+                      f"avg_rate={summary['avg_engagement_rate']}"
                       f", reflect={'yes' if reflected else 'skipped'}")
     return {"refreshed": len(own), "reflected": reflected, **summary}
 
 
-async def _maybe_reflect(cfg, summary: dict) -> bool:
+async def _maybe_reflect(cfg, summary: dict, acct: int | None = None) -> bool:
     """brain.reflect('metrics') only when the summary changed materially."""
     h = summary_hash(summary)
-    if h == db.get_setting(HASH_SETTING):
+    key = HASH_SETTING if db._acct(acct) == 1 else f"{HASH_SETTING}:{db._acct(acct)}"
+    if h == db.get_setting(key):
         return False
     from . import brain  # lazy: brain never imports metrics at module load
     try:
         await asyncio.to_thread(
             brain.reflect, cfg, "metrics",
             {"material": render_summary(summary),
-             "note": "metrics refresh — real performance data"})
-        db.set_setting(HASH_SETTING, h)  # only on success: LLM-down retries next tick
+             "note": "metrics refresh — real performance data"}, acct)
+        db.set_setting(key, h)  # only on success: LLM-down retries next tick
         return True
     except Exception as e:  # noqa: BLE001 — reflection must never break refresh
         db.log("metrics", f"reflect(metrics) failed: {e}", level="warn")
@@ -224,17 +234,20 @@ def growth_series(days: int = 14) -> dict:
     days = max(1, min(int(days or 14), MAX_GROWTH_DAYS))
     today = date.today()
     since = (today - timedelta(days=days - 1)).isoformat()
+    a = db.active_account()
     with db.connect() as c:
         frows = c.execute(
             "SELECT captured_at, followers FROM identity_snapshots "
-            "WHERE captured_at >= ? ORDER BY captured_at, id", (since,)).fetchall()
+            "WHERE account_id=? AND captured_at >= ? "
+            "ORDER BY captured_at, id", (a, since)).fetchall()
         carry = c.execute(
-            "SELECT followers FROM identity_snapshots WHERE captured_at < ? "
-            "ORDER BY captured_at DESC, id DESC LIMIT 1", (since,)).fetchone()
+            "SELECT followers FROM identity_snapshots "
+            "WHERE account_id=? AND captured_at < ? "
+            "ORDER BY captured_at DESC, id DESC LIMIT 1", (a, since)).fetchone()
         prows = c.execute(
             "SELECT x_id, author_handle, text, created_at, likes, reposts, replies "
-            "FROM posts WHERE is_own=1 AND created_at >= ? "
-            "ORDER BY created_at", (since,)).fetchall()
+            "FROM posts WHERE account_id=? AND is_own=1 AND created_at >= ? "
+            "ORDER BY created_at", (a, since)).fetchall()
     followers_by_day: dict[str, int] = {}
     for r in frows:
         followers_by_day[r["captured_at"][:10]] = int(r["followers"])
@@ -296,8 +309,9 @@ def top_posts(limit: int = 10, days: int = 30) -> list[dict]:
     with db.connect() as c:
         rows = c.execute(
             "SELECT x_id, author_handle, text, created_at, impressions, likes, "
-            "reposts, replies FROM posts WHERE is_own=1 AND created_at >= ?",
-            (since,)).fetchall()
+            "reposts, replies FROM posts WHERE account_id=? AND is_own=1 "
+            "AND created_at >= ?",
+            (db.active_account(), since)).fetchall()
     followers = latest_followers()
     scored = sorted((dict(r) for r in rows),
                     key=lambda p: (_rate_of(p, followers), p.get("created_at") or ""),
@@ -313,7 +327,8 @@ def times_of_day(days: int = 60) -> dict:
     with db.connect() as c:
         rows = c.execute(
             "SELECT created_at, likes, reposts, replies FROM posts "
-            "WHERE is_own=1 AND created_at >= ?", (since,)).fetchall()
+            "WHERE account_id=? AND is_own=1 AND created_at >= ?",
+            (db.active_account(), since)).fetchall()
     by_hour: dict[int, dict] = {h: {"posts": 0, "engagement": 0}
                                 for h in range(24)}
     for r in rows:

@@ -35,10 +35,11 @@ numeral system used (Arabic-Indic ٠١٢ vs Western 012), and punctuation habits
 (؟ ، ؛). Return the JSON values in English but quote Arabic examples inline."""
 
 
-def build_voice(cfg: Config, force: bool = False) -> dict:
-    """Extract/update bilingual voice profile. Called by learn loop + scan."""
-    existing = db.load_voice()
-    posts = db.own_posts(limit=300)
+def build_voice(cfg: Config, force: bool = False,
+                acct: int | None = None) -> dict:
+    """Extract/update bilingual voice profile for one account's posts."""
+    existing = db.load_voice(acct)
+    posts = db.own_posts(limit=300, acct=acct)
     if not posts:
         raise LLMError("No own posts imported yet — run an import first.")
 
@@ -46,9 +47,10 @@ def build_voice(cfg: Config, force: bool = False) -> dict:
     if existing and not force:
         rubric = existing["rubric"]
         # keep rubric, refresh examples only (cheap path)
-        db.save_voice(rubric, examples)
-        db.log("learn", f"voice examples refreshed ({len(examples)} examples)")
-        return db.load_voice()
+        db.save_voice(rubric, examples, acct)
+        db.log("learn", f"[account {db._acct(acct)}] voice examples refreshed "
+                        f"({len(examples)} examples)")
+        return db.load_voice(acct)
 
     # split corpus by language — learn the voice in each language present
     by_lang: dict[str, list[dict]] = {"ar": [], "en": [], "mixed": []}
@@ -73,10 +75,11 @@ def build_voice(cfg: Config, force: bool = False) -> dict:
 
     primary = max(rubrics, key=lambda k: len(by_lang[k]))
     rubric_obj = {"languages": rubrics, "primary": primary}
-    db.save_voice(json.dumps(rubric_obj, ensure_ascii=False, indent=1), examples)
-    db.log("learn", f"voice rubric extracted (langs={list(rubrics)}, "
-                    f"{len(examples)} examples)")
-    return db.load_voice()
+    db.save_voice(json.dumps(rubric_obj, ensure_ascii=False, indent=1),
+                  examples, acct)
+    db.log("learn", f"[account {db._acct(acct)}] voice rubric extracted "
+                    f"(langs={list(rubrics)}, {len(examples)} examples)")
+    return db.load_voice(acct)
 
 
 def _scored(posts: list[dict]) -> list[tuple[float, dict]]:
