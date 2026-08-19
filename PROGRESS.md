@@ -25,3 +25,4 @@
 2026-08-19 14:05 — final loop tick (past 12:00 horizon): all green — server healthy, TG poller active, 235/235. No /start yet from Fadi; awaiting chat-id bootstrap. Loop closing.
 2026-08-19 14:20 — chat 5650490 whitelisted; /api/telegram/test OK (200). TG integration fully live end-to-end.
 2026-08-19 14:55 — RENAMED XStanley→OpenStanley (D:\ai\openstanley). 235/235, server live, TG settings recovered, fresh git.
+2026-08-19 15:40 — Claude Code tested /study: found 3 real defects (JSONResponse.body bytes bug = command could NEVER succeed, dropped lines on partial failure, no timeout = poller hang). All fixed (f5b00b6, 245 tests). LIVE rerun: full chain green on real account.
