@@ -564,6 +564,31 @@ async def regen_draft(draft_id: int):
         raise HTTPException(500, str(e)) from e
 
 
+@app.get("/api/insights/overview")
+async def insights_overview_ep():
+    """Insights v2 — every aggregate the redesigned page renders, real data."""
+    from ..gen import insights as insights_mod
+    return insights_mod.overview()
+
+
+@app.post("/api/posts/{x_id}/repost")
+async def repost_post(x_id: str):
+    """Best-of wall → a fresh draft in the queue. Approval-gated, as ever."""
+    with db.connect() as c:
+        row = c.execute(
+            "SELECT p.text, d.image AS draft_image FROM posts p "
+            "LEFT JOIN drafts d ON d.x_id = p.x_id "
+            "WHERE p.x_id=? AND p.account_id=?",
+            (x_id, db.active_account())).fetchone()
+    if not row or not row["text"]:
+        raise HTTPException(404, "no such post")
+    did = db.add_draft(text=row["text"], kind="post",
+                       meta={"source": "repost", "original_x_id": x_id},
+                       image=row["draft_image"], acct=db.active_account())
+    db.log("insights", f"repost: post {x_id} → draft #{did} (approval-gated)")
+    return {"ok": True, "draft_id": did}
+
+
 @app.post("/api/drafts/clear-scheduled")
 async def clear_scheduled_drafts():
     """Calendar 'clear schedule' — delete all placed-but-unpublished drafts."""
