@@ -38,9 +38,18 @@ class _FakeProbe:
         self._cookies = cookies_json
         self.username = username
 
-    async def me(self) -> dict:
+    async def me(self, heal: bool = True) -> dict:
         return {"username": self.username or "probe_user",
                 "name": "Probe User", "followers": 9}
+
+
+@pytest.fixture()
+def ok_probe(monkeypatch):
+    """Every cookie-persisting endpoint now VALIDATES via me(heal=False)
+    before storing (FIX_BRIEF_BOOTSTRAP_VALIDATION) — fake that seam so these
+    normalizer tests stay hermetic (no real XCookie → no network)."""
+    monkeypatch.setattr(xclient, "XCookie",
+                        lambda c, caps=None, account_id=1: _FakeProbe(c))
 
 
 @pytest.fixture()
@@ -106,9 +115,7 @@ def test_garbage_yields_none():
 
 # ---------------- endpoints: same normalizer everywhere ----------------
 
-def test_bootstrap_accepts_bare_token(client, monkeypatch):
-    monkeypatch.setattr(xclient, "XCookie",
-                        lambda c, caps=None, account_id=1: _FakeProbe(c))
+def test_bootstrap_accepts_bare_token(client, ok_probe):
     r = client.post("/api/accounts/bootstrap", json={"cookies_json": TOKEN})
     assert r.status_code == 200, r.text
     body = r.json()
@@ -117,9 +124,7 @@ def test_bootstrap_accepts_bare_token(client, monkeypatch):
     assert db.account_cookies(body["account_id"]) == CANON
 
 
-def test_bootstrap_accepts_cookie_header(client, monkeypatch):
-    monkeypatch.setattr(xclient, "XCookie",
-                        lambda c, caps=None, account_id=1: _FakeProbe(c))
+def test_bootstrap_accepts_cookie_header(client, ok_probe):
     r = client.post("/api/accounts/bootstrap",
                     json={"cookies_json": f"auth_token={TOKEN}; ct0=abc"})
     assert r.status_code == 200, r.text
@@ -133,7 +138,7 @@ def test_bootstrap_helpful_400_on_garbage(client):
     assert "auth_token" in r.json()["detail"]
 
 
-def test_set_account_cookies_accepts_bare_token(client):
+def test_set_account_cookies_accepts_bare_token(client, ok_probe):
     r = client.post("/api/accounts/1/cookies", json={"cookies_json": TOKEN})
     assert r.status_code == 200, r.text
     assert db.account_cookies(1) == CANON
@@ -141,7 +146,7 @@ def test_set_account_cookies_accepts_bare_token(client):
     assert r.json()["cookies_masked"] == f"••••{TOKEN[-4:]}"
 
 
-def test_set_account_cookies_accepts_header_and_quotes(client):
+def test_set_account_cookies_accepts_header_and_quotes(client, ok_probe):
     r = client.post("/api/accounts/1/cookies",
                     json={"cookies_json": f'  "auth_token={TOKEN}; ct0=abc"  '})
     assert r.status_code == 200, r.text
@@ -154,7 +159,7 @@ def test_set_account_cookies_helpful_400_on_garbage(client):
     assert "auth_token" in r.json()["detail"]
 
 
-def test_create_account_accepts_bare_token(client):
+def test_create_account_accepts_bare_token(client, ok_probe):
     r = client.post("/api/accounts", json={"handle": "newbie",
                                            "cookies_json": TOKEN})
     assert r.status_code == 200, r.text
@@ -166,9 +171,7 @@ def test_create_account_accepts_bare_token(client):
     assert "auth_token" in r.json()["detail"]
 
 
-def test_cookie_connect_accepts_bare_token(client, monkeypatch):
-    monkeypatch.setattr(xclient, "XCookie",
-                        lambda c, caps=None, account_id=1: _FakeProbe(c))
+def test_cookie_connect_accepts_bare_token(client, ok_probe):
     r = client.post("/api/x/cookie-connect", json={"cookies_json": TOKEN})
     assert r.status_code == 200, r.text
     assert r.json()["username"] == "probe_user"

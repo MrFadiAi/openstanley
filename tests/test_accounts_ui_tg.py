@@ -39,7 +39,7 @@ class _FakeProbe:
         self._cookies = cookies_json
         self.username = username
 
-    async def me(self) -> dict:
+    async def me(self, heal: bool = True) -> dict:
         return {"username": self.username, "name": self.username.title(),
                 "followers": 77}
 

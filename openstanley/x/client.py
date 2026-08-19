@@ -33,6 +33,12 @@ def _auto_heal(retry: bool = True):
     heal — the retry re-enters _ensure() with the rebuilt client. Writes
     re-raise: an unauthorized POST never reached X, but side-effectful calls
     are never auto-retried. Never loops (cooldown + single retry).
+
+    ``heal=False`` (kwarg, honored on any wrapped method) disables the whole
+    machinery for that one call: the original auth error propagates. This is
+    the connect/bootstrap VALIDATION mode — a healed success there would make
+    the caller persist cookies that were never actually validated
+    (FIX_BRIEF_BOOTSTRAP_VALIDATION).
     """
     def deco(fn):
         @functools.wraps(fn)
@@ -41,6 +47,8 @@ def _auto_heal(retry: bool = True):
                 return await fn(self, *args, **kwargs)
             except Exception as e:
                 from . import cookie_heal
+                if not kwargs.get("heal", True):
+                    raise
                 if not cookie_heal.is_auth_failure(e):
                     raise
                 if not await cookie_heal.handle_failure(self, e):
@@ -56,7 +64,9 @@ class XClient(ABC):
     mode = "base"
 
     @abstractmethod
-    async def me(self) -> dict: ...
+    async def me(self, heal: bool = True) -> dict: ...
+    # heal=False = validation mode (cookie clients skip auto-heal so a bad
+    # token surfaces instead of being masked by a healed browser session)
 
     @abstractmethod
     async def user_tweets(self, username: str, limit: int = 100) -> list[dict]: ...
@@ -131,7 +141,7 @@ class XDry(XClient):
     def __init__(self, username: str = "local_user"):
         self.username = username
 
-    async def me(self) -> dict:
+    async def me(self, heal: bool = True) -> dict:
         return {"username": self.username, "name": "Local User (dry-run)", "followers": 421}
 
     async def user_tweets(self, username: str, limit: int = 100) -> list[dict]:
@@ -268,7 +278,7 @@ class XCookie(XClient):
         return c
 
     @_auto_heal()
-    async def me(self) -> dict:
+    async def me(self, heal: bool = True) -> dict:
         c = await self._ensure()
         u = await c.user()
         return {"username": u.screen_name, "name": u.name, "followers": u.followers_count}
@@ -408,7 +418,7 @@ class XApi(XClient):
         self._client = client
         return client
 
-    async def me(self) -> dict:
+    async def me(self, heal: bool = True) -> dict:
         import asyncio
         c = await self._ensure()
         me = await asyncio.to_thread(c.get_me, user_fields=["public_metrics"])

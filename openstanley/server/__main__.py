@@ -1420,6 +1420,37 @@ async def style_profile_ep():
 
 # ---------------- accounts (v0.5.0 multi-account) ----------------
 
+def _x_caps() -> dict:
+    return {
+        "max_posts_per_day": cfg.x.max_posts_per_day,
+        "max_replies_per_day": cfg.x.max_replies_per_day,
+        "min_delay_s": cfg.x.min_delay_s,
+        "max_delay_s": cfg.x.max_delay_s,
+    }
+
+
+async def _verify_cookies_no_heal(canonical: str, account_id: int = 1,
+                                  surface: str = "cookie connect") -> dict:
+    """Validate cookies against real X with auto-heal DISABLED, then return
+    the verified identity. Raises 400 on any failure.
+
+    Every endpoint that persists cookies calls this FIRST and stores the same
+    ``canonical`` string it validated. me()'s default heal-on-auth-failure must
+    never run here: a healed browser session would make a dead token look
+    valid and the caller would persist input cookies that never worked
+    (FIX_BRIEF_BOOTSTRAP_VALIDATION)."""
+    from ..x.client import XCookie
+    probe = XCookie(canonical, caps=_x_caps(), account_id=account_id)
+    try:
+        return await probe.me(heal=False)  # identity check — whose cookies?
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        db.log("system", f"{surface} failed: {str(e)[:200]}", level="error")
+        raise HTTPException(
+            400, f"Cookies rejected by X: {str(e)[:300]} — the token is "
+                 "invalid or expired; re-copy it from your browser") from e
+
 @app.get("/api/accounts")
 async def accounts_ep():
     """Registry view — handles, follower snapshot, post count. No secrets:
@@ -1438,6 +1469,9 @@ async def create_account_ep(body: AccountCreate):
         cookies = normalize_cookies_input(body.cookies_json) or ""
         if not cookies:
             raise HTTPException(400, COOKIES_PASTE_HINT)
+        # validate no-heal BEFORE the account row exists — a bad paste must
+        # not leave an orphan account or unvalidated cookies in the DB
+        await _verify_cookies_no_heal(cookies, surface="account create")
     acct_id = db.create_account(handle, cookies)
     from ..gen import brain as brain_mod
     brain_mod.ensure(acct_id)  # fresh EMPTY brain — seeds only, no other account's memory
@@ -1462,6 +1496,12 @@ async def set_account_cookies_ep(account_id: int, body: AccountCookies):
     canonical = normalize_cookies_input(body.cookies_json)
     if not canonical:
         raise HTTPException(400, COOKIES_PASTE_HINT)
+    if not db.get_account(account_id):
+        raise HTTPException(404, f"no account {account_id}")
+    # no-heal validation BEFORE storing — only cookies X actually accepted
+    # are ever persisted; on failure the stored ones stay untouched
+    await _verify_cookies_no_heal(canonical, account_id=account_id,
+                                  surface="account cookies update")
     if not db.set_account_cookies(account_id, canonical):
         raise HTTPException(404, f"no account {account_id}")
     db.log("accounts", f"cookies updated for account #{account_id} (values not logged)")
@@ -1518,23 +1558,13 @@ async def account_bootstrap_ep(body: AccountBootstrap):
     Validates the cookies against real X via me(); the returned handle then
     either re-selects an existing account (reconnect) or creates a fresh one
     with a seeded empty brain. The account becomes active."""
-    from ..x.client import XCookie, normalize_cookies_input
+    from ..x.client import normalize_cookies_input
     canonical = normalize_cookies_input(body.cookies_json)
     if not canonical:
         raise HTTPException(400, COOKIES_PASTE_HINT)
-    probe = XCookie(canonical, caps={
-        "max_posts_per_day": cfg.x.max_posts_per_day,
-        "max_replies_per_day": cfg.x.max_replies_per_day,
-        "min_delay_s": cfg.x.min_delay_s,
-        "max_delay_s": cfg.x.max_delay_s,
-    })
-    try:
-        me = await probe.me()  # identity check — whose cookies are these?
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001
-        db.log("system", f"account bootstrap failed: {str(e)[:200]}", level="error")
-        raise HTTPException(400, f"Cookies rejected by X: {str(e)[:300]}") from e
+    # no-heal identity check — a fake token must FAIL here (400, DB
+    # untouched), never be masked by a healed browser session and persisted
+    me = await _verify_cookies_no_heal(canonical, surface="account bootstrap")
     handle = me["username"]
     single_line = canonical
     existing = next((a for a in db.list_accounts()
@@ -1568,25 +1598,15 @@ async def cookie_connect(body: CookieConnect):
 
     v0.5.0: cookies persist into the ACTIVE account's row (DB is the source
     of truth; .env stays a bootstrap fallback for account 1)."""
-    from ..x.client import XCookie, normalize_cookies_input
+    from ..x.client import normalize_cookies_input
     canonical = normalize_cookies_input(body.cookies_json)
     if not canonical:
         raise HTTPException(400, COOKIES_PASTE_HINT)
-    caps = {
-        "max_posts_per_day": cfg.x.max_posts_per_day,
-        "max_replies_per_day": cfg.x.max_replies_per_day,
-        "min_delay_s": cfg.x.min_delay_s,
-        "max_delay_s": cfg.x.max_delay_s,
-    }
     acct = db.active_account()
-    probe = XCookie(canonical, caps=caps, account_id=acct)
-    try:
-        me = await probe.me()  # validates cookies by calling c.user()
-    except HTTPException:
-        raise
-    except Exception as e:  # noqa: BLE001
-        db.log("system", f"cookie connect failed: {str(e)[:200]}", level="error")
-        raise HTTPException(400, f"Cookies rejected by X: {str(e)[:300]}") from e
+    # no-heal validation — only cookies X accepted get stored (same rule as
+    # bootstrap; a healed success must never persist the unvalidated input)
+    me = await _verify_cookies_no_heal(canonical, account_id=acct,
+                                       surface="cookie connect")
     # success → persist into the account row and switch mode
     db.set_account_cookies(acct, canonical)
     db.set_account_handle(acct, me["username"])

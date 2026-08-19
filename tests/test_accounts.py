@@ -366,6 +366,17 @@ def test_api_accounts_crud(client, tmp_path, monkeypatch):
 def test_api_account_cookies_write_only(client, tmp_path, monkeypatch):
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "cookies.db")
     db.init_db()
+    # cookies are validated against X before storing — fake the probe seam
+    import openstanley.x.client as xclient
+
+    class _OkProbe:
+        def __init__(self, cookies_json: str, caps=None, account_id: int = 1):
+            pass
+
+        async def me(self, heal: bool = True) -> dict:
+            return {"username": "writer", "name": "Writer", "followers": 1}
+
+    monkeypatch.setattr(xclient, "XCookie", _OkProbe)
     cookies = json.dumps({"auth_token": "tok-1234567890", "ct0": "ct0-value"})
     r = client.post("/api/accounts/1/cookies", json={"cookies_json": cookies})
     assert r.status_code == 200
