@@ -231,3 +231,30 @@ input[type='date'] {
   color: #ffffff;
   font-weight: 650;
 }
+
+/* ---------------- Calendar: the paper sheet ----------------
+   Self-hosted Newsreader (latin subsets, ~24KB each — fully offline).
+   The calendar is a deliberately LIGHT editorial surface inside the dark
+   app: tokens are flipped inside .cal-sheet only; nothing outside it
+   changes. Portaled popovers get the class too so they match. */
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./assets/fonts/newsreader-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/fonts/newsreader-400i.woff2') format('woff2');
+}
+
+:root {
+  --font-serif: 'Newsreader', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+}
+
+/* calendar rides the app's native dark theme — structure only, no palette overrides */
