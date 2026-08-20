@@ -61,11 +61,23 @@ def generate_drafts(cfg: Config, count: int = None,
             continue
         if draft is None:  # voice-lock rejection — idea stays fresh for a retry
             continue
+        image = draft.get("image")
+        if not image and draft.get("kind", "post") == "post" and not draft.get("thread"):
+            # media auto-attach: a clean typographic card beats no image —
+            # the algorithm's media factor is otherwise pure upside left unused
+            from . import quote_card
+            try:
+                image = quote_card.make_card(draft["text"])
+                if image:
+                    db.log("create", f"hook-card attached: {image}")
+            except Exception as e:  # noqa: BLE001 — never lose a draft over art
+                db.log("create", f"hook-card failed (draft continues bare): {e}",
+                       level="warn")
         did = db.add_draft(
             text=draft["text"], idea_id=idea["id"],
             kind=draft.get("kind", "post"),
             thread=draft.get("thread"), temperature=temp,
-            image=draft.get("image"),
+            image=image,
             quote_of=(draft.get("quote") or {}).get("x_id") if draft.get("quote") else None,
             meta=_draft_meta(idea, draft, lang), acct=acct,
         )
