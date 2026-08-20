@@ -37,6 +37,8 @@ from collections import deque
 from datetime import datetime
 from typing import Optional
 
+import json
+
 import httpx
 
 from ..core import db
@@ -65,6 +67,7 @@ HELP_TEXT = (
     "/drafts — drafts waiting for your approval\n"
     "/approve <id> — approve a draft (it gets scheduled)\n"
     "/reject <id> — reject a draft\n"
+    "(approval cards and /drafts carry one-tap buttons — tap, done)\n"
     "/img <id> — attach a photo to a draft (send the photo with this caption,\n"
     "           or just reply to a draft card with a photo)\n"
     "/post <text> — save your own text as a draft for review\n"
@@ -128,7 +131,7 @@ def _api(token: str, method: str, params: dict) -> httpx.Response:
 def _get_updates(token: str, offset: int) -> httpx.Response:
     return httpx.post(API_URL.format(token=token, method="getUpdates"),
                       json={"offset": offset, "timeout": POLL_TIMEOUT_S,
-                            "allowed_updates": ["message"]},
+                            "allowed_updates": ["message", "callback_query"]},
                       timeout=POLL_TIMEOUT_S + HTTP_TIMEOUT_S)
 
 
@@ -143,13 +146,16 @@ def _entities_rejected(r: httpx.Response) -> bool:
 
 
 def _api_send_text(token: str, chat_id: int, text: str,
-                   partial: bool = False) -> httpx.Response:
+                   partial: bool = False,
+                   reply_markup: str | None = None) -> httpx.Response:
     """sendMessage with HTML formatting; if Telegram rejects the entities,
     retried ONCE with parse_mode removed (plain, markers stripped) —
     formatting must never cost delivery."""
-    r = _api(token, "sendMessage",
-             {"chat_id": chat_id, "text": _format_tg(text, partial=partial),
-              "parse_mode": "HTML"})
+    params: dict = {"chat_id": chat_id, "text": _format_tg(text, partial=partial),
+                    "parse_mode": "HTML"}
+    if reply_markup:
+        params["reply_markup"] = reply_markup
+    r = _api(token, "sendMessage", params)
     if _entities_rejected(r):
         r = _api(token, "sendMessage",
                  {"chat_id": chat_id, "text": _clip(_md_to_plain(text))})
@@ -454,7 +460,8 @@ def _rate_allow() -> bool:
     return True
 
 
-def send_message(chat_id: int, text: str) -> dict:
+def send_message(chat_id: int, text: str,
+                 reply_markup: str | None = None) -> dict:
     """One outbound message. Rate-limited; overflow drops with a warn log.
     Never raises — returns an ok/error record instead."""
     token = bot_token()
@@ -465,7 +472,7 @@ def send_message(chat_id: int, text: str) -> dict:
                level="warn")
         return {"ok": False, "status_code": None, "error": "rate limited"}
     try:
-        r = _api_send_text(token, chat_id, text)
+        r = _api_send_text(token, chat_id, text, reply_markup=reply_markup)
         ok = 200 <= r.status_code < 300
         if not ok:
             db.log("telegram", f"sendMessage to chat {chat_id} failed "
@@ -623,6 +630,15 @@ def _send_and_capture(token: str, chat_id: int, text: str,
             "error": None if ok else r.text[:200]}
 
 
+def _approve_keyboard(draft_ids: list[int]) -> str:
+    """One [approve, reject] row per draft — one-tap decisions on the card.
+    callback_data stays tiny (a:<id> / r:<id>) well under Telegram's 64 bytes."""
+    rows = [[{"text": f"approve {i}", "callback_data": f"a:{i}"},
+             {"text": f"reject {i}", "callback_data": f"r:{i}"}]
+            for i in draft_ids[:DRAFTS_PAGE]]
+    return json.dumps({"inline_keyboard": rows})
+
+
 def notify(text: str, card_drafts: list[int] | None = None) -> dict:
     """Broadcast to every allowed chat (digest cron + approval cards).
     Rate-limited per message; failures are logged, never raised.
@@ -632,8 +648,9 @@ def notify(text: str, card_drafts: list[int] | None = None) -> dict:
     if not is_enabled():
         return {"ok": False, "sent": 0, "chats": 0, "error": "telegram disabled"}
     sent = 0
+    markup = _approve_keyboard(card_drafts) if card_drafts else None
     for c in chats:
-        r = send_message(c, text)
+        r = send_message(c, text, reply_markup=markup)
         if r["ok"]:
             sent += 1
             if card_drafts is not None and r.get("message_id"):
@@ -1146,7 +1163,43 @@ def handle_update(cfg: Config, upd: dict) -> None:
         db.log("telegram", f"update handler error: {e}", level="error")
 
 
+def _handle_callback(cfg: Config, cb: dict) -> None:
+    """Inline-button tap (approve/reject). One tap = one decision: the
+    callback gets answered (spinner stops, result as toast) and the card's
+    buttons are cleared so a second tap can't double-fire."""
+    token = bot_token()
+    if not token:
+        return
+    msg = cb.get("message") or {}
+    chat_id = int((msg.get("chat") or {}).get("id") or 0)
+    if not chat_id:
+        return
+    if chat_id not in allowed_chats():
+        _api(token, "answerCallbackQuery",
+             {"callback_query_id": cb.get("id"), "text": "not authorized"})
+        return
+    action, _, sid = str(cb.get("data") or "").partition(":")
+    try:
+        draft_id = int(sid)
+    except ValueError:
+        draft_id = -1
+    if action == "a":
+        reply = approve_draft_tg(cfg, draft_id)
+    elif action == "r":
+        reply = reject_draft_tg(draft_id)
+    else:
+        reply = "unknown button"
+    _api(token, "answerCallbackQuery",
+         {"callback_query_id": cb.get("id"), "text": reply[:190]})
+    _api(token, "editMessageReplyMarkup",
+         {"chat_id": chat_id, "message_id": msg.get("message_id")})
+
+
 def _handle_update(cfg: Config, upd: dict) -> None:
+    cb = upd.get("callback_query")
+    if cb:
+        _handle_callback(cfg, cb)
+        return
     msg = upd.get("message") or upd.get("edited_message") or {}
     chat_id = int((msg.get("chat") or {}).get("id") or 0)
     text = str(msg.get("text") or "").strip()
@@ -1183,6 +1236,10 @@ def _handle_update(cfg: Config, upd: dict) -> None:
         reply = _cmd_ideas()
     elif name == "drafts":
         reply = _cmd_drafts()
+        reply_markup = _approve_keyboard(
+            [d["id"] for d in db.drafts_by_status("draft", DRAFTS_PAGE)])
+        send_message(chat_id, reply, reply_markup=reply_markup or None)
+        return
     elif name == "approve":
         reply = approve_draft_tg(cfg, _int_arg(args, "approve"))
     elif name == "reject":

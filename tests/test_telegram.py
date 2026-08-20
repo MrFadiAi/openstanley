@@ -21,6 +21,7 @@ import re
 import sys
 import threading
 import time
+import json
 import types
 from datetime import datetime
 from pathlib import Path
@@ -908,3 +909,72 @@ def test_video_document_declined(tmp_path, monkeypatch):
            "document": {"file_id": "f1", "mime_type": "video/mp4"}}}
     tg._handle_update(CFG, upd)
     assert any("photos only" in t.lower() for _c, t in fake.sent())
+
+
+# ---------------- one-tap inline approve/reject (v0.6.2) ----------------
+
+def _cb_update(cb_id: str, data: str, chat_id: int = CHAT, msg_id: int = 55) -> dict:
+    return {"update_id": 1, "callback_query": {
+        "id": cb_id, "data": data,
+        "message": {"message_id": msg_id, "chat": {"id": chat_id}}}}
+
+
+def test_card_carries_one_tap_keyboard(monkeypatch):
+    _enable()
+    d1 = db.add_draft(text="one")
+    d2 = db.add_draft(text="two")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg.notify_new_drafts([d1, d2])
+    sends = [(u, p) for u, m, p in fake.calls if m == "sendMessage"]
+    assert sends and "reply_markup" in sends[0][1]
+    kb = json.loads(sends[0][1]["reply_markup"])
+    datas = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+    assert f"a:{d1}" in datas and f"r:{d2}" in datas
+
+
+def test_one_tap_approve(monkeypatch):
+    _enable()
+    d = db.add_draft(text="tap approved")
+    monkeypatch.setattr(slots_mod, "pick_slot_with_reason",
+                        lambda cfg, kind, now: (datetime(2030, 1, 2, 9, 0, 0), "cadence"))
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._handle_update(CFG, _cb_update("cb1", f"a:{d}"))
+    row = db.get_draft(d)
+    assert row["status"] == "approved"
+    methods = [m for _u, m, p in fake.calls]
+    assert "answerCallbackQuery" in methods
+    answer = [p for _u, m, p in fake.calls if m == "answerCallbackQuery"][0]
+    assert "approved" in answer["text"].lower()
+    assert "editMessageReplyMarkup" in methods  # buttons cleared
+
+
+def test_one_tap_reject(monkeypatch):
+    _enable()
+    d = db.add_draft(text="tap rejected")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._handle_update(CFG, _cb_update("cb2", f"r:{d}"))
+    assert db.get_draft(d)["status"] == "rejected"
+
+
+def test_one_tap_stranger_refused(monkeypatch):
+    _enable()
+    d = db.add_draft(text="stranger cannot tap")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._handle_update(CFG, _cb_update("cb3", f"a:{d}", chat_id=666999))
+    assert db.get_draft(d)["status"] == "draft"     # untouched
+    answer = [p for _u, m, p in fake.calls if m == "answerCallbackQuery"][0]
+    assert "not authorized" in answer["text"].lower()
+
+
+def test_drafts_command_carries_keyboard(monkeypatch):
+    _enable()
+    db.add_draft(text="listed draft")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._handle_update(CFG, _upd(1, CHAT, "/drafts"))
+    sends = [(u, p) for u, m, p in fake.calls if m == "sendMessage"]
+    assert sends and "reply_markup" in sends[0][1]
