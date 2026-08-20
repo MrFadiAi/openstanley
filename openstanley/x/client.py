@@ -79,6 +79,15 @@ class XClient(ABC):
         """Fetch one tweet (for quote-post previews). Default: unsupported."""
         return {"x_id": x_id, "text": "", "author": ""}
 
+    async def get_dms(self, limit: int = 20) -> dict:
+        """Read-only DM inbox. Default: NOT AVAILABLE — cookie mode (twikit)
+        exposes no DM endpoint and the official v2 DM API needs paid access.
+        Callers render the honest empty state, never fake data."""
+        return {"available": False,
+                "reason": "DM reading needs the official X API (paid tier) — "
+                          "cookie mode cannot see DMs",
+                "messages": []}
+
     @abstractmethod
     async def search(self, query: str, limit: int = 50) -> list[dict]: ...
 

@@ -619,6 +619,13 @@ async def threads_ep(body: ThreadTopic):
     return {"ok": True, "draft_id": did, "tweets": len(thread)}
 
 
+@app.get("/api/dms")
+async def dms_ep():
+    """Read-only DM triage — what the current X mode can honestly see."""
+    res = await agent.x.get_dms()
+    return res
+
+
 @app.get("/api/hooks")
 async def hooks_ep():
     """Steal-this-hook bank — patterns mined from niche winners."""

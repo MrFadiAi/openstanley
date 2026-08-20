@@ -132,6 +132,42 @@ function MentionRowCard({ mention, onDraft, drafting }: MentionRowCardProps) {
   );
 }
 
+function DmTriageCard() {
+  const { t } = useApp();
+  const [dms, setDms] = useState<{ available: boolean; reason: string;
+                                   messages: { from: string; text: string }[] } | null>(null);
+  useEffect(() => {
+    void (async () => {
+      try { setDms(await api<typeof dms & never>('dms')); } catch { setDms(null); }
+    })();
+  }, []);
+  if (!dms) return null;
+  return (
+    <div className="mb-4 rounded-xl border border-line bg-panel px-4 py-3">
+      <div className="mb-1 flex items-center gap-1.5 text-[13px] font-semibold">
+        {t('dms.title')}
+      </div>
+      {dms.available ? (
+        dms.messages.length === 0 ? (
+          <div className="text-[12.5px] text-muted">{t('dms.empty')}</div>
+        ) : (
+          dms.messages.slice(0, 5).map((m, i) => (
+            <div key={i} className="text-[12.5px]">
+              <span className="font-mono text-[11px] text-accent-ink">@{m.from}</span>{' '}
+              {m.text.slice(0, 90)}
+            </div>
+          ))
+        )
+      ) : (
+        <div className="text-[12.5px] leading-relaxed text-muted">
+          {t('dms.unavailable')} <span className="text-ink-3">({dms.reason})</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export function InboxPage() {
   const { t } = useApp();
   const [stats, setStats] = useState<Stats | null>(null);
@@ -350,6 +386,7 @@ export function InboxPage() {
           </div>
         ) : (
           <>
+            <DmTriageCard />
             {/* mention inbox — people talking to us directly */}
             <h3 className="mb-2.5 mt-1 text-[11px] font-semibold uppercase tracking-[0.9px] text-muted">
               {t('inbox.mentionsSection')}

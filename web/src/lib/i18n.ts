@@ -208,6 +208,10 @@ const en = {
   'hooks.remixed': 'Draft #{id} — waiting for your approval',
   'hooks.remixFailed': 'Remix failed: {msg}',
 
+  'dms.title': 'Direct messages',
+  'dms.empty': 'No DMs waiting.',
+  'dms.unavailable': 'DM reading needs the official X API (paid tier) — cookie mode cannot see DMs.',
+
   'calendar.title': 'Content Calendar',
   'calendar.subtitle': 'drag from the queue to schedule · green = published · dotted = awaiting approval',
   'calendar.month': 'Month',
@@ -870,6 +874,10 @@ const ar: Record<I18nKey, string> = {
   'hooks.remixing': 'يكتب…',
   'hooks.remixed': 'مسودة #{id} — بانتظار موافقتك',
   'hooks.remixFailed': 'فشل: {msg}',
+
+  'dms.title': 'الرسائل الخاصة',
+  'dms.empty': 'لا رسائل بانتظارك.',
+  'dms.unavailable': 'قراءة الرسائل تحتاج واجهة X الرسمية (مدفوعة) — وضع الكوكيز لا يراها.',
 
   'calendar.title': 'تقويم المحتوى',
   'calendar.subtitle': 'اسحب من قائمة الانتظار للجدولة · الأخضر = منشور · المنقّط = بانتظار الاعتماد',
