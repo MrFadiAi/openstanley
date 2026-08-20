@@ -40,5 +40,9 @@ def test_thread_tweets_scrubbed_too():
     db.init_db()
     t = ["hook \u2014 one", "body \u2013 two", "tail"]
     did = db.add_draft(text=t[0], thread=t, acct=1)
-    row = db.get_draft(did)
-    assert all("\u2014" not in x and "\u2013" not in x for x in row["thread"])
+    try:
+        row = db.get_draft(did)
+        assert all("\u2014" not in x and "\u2013" not in x for x in row["thread"])
+    finally:  # never leak rows into other suites' deterministic ranges
+        with db.connect() as c:
+            c.execute("DELETE FROM drafts WHERE id=?", (did,))
