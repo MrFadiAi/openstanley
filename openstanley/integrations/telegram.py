@@ -70,7 +70,9 @@ HELP_TEXT = (
     "(approval cards and /drafts carry one-tap buttons — tap, done)\n"
     "/img <id> — attach a photo to a draft (send the photo with this caption,\n"
     "           or just reply to a draft card with a photo)\n"
-    "/post <text> — save your own text as a draft for review\n"
+    "/post <text> — save your own text as a draft for review
+"
+    "or just send a VOICE NOTE — heard, transcribed, drafted from your words\n"
     "/digest — today's report, on demand\n"
     "/study — study your X account fully & refresh my brain\n"
     "\nAnything else you type, I answer — same brain as the dashboard. Ask me\n"
@@ -1163,6 +1165,38 @@ def handle_update(cfg: Config, upd: dict) -> None:
         db.log("telegram", f"update handler error: {e}", level="error")
 
 
+def _handle_voice(cfg: Config, chat_id: int, msg: dict) -> None:
+    """Voice note -> text -> the normal chat brain. Talk to OpenStanley
+    like a person: ramble about a post idea, it drafts from your words."""
+    from ..gen import voice_notes as vn
+    token = bot_token()
+    v = msg.get("voice") or {}
+    file_id = v.get("file_id")
+    if not token or not file_id:
+        send_message(chat_id, "Voice note came without a file — try again.")
+        return
+    try:
+        r = _api(token, "getFile", {"file_id": file_id})
+        fp = (r.json().get("result") or {}).get("file_path")
+        if not fp:
+            raise RuntimeError("no file_path")
+        fr = httpx.get(FILE_URL.format(token=token, path=fp),
+                       timeout=HTTP_TIMEOUT_S)
+        if fr.status_code != 200:
+            raise RuntimeError(f"download HTTP {fr.status_code}")
+        text = vn.transcribe(fr.content)
+    except Exception as e:  # noqa: BLE001
+        db.log("telegram", f"voice download failed: {_scrub(str(e), token)}",
+               level="warn")
+        send_message(chat_id, "Couldn't fetch the voice note — try again.")
+        return
+    if not text:
+        send_message(chat_id, "I couldn't hear anything in that voice note.")
+        return
+    send_message(chat_id, f"heard: {text[:300]}")
+    send_stream(chat_id, chat_reply_tg_stream(cfg, chat_id, text))
+
+
 def _fmt_slot(iso: str) -> str:
     """'2026-08-21T09:00:00' → 'Fri 09:00' — the card shows WHEN it ships."""
     try:
@@ -1248,7 +1282,7 @@ def _handle_update(cfg: Config, upd: dict) -> None:
     chat_id = int((msg.get("chat") or {}).get("id") or 0)
     text = str(msg.get("text") or "").strip()
     photo = msg.get("photo")
-    has_media = bool(photo or msg.get("document"))
+    has_media = bool(photo or msg.get("document") or msg.get("voice"))
     if not chat_id or (not text and not has_media):
         return
     db.log("telegram", f"inbound from chat {chat_id}: "
@@ -1263,8 +1297,10 @@ def _handle_update(cfg: Config, upd: dict) -> None:
     if not text and has_media:
         if photo:
             _handle_photo(cfg, chat_id, msg)
+        elif msg.get("voice"):
+            _handle_voice(cfg, chat_id, msg)
         else:
-            send_message(chat_id, "Photos only, please — videos aren't supported yet.")
+            send_message(chat_id, "Photos and voice notes, yes — videos aren't supported yet.")
         return
 
     cmd = parse_command(text)

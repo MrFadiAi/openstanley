@@ -908,7 +908,7 @@ def test_video_document_declined(tmp_path, monkeypatch):
     upd = {"update_id": 1, "message": {"chat": {"id": CHAT},
            "document": {"file_id": "f1", "mime_type": "video/mp4"}}}
     tg._handle_update(CFG, upd)
-    assert any("photos only" in t.lower() for _c, t in fake.sent())
+    assert any("videos aren" in t.lower() for _c, t in fake.sent())
 
 
 # ---------------- one-tap inline approve/reject (v0.6.2) ----------------
@@ -1038,3 +1038,43 @@ def test_all_decided_clears_buttons(monkeypatch):
     tg._handle_update(CFG, _cb_update("cb3", f"a:{d1}", msg_id=4242))
     markup = [p for _u, m, p in fake.calls if m == "editMessageReplyMarkup"][-1]
     assert "reply_markup" not in markup           # nothing pending → no buttons
+
+
+# ---------------- voice notes -> post ----------------
+
+def _voice_update(chat_id: int = CHAT) -> dict:
+    return {"update_id": 1, "message": {"chat": {"id": chat_id},
+            "voice": {"file_id": "v1", "duration": 7}}}
+
+
+def test_voice_note_transcribes_and_chats(monkeypatch):
+    _enable()
+    from openstanley.gen import voice_notes as vn
+    monkeypatch.setattr(vn, "transcribe", lambda b, lang=None: "write a post about agents learning to code")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._handle_update(CFG, _voice_update())
+    texts = " ".join(t for _c, t in fake.sent())
+    assert "heard: write a post" in texts          # transcript echoed back
+
+
+def test_voice_note_empty_transcript(monkeypatch):
+    _enable()
+    from openstanley.gen import voice_notes as vn
+    monkeypatch.setattr(vn, "transcribe", lambda b, lang=None: "")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._handle_update(CFG, _voice_update())
+    texts = " ".join(t for _c, t in fake.sent())
+    assert "couldn't hear" in texts
+
+
+def test_voice_note_stranger_refused(monkeypatch):
+    _enable()
+    from openstanley.gen import voice_notes as vn
+    calls = []
+    monkeypatch.setattr(vn, "transcribe", lambda b, lang=None: calls.append(1) or "x")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._handle_update(CFG, _voice_update(chat_id=666999))
+    assert calls == []                              # never transcribed
