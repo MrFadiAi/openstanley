@@ -7,3 +7,4 @@ python-multipart>=0.0.9
 tweepy>=4.14
 twikit==2.3.3
 pytest>=8.0
+faster-whisper
