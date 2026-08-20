@@ -564,6 +564,19 @@ async def regen_draft(draft_id: int):
         raise HTTPException(500, str(e)) from e
 
 
+@app.post("/api/metrics/refresh")
+async def metrics_refresh_ep():
+    """Nightly metrics refresh — keeps Insights (heatmap/growth/milestones)
+    current without a full study/scan run."""
+    from ..gen import metrics as metrics_mod
+    try:
+        res = await metrics_mod.refresh_metrics(agent.x, cfg, limit=20)
+        return {"ok": True, "result": res}
+    except Exception as e:  # noqa: BLE001
+        db.log("api", f"metrics refresh error: {e}", level="error")
+        raise HTTPException(500, str(e)) from e
+
+
 @app.get("/api/insights/overview")
 async def insights_overview_ep():
     """Insights v2 — every aggregate the redesigned page renders, real data."""
@@ -1839,6 +1852,19 @@ def start_scheduler():
     # (Wrapping in ensure_future runs in APScheduler's worker thread → no event loop.)
     sched.add_job(agent.study,
                   CronTrigger(hour=cfg.agent.study_hour, minute=0), id="study")
+
+    async def _metrics_job():
+        """04:17 nightly — small refresh keeps Insights numbers honest
+        without waiting for the weekly learn loop's deeper pull."""
+        from ..gen import metrics as metrics_mod
+        try:
+            res = await metrics_mod.refresh_metrics(agent.x, cfg, limit=20)
+            db.log("metrics", f"nightly refresh: {res.get('refreshed')} posts captured")
+        except Exception as e:  # noqa: BLE001
+            db.log("metrics", f"nightly refresh failed: {e}", level="error")
+
+    sched.add_job(_metrics_job, CronTrigger(hour=4, minute=17),
+                  id="metrics_refresh")
     sched.add_job(agent.create,
                   CronTrigger(hour=7, minute=0), id="create")
     sched.add_job(agent.engage,

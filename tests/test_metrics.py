@@ -338,3 +338,18 @@ def test_api_growth_top_times_shape():
     assert all({"hour", "posts", "engagement", "avg_engagement"} <= set(h)
                for h in tm["hours"])
     assert isinstance(tm["best_hours"], list)
+
+
+def test_metrics_refresh_endpoint_and_job_registered():
+    """POST /api/metrics/refresh runs a small refresh (dryrun X) and
+    the nightly job is registered on the scheduler (when one exists)."""
+    from fastapi.testclient import TestClient
+    from openstanley.server import __main__ as srv
+    with TestClient(srv.app) as client:
+        r = client.post("/api/metrics/refresh")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is True
+    sched = getattr(srv, "sched", None)
+    if sched and sched.get_jobs():   # tests run scheduler-less (NO_SCHEDULER=1)
+        assert "metrics_refresh" in [j.id for j in sched.get_jobs()]
