@@ -978,3 +978,11 @@ def test_drafts_command_carries_keyboard(monkeypatch):
     tg._handle_update(CFG, _upd(1, CHAT, "/drafts"))
     sends = [(u, p) for u, m, p in fake.calls if m == "sendMessage"]
     assert sends and "reply_markup" in sends[0][1]
+
+
+def test_int_arg_accepts_hash_prefix():
+    """'/approve #2379' is how humans type ids — must parse like '2379'."""
+    assert tg._int_arg("#2379", "approve") == 2379
+    assert tg._int_arg("2379", "approve") == 2379
+    assert tg._int_arg("", "approve") == -1
+    assert tg._int_arg("#nope", "approve") == -1

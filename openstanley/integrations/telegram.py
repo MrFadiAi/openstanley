@@ -1259,7 +1259,7 @@ def _handle_update(cfg: Config, upd: dict) -> None:
 
 def _int_arg(args: str, cmd: str) -> int:
     try:
-        return int(args.split()[0])
+        return int(args.split()[0].lstrip("#"))  # '#2379' reads like '2379'
     except (ValueError, IndexError):
         return -1
 
