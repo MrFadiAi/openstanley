@@ -277,6 +277,9 @@ def _band_for(rules: dict, kind: str) -> tuple[int, int]:
     return rules["bands"]["reply"] if kind == "reply" else rules["bands"]["post"]
 
 
+from ..core.text import scrub_ai_punctuation  # noqa: E402
+
+
 def score_deterministic(text: str, kind: str = "post",
                         rules: Optional[dict] = None) -> tuple[int, list[str]]:
     """Score 0-100 against the persona rules. No LLM, no I/O, no clock."""
@@ -386,6 +389,7 @@ def check_draft(cfg, text: str, kind: str = "post",
     deterministically — it wins only if it scores strictly better.
     `passed = score >= threshold` (config [agent] voice_lock_threshold).
     """
+    text = scrub_ai_punctuation(text)
     rules = load_persona_rules()
     threshold = lock_threshold(cfg)
     score, violations = score_deterministic(text, kind, rules)

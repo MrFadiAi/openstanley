@@ -704,6 +704,8 @@ def add_draft(text: str, idea_id: Optional[int] = None, kind: str = "post",
               quote_of: Optional[str] = None,
               scheduled_at: Optional[str] = None,
               status: str = "draft", acct: Optional[int] = None) -> int:
+    from .text import scrub_ai_punctuation
+    text = scrub_ai_punctuation(text)
     with _lock, connect() as c:
         cur = c.execute(
             "INSERT INTO drafts (account_id, idea_id, kind, text, thread_json, status, "
@@ -739,6 +741,9 @@ def update_draft(draft_id: int, acct: Optional[int] = None, **fields: Any) -> No
     allowed = {"text", "thread_json", "status", "scheduled_at", "x_id", "published_at",
                "meta_json", "image", "quote_of", "kind", "temperature"}
     sets, vals = [], []
+    from .text import scrub_ai_punctuation
+    if "text" in fields and fields["text"]:
+        fields["text"] = scrub_ai_punctuation(fields["text"])
     for k, v in fields.items():
         if k not in allowed:
             continue
