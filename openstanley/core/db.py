@@ -706,6 +706,8 @@ def add_draft(text: str, idea_id: Optional[int] = None, kind: str = "post",
               status: str = "draft", acct: Optional[int] = None) -> int:
     from .text import scrub_ai_punctuation
     text = scrub_ai_punctuation(text)
+    if thread:
+        thread = [scrub_ai_punctuation(t) for t in thread]
     with _lock, connect() as c:
         cur = c.execute(
             "INSERT INTO drafts (account_id, idea_id, kind, text, thread_json, status, "

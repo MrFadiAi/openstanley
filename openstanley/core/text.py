@@ -12,9 +12,9 @@ def scrub_ai_punctuation(text: str) -> str:
     for dash in ("\u2014", "\u2013", "\u2212"):
         out = out.replace(dash, ", ")
     out = out.replace(" -- ", ", ").replace(" --", ",")
-    while ", ," in out:
-        out = out.replace(", ,", ",")
-    out = out.replace(" ,", ",")
     while "  " in out:
         out = out.replace("  ", " ")
+    out = out.replace(" ,", ",").replace(", ", ", ")
+    while ", ," in out or ",," in out:
+        out = out.replace(", ,", ",").replace(",,", ",")
     return out
