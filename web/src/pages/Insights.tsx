@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useApp } from '@/lib/app-context';
 import { api, apiPost } from '@/lib/api';
 import { cn, hasArabic } from '@/lib/utils';
+import type { I18nKey } from '@/lib/i18n';
 
 // ---------------- api types (GET /api/insights/overview) ----------------
 
@@ -192,6 +193,21 @@ function OrbitCard({ orbit }: { orbit: Overview['orbit'] }) {
 
 function MilestonesCard({ milestones }: { milestones: Overview['milestones'] }) {
   const { t } = useApp();
+
+  // milestone labels live in i18n by id — the backend's English label is
+  // only a fallback for ids the frontend hasn't met yet
+  const MS_KEY: Record<string, I18nKey> = {
+    followers_100: 'insights2.ms.followers_100',
+    followers_1k: 'insights2.ms.followers_1k',
+    followers_10k: 'insights2.ms.followers_10k',
+    followers_100k: 'insights2.ms.followers_100k',
+    imp_1k: 'insights2.ms.imp_1k',
+    imp_100k: 'insights2.ms.imp_100k',
+    imp_1m: 'insights2.ms.imp_1m',
+    posts_10: 'insights2.ms.posts_10',
+    posts_100: 'insights2.ms.posts_100',
+    likes_100: 'insights2.ms.likes_100',
+  };
   return (
     <div className="rounded-2xl border border-line bg-panel p-4">
       <h3 className="mb-3 font-serif text-[16px]">{t('insights2.milestones')}</h3>
@@ -211,7 +227,7 @@ function MilestonesCard({ milestones }: { milestones: Overview['milestones'] }) 
               <Lock size={14} className="text-ink-3" />
             )}
             <span className={cn('text-[10.5px] leading-tight', m.unlocked ? 'text-ink' : 'text-muted')}>
-              {m.label}
+              {MS_KEY[m.id] ? t(MS_KEY[m.id]) : m.label}
             </span>
             {!m.unlocked ? (
               <span className="font-mono text-[9.5px] text-ink-3">
