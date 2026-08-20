@@ -36,7 +36,9 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 ACCOUNTS_ROOT = ROOT / "data" / "accounts"
 LEGACY_BRAIN_DIR = ROOT / "data" / "brain"
 
-BUDGET_CHARS = 1500  # hard cap for brain_context()
+BUDGET_CHARS = 6000  # hard cap — the LLM config allows 20k tokens; starving
+                     # the learned layers to 1.5k chars made the agent ignore
+                     # its own memory (user report 2026-08-20)
 
 # ---------- security: never let secrets into the brain ----------
 
@@ -446,7 +448,8 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
         return ""
     ensure(acct)
     # fair-share budgets scaled to the total
-    shares = (500, 420, 320, 260)  # instructions, rules, strategies, pillars
+    shares = (1200, 1800, 1200, 1000, 800)  # instructions, rules, strategies,
+    #                                         pillars, recent journal lessons
     blocks: list[str] = []
 
     instr = read("instructions", acct)
@@ -475,6 +478,14 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
                    not in ln][:6]
         if pillars:
             blocks.append(_clip("CONTENT PILLARS:\n" + "\n".join(pillars), shares[3]))
+
+    # recent journal entries — the FRESHEST lessons were previously never
+    # shown to the agent at all; two entries is the working set that matters
+    journal_tail = parse_journal(read("journal", acct))[-2:]
+    if journal_tail:
+        jlines = [f"- {j.get('text', '')[:220]}" for j in journal_tail]
+        blocks.append(_clip("RECENT LESSONS (newest learnings — obey):" + chr(10)
+                            + chr(10).join(jlines), shares[4]))
 
     out = BRAIN_HEADER + "\n" + "\n\n".join(b for b in blocks if b.strip())
     return out[:budget]
