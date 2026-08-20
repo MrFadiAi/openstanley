@@ -577,6 +577,48 @@ async def metrics_refresh_ep():
         raise HTTPException(500, str(e)) from e
 
 
+class ThreadTopic(BaseModel):
+    topic: str
+
+
+_THREAD_SYSTEM = (
+    "You write a short X THREAD (3-6 tweets) in the user's voice. Output "
+    'STRICT JSON: {"thread": ["tweet 1", "tweet 2", ...]}. Rules: the first '
+    "tweet is the hook (under 200 chars, scroll-stopping); every tweet under "
+    "270 chars; each ends clean (no '1/'); plain text, no hashtags."
+)
+
+
+@app.post("/api/threads")
+async def threads_ep(body: ThreadTopic):
+    """Thread composer — topic -> a 3-6 tweet thread draft (approval-gated;
+    the publish loop ships it via post_thread)."""
+    from ..gen.llm import chat, extract_json
+    from ..gen import voice as voice_mod
+    topic = (body.topic or "").strip()
+    if not topic:
+        raise HTTPException(400, "topic required")
+    voice = voice_mod.load_rubric() if hasattr(voice_mod, "load_rubric") else ""
+    user = (f"TOPIC: {topic}" + chr(10) +
+            f"USER VOICE: {str(voice)[:400]}" + chr(10) + chr(10) +
+            "Write the thread now.")
+    raw = await asyncio.to_thread(chat, cfg.llm, _THREAD_SYSTEM, user,
+                                  None, True)
+    try:
+        data = extract_json(raw)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"thread generation failed — try again ({e})") from e
+    thread = ([str(t).strip() for t in (data.get("thread") or []) if str(t).strip()]
+              if isinstance(data, dict) else [])
+    if len(thread) < 2:
+        raise HTTPException(500, "thread generation failed — try again")
+    did = db.add_draft(text=thread[0], thread=thread, kind="post",
+                       temperature="bold",
+                       meta={"source": "thread-composer", "topic": topic})
+    db.log("threads", f"thread drafted #{did}: {len(thread)} tweets on '{topic[:40]}'")
+    return {"ok": True, "draft_id": did, "tweets": len(thread)}
+
+
 @app.get("/api/hooks")
 async def hooks_ep():
     """Steal-this-hook bank — patterns mined from niche winners."""

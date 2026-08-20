@@ -70,6 +70,7 @@ HELP_TEXT = (
     "(approval cards and /drafts carry one-tap buttons — tap, done)\n"
     "/img <id> — attach a photo to a draft (send the photo with this caption,\n"
     "           or just reply to a draft card with a photo)\n"
+    "/thread <topic> — compose a 3-6 tweet thread draft\n"
     "/post <text> — save your own text as a draft for review\n"
     "or just send a VOICE NOTE — heard, transcribed, drafted from your words\n"
     "/digest — today's report, on demand\n"
@@ -949,6 +950,24 @@ def _cmd_ideas() -> str:
         f"{BULLET} {idea['title']} (score {idea['score']})" for idea in ideas))
 
 
+def _cmd_thread(cfg: Config, args: str) -> str:
+    """/thread <topic> — compose a 3-6 tweet thread draft (approval-gated)."""
+    import httpx as _hx
+    topic = args.strip()
+    if not topic:
+        return "Usage: /thread <topic> — e.g. /thread lessons from my first month on X"
+    try:
+        r = _hx.post("http://127.0.0.1:7878/api/threads",
+                     json={"topic": topic}, timeout=120)
+        body = r.json()
+        if r.status_code == 200:
+            return (f"Thread drafted #{body['draft_id']} — {body['tweets']} tweets"
+                    " on your keyboard waiting: /drafts (or the card above)")
+        return f"Thread failed: {body.get('detail', r.status_code)}"
+    except Exception as e:  # noqa: BLE001
+        return f"Thread failed: {e}"
+
+
 def _cmd_drafts() -> str:
     return drafts_card(db.drafts_by_status("draft", DRAFTS_PAGE))
 
@@ -1327,6 +1346,8 @@ def _handle_update(cfg: Config, upd: dict) -> None:
         reply = reject_draft_tg(_int_arg(args, "reject"))
     elif name == "post":
         reply = post_draft_tg(cfg, args)
+    elif name == "thread":
+        reply = _cmd_thread(cfg, args)
     elif name == "digest":
         reply = _cmd_digest(cfg)
     elif name == "study":
