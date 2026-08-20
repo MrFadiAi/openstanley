@@ -577,6 +577,30 @@ async def metrics_refresh_ep():
         raise HTTPException(500, str(e)) from e
 
 
+@app.get("/api/hooks")
+async def hooks_ep():
+    """Steal-this-hook bank — patterns mined from niche winners."""
+    from ..gen import hooks as hooks_mod
+    return {"hooks": hooks_mod.list_hooks()}
+
+
+@app.post("/api/hooks/extract")
+async def hooks_extract_ep():
+    """(Re)mine patterns from the stored niche winners."""
+    from ..gen import hooks as hooks_mod
+    return await asyncio.to_thread(hooks_mod.extract, cfg)
+
+
+@app.post("/api/hooks/{hook_id}/remix")
+async def hooks_remix_ep(hook_id: int):
+    """Pattern -> a fresh draft in the user's voice (approval-gated)."""
+    from ..gen import hooks as hooks_mod
+    did = await asyncio.to_thread(hooks_mod.remix, cfg, hook_id)
+    if not did:
+        raise HTTPException(404, f"no hook {hook_id}")
+    return {"ok": True, "draft_id": did}
+
+
 @app.get("/api/insights/overview")
 async def insights_overview_ep():
     """Insights v2 — every aggregate the redesigned page renders, real data."""

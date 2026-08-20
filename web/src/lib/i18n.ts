@@ -201,6 +201,13 @@ const en = {
   'insights2.ms.likes_100': '100 likes',
 
   // ---- calendar ----
+  'hooks.title': 'Steal this hook',
+  'hooks.none': 'none yet — run /study or Extract to mine your niche winners',
+  'hooks.remix': 'Remix into a post',
+  'hooks.remixing': 'Writing…',
+  'hooks.remixed': 'Draft #{id} — waiting for your approval',
+  'hooks.remixFailed': 'Remix failed: {msg}',
+
   'calendar.title': 'Content Calendar',
   'calendar.subtitle': 'drag from the queue to schedule · green = published · dotted = awaiting approval',
   'calendar.month': 'Month',
@@ -856,6 +863,13 @@ const ar: Record<I18nKey, string> = {
   'insights2.ms.posts_10': '١٠ منشورات',
   'insights2.ms.posts_100': '١٠٠ منشور',
   'insights2.ms.likes_100': '١٠٠ إعجاب',
+
+  'hooks.title': 'سرق هذا الافتتاح',
+  'hooks.none': 'لا شيء بعد — شغّل /study لاستخراج أنماط المتصدرين',
+  'hooks.remix': 'اصنع منه منشوراً',
+  'hooks.remixing': 'يكتب…',
+  'hooks.remixed': 'مسودة #{id} — بانتظار موافقتك',
+  'hooks.remixFailed': 'فشل: {msg}',
 
   'calendar.title': 'تقويم المحتوى',
   'calendar.subtitle': 'اسحب من قائمة الانتظار للجدولة · الأخضر = منشور · المنقّط = بانتظار الاعتماد',

@@ -92,8 +92,16 @@ class Agent:
                 niche_new += 1
         # bank check right after the reads — usually pure DB mining (path a)
         rep = await ideas_mod.replenish(self.cfg, min_bank=16, x=self.x, acct=acct)
+        # steal-this-hook: winners are in the room — distill their patterns
+        hooks_added = 0
+        try:
+            from . import hooks as hooks_mod
+            res = await asyncio.to_thread(hooks_mod.extract, self.cfg, acct)
+            hooks_added = res.get("added", 0)
+        except Exception as e:  # noqa: BLE001 — patterns never block study
+            db.log("hooks", f"pattern extract skipped: {e}", level="warn")
         db.log("study", f"[account {acct}] study loop done: +{niche_new} niche posts, "
-                        f"bank={db.idea_count(acct)}")
+                        f"bank={db.idea_count(acct)}, hooks+{hooks_added}")
         return {"niche_new": niche_new, "bank": db.idea_count(acct),
                 "replenished": rep["added"], "account": acct}
 

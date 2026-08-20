@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/PageHeader';
+import { Sparkles } from 'lucide-react';
 import { useApp } from '@/lib/app-context';
 import {
   api,
@@ -30,6 +31,14 @@ const SRC_VARIANTS: Record<IdeaSource, 'cyan' | 'accent' | 'green' | 'amber'> = 
 const isIdeaSource = (s?: string): s is IdeaSource =>
   !!s && s in SRC_VARIANTS;
 
+interface HookPattern {
+  id: number;
+  pattern: string;
+  why: string;
+  example: string;
+  added_at?: string;
+}
+
 export function IdeasPage() {
   const { t, navigate } = useApp();
   const [ideas, setIdeas] = useState<Idea[] | null>(null);
@@ -53,6 +62,33 @@ export function IdeasPage() {
   };
 
   useEffect(load, []);
+
+  const [hooksL, setHooks] = useState<HookPattern[] | null>(null);
+  const [remixingId, setRemixingId] = useState<number | null>(null);
+  const loadHooks = (): void => {
+    void (async () => {
+      try {
+        const r = await api<{ hooks: HookPattern[] }>('hooks');
+        setHooks(r.hooks);
+      } catch {
+        setHooks([]);
+      }
+    })();
+  };
+  useEffect(loadHooks, []);
+  const remixHook = (id: number): void => {
+    setRemixingId(id);
+    void (async () => {
+      try {
+        const r = await apiPost<{ ok: boolean; draft_id: number }>(`hooks/${id}/remix`, {});
+        toast.success(t('hooks.remixed', { id: r.draft_id }));
+      } catch (e) {
+        toast.error(t('hooks.remixFailed', { msg: errMsg(e) }));
+      } finally {
+        setRemixingId(null);
+      }
+    })();
+  };
 
   const writeIt = (id: number): void => {
     setBusyId(id);
@@ -183,6 +219,40 @@ export function IdeasPage() {
             ))}
           </div>
         )}
+
+        {/* — steal this hook — */}
+        <div className="mt-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-1.5 font-serif text-[19px]">
+              <Sparkles size={15} className="text-accent-ink" />
+              {t('hooks.title')}
+            </h2>
+            <span className="font-serif text-[12.5px] italic text-ink-3">
+              {hooksL === null ? '' : hooksL.length === 0 ? t('hooks.none') : `${hooksL.length}`}
+            </span>
+          </div>
+          {hooksL !== null && hooksL.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {hooksL.map((h) => (
+                <div key={h.id} className="rounded-xl border border-edge bg-panel p-4">
+                  <div className="font-serif text-[15px] leading-snug">{h.pattern}</div>
+                  <div className="mt-1.5 text-[12.5px] text-muted">{h.why}</div>
+                  {h.example ? (
+                    <div className="mt-1.5 border-s-2 border-line ps-2 text-[12px] italic text-ink-3">
+                      {h.example}
+                    </div>
+                  ) : null}
+                  <div className="mt-3">
+                    <Button size="sm" variant="primary" disabled={remixingId !== null}
+                            onClick={() => remixHook(h.id)}>
+                      {remixingId === h.id ? t('hooks.remixing') : t('hooks.remix')}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
