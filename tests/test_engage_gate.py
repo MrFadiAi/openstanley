@@ -60,37 +60,37 @@ def test_recency_full_then_linear_decay_to_zero():
     assert abs(mid.recency - 0.5) < 0.02, mid.recency
     day = engage_gate.score_target(
         cfg, _tweet(created_at=(NOW - timedelta(hours=24)).isoformat()), NOW)
-    assert day.recency == 0.0 and day.score > 0, \
-        "24h = zero recency points, NOT a hard reject"
+    assert day.recency == 0.0 and day.score == 0, \
+        "24h = the hard wall — no traction/fit can buy a day-old thread"
 
 
-def test_recency_hard_reject_over_48h():
+def test_recency_hard_reject_over_24h():
     cfg = Config()
     stale = engage_gate.score_target(
-        cfg, _tweet(created_at=(NOW - timedelta(hours=49)).isoformat()), NOW)
+        cfg, _tweet(created_at=(NOW - timedelta(hours=25)).isoformat()), NOW)
     assert stale.score == 0
     assert any("hard reject" in r for r in stale.reasons)
     kept, rejected = engage_gate.filter_targets(
         cfg, [_tweet(created_at=(NOW - timedelta(hours=72)).isoformat(),
                      x_id="dead")], NOW)
     assert kept == [] and len(rejected) == 1
+    # the leak the old gate had: 24-48h old + hot on other axes used to pass
+    hot_old = _tweet(created_at=(NOW - timedelta(hours=30)).isoformat(),
+                     replies=200, likes=5000, x_id="hot-but-old")
+    s = engage_gate.score_target(cfg, hot_old, NOW)
+    assert s.score == 0, "no score can rescue a 30h-old conversation"
 
 
-def test_missing_created_at_warns_not_rejects():
+def test_missing_created_at_hard_rejects():
     _clean_db()
     cfg = Config()
     ts = engage_gate.score_target(cfg, _tweet(created_at=None), NOW)
     assert ts.age_h is None
-    assert ts.recency == 0.5, "unknown age → neutral, never a guess"
-    assert ts.score > 0, "missing created_at must not hard-reject"
-    assert any("WARN" in r for r in ts.reasons)
-    # the WARN surfaces in the log for the debug view
-    engage_gate.filter_targets(cfg, [_tweet(x_id="n1", created_at=None)], NOW)
-    with db.connect() as c:
-        rows = c.execute(
-            "SELECT level FROM agent_log WHERE loop='engage' "
-            "AND message LIKE '%missing created_at%'").fetchall()
-    assert rows and rows[0]["level"] == "warn"
+    assert ts.score == 0, "unknown age is treated as old, never neutral"
+    assert any("hard reject" in r for r in ts.reasons)
+    kept, rejected = engage_gate.filter_targets(
+        cfg, [_tweet(x_id="n1", created_at=None)], NOW)
+    assert kept == [] and len(rejected) == 1
 
 
 def test_traction_log_scale_monotonic():
@@ -124,18 +124,20 @@ def test_composite_matches_configured_weights():
     cfg.agent.engage_gate = {
         "weights": {"recency": 0.5, "traction": 0.5},  # override defaults
         "threshold": 10, "max_targets": 12}
-    tweet = _tweet(created_at=None, likes=0, reposts=0, replies=8)
-    # recency .5 (unknown), traction 0, everything else must not leak in
+    tweet = _tweet(created_at=(NOW - timedelta(hours=1)).isoformat(),
+                   likes=0, reposts=0, replies=8)
+    # fresh (recency 1.0), traction 0, other factors must not leak in
     ts = engage_gate.score_target(cfg, tweet, NOW)
-    assert ts.score == 25, \
-        "renormalized weights: 100 * (.5*.5 + .5*0) / (.5+.5) == 25"
-    # default weights: hand-check the weighted sum
+    assert ts.score == 50, \
+        "configured weights: 100 * (.5*1 + .5*0) == 50 — unweighted factors stay out"
+    # default weights: hand-check the weighted sum on a KNOWN-age tweet
     cfg2 = Config()
-    t2 = _tweet(created_at=None, replies=8)
+    t2 = _tweet(created_at=(NOW - timedelta(hours=2)).isoformat(), replies=8)
     ts2 = engage_gate.score_target(cfg2, t2, NOW)
     w = engage_gate.gate_cfg(cfg2)["weights"]
-    expected = 100 * (w["recency"] * 0.5 + w["traction"] * ts2.traction +
-                      w["author"] * 0.5 + w["crowding"] * 1.0 +
+    expected = 100 * (w["recency"] * ts2.recency + w["traction"] * ts2.traction +
+                      w["author"] * ts2.author_surface +
+                      w["crowding"] * ts2.crowding +
                       w["fit"] * ts2.niche_fit) / sum(w.values())
     assert ts2.score == round(expected)
 

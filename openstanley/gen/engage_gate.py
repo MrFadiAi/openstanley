@@ -8,7 +8,7 @@ Five fast heuristic layers, each 0-1:
 
   recency        tweet age — full points < 3h, linear decay to 0 at 24h,
                  hard reject > 48h (the X reply window is ~2-6h; after
-                 that a reply is noise). Missing created_at → WARN, not
+                 that a reply is noise). Missing created_at → reject:
                  reject: recency goes neutral 0.5.
   traction       log-scaled likes+reposts of the TARGET tweet — a rising
                  tweet is a surface; 500 combined interactions ≈ full.
@@ -44,7 +44,9 @@ from ..core.config import Config
 
 FRESH_H = 3.0          # full recency points below this age
 DECAY_H = 24.0         # recency hits 0 here
-STALE_H = 48.0         # hard reject: the conversation is dead
+# 24h is the hard wall (user rule 2026-08-20): older conversations are
+# DEAD — no amount of traction/fit buys a reply into a day-old thread.
+STALE_H = DECAY_H       # hard reject beyond the reply window
 TRACTION_FULL = 500.0  # likes+reposts that score full traction
 AUTHOR_FULL = 200.0    # author avg likes+reposts+replies that score full
 CROWD_SWEET = (1, 15)  # reply_count sweet spot (inclusive)
@@ -68,7 +70,7 @@ class TargetScore:
     author_surface: float
     crowding: float
     niche_fit: float
-    age_h: Optional[float] = None   # parsed age; None = unknown → WARN path
+    age_h: Optional[float] = None   # parsed age; None = unknown → hard reject
     verdict: str = ""               # fresh | rising | warm | stale
     reasons: list[str] = field(default_factory=list)
 
@@ -125,7 +127,7 @@ def _age_hours(tweet: dict, now: datetime) -> tuple[Optional[float], bool]:
 
 def _recency(age_h: Optional[float]) -> tuple[float, list[str]]:
     if age_h is None:
-        return 0.5, ["created_at missing — recency neutral (WARN)"]
+        return 0.0, ["created_at missing — age unknown, hard reject"]
     if age_h <= FRESH_H:
         return 1.0, []
     if age_h >= STALE_H:
@@ -228,7 +230,9 @@ def score_target(cfg: Config, tweet: dict, now: datetime) -> TargetScore:
     fit, notes = _niche_fit(tweet.get("text") or "", _niche_terms(cfg))
     reasons.extend(notes)
 
-    hard_reject = parseable and age_h is not None and age_h > STALE_H
+    # age can never be proven fresh → never engageable (user rule
+    # 2026-08-20: unknown age is treated as old, not neutral)
+    hard_reject = age_h is None or age_h >= STALE_H
     if hard_reject:
         score = 0
     else:
