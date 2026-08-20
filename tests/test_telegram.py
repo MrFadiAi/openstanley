@@ -986,3 +986,55 @@ def test_int_arg_accepts_hash_prefix():
     assert tg._int_arg("2379", "approve") == 2379
     assert tg._int_arg("", "approve") == -1
     assert tg._int_arg("#nope", "approve") == -1
+
+
+# ---------------- live approval card (decisions update the message) ----------------
+
+def test_approve_updates_card_keeps_other_buttons(monkeypatch):
+    """User rule: approving one draft must NOT orphan the others — the card
+    rewrites with outcomes, pending drafts keep their buttons."""
+    _enable()
+    d1 = db.add_draft(text="first to approve")
+    d2 = db.add_draft(text="stays pending")
+    monkeypatch.setattr(slots_mod, "pick_slot_with_reason",
+                        lambda cfg, kind, now: (datetime(2030, 1, 3, 9, 0, 0), "cadence"))
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._card_map.clear()
+    tg.notify_new_drafts([d1, d2])                 # card message_id 4242, map recorded
+    tg._handle_update(CFG, _cb_update("cb1", f"a:{d1}", msg_id=4242))
+    edited = [p for _u, m, p in fake.calls if m == "editMessageText"]
+    assert edited, "card must be rewritten in place"
+    text = edited[-1]["text"]
+    assert f"#{d1}" in text and "scheduled" in text
+    assert f"#{d2}" in text and "first" not in text[:20]   # d2 still listed pending
+    markup = [p for _u, m, p in fake.calls if m == "editMessageReplyMarkup"][-1]
+    kb = json.loads(markup["reply_markup"])
+    datas = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+    assert f"a:{d2}" in datas and f"a:{d1}" not in datas
+
+
+def test_reject_updates_card_too(monkeypatch):
+    _enable()
+    d1 = db.add_draft(text="rejected one")
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._card_map.clear()
+    tg.notify_new_drafts([d1])
+    tg._handle_update(CFG, _cb_update("cb2", f"r:{d1}", msg_id=4242))
+    edited = [p for _u, m, p in fake.calls if m == "editMessageText"]
+    assert any("rejected" in p["text"] for p in edited)
+
+
+def test_all_decided_clears_buttons(monkeypatch):
+    _enable()
+    d1 = db.add_draft(text="only one")
+    monkeypatch.setattr(slots_mod, "pick_slot_with_reason",
+                        lambda cfg, kind, now: (datetime(2030, 1, 4, 9, 0, 0), "cadence"))
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._card_map.clear()
+    tg.notify_new_drafts([d1])
+    tg._handle_update(CFG, _cb_update("cb3", f"a:{d1}", msg_id=4242))
+    markup = [p for _u, m, p in fake.calls if m == "editMessageReplyMarkup"][-1]
+    assert "reply_markup" not in markup           # nothing pending → no buttons

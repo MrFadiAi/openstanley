@@ -1163,6 +1163,51 @@ def handle_update(cfg: Config, upd: dict) -> None:
         db.log("telegram", f"update handler error: {e}", level="error")
 
 
+def _fmt_slot(iso: str) -> str:
+    """'2026-08-21T09:00:00' → 'Fri 09:00' — the card shows WHEN it ships."""
+    try:
+        return datetime.fromisoformat(iso).strftime("%a %H:%M")
+    except ValueError:
+        return iso[:16].replace("T", " ")
+
+
+def _card_status_line(d: dict) -> str:
+    """One line per draft on the live approval card."""
+    if d["status"] == "rejected":
+        return f"❌ #{d['id']} — rejected"
+    if d["status"] == "published":
+        return f"✅ #{d['id']} — live on X"
+    if d["status"] == "approved" and d.get("scheduled_at"):
+        return f"✅ #{d['id']} — scheduled {_fmt_slot(d['scheduled_at'])}"
+    return f"⏳ #{d['id']} — {(d.get('text') or '').strip()[:60]}"
+
+
+def _rebuild_card(chat_id: int, message_id: int) -> None:
+    """The approval card is LIVE: every decision rewrites this message —
+    decided drafts show their outcome (and their slot), pending drafts keep
+    their one-tap buttons. Nobody disappears; everything stays visible."""
+    token = bot_token()
+    ids = (_card_map.get(chat_id) or {}).get(message_id)
+    if not token or not message_id:
+        return
+    if not ids:
+        # unknown message (e.g. an old card from before this feature) —
+        # just drop its buttons so no stale tap fires twice
+        _api(token, "editMessageReplyMarkup",
+             {"chat_id": chat_id, "message_id": message_id})
+        return
+    rows = [r for r in (db.get_draft(i) for i in ids) if r]
+    pending = [r["id"] for r in rows if r["status"] == "draft"]
+    lines = ["⏳ Approvals — tap a button; this card tracks the rest:"]
+    lines.extend(_card_status_line(r) for r in rows)
+    lines.append("")
+    lines.append("/drafts — full previews")
+    _api_edit_text(token, chat_id, message_id, chr(10).join(lines))
+    markup = {"reply_markup": _approve_keyboard(pending)} if pending else {}
+    _api(token, "editMessageReplyMarkup",
+         {"chat_id": chat_id, "message_id": message_id, **markup})
+
+
 def _handle_callback(cfg: Config, cb: dict) -> None:
     """Inline-button tap (approve/reject). One tap = one decision: the
     callback gets answered (spinner stops, result as toast) and the card's
@@ -1191,8 +1236,7 @@ def _handle_callback(cfg: Config, cb: dict) -> None:
         reply = "unknown button"
     _api(token, "answerCallbackQuery",
          {"callback_query_id": cb.get("id"), "text": reply[:190]})
-    _api(token, "editMessageReplyMarkup",
-         {"chat_id": chat_id, "message_id": msg.get("message_id")})
+    _rebuild_card(chat_id, msg.get("message_id"))
 
 
 def _handle_update(cfg: Config, upd: dict) -> None:
@@ -1236,9 +1280,11 @@ def _handle_update(cfg: Config, upd: dict) -> None:
         reply = _cmd_ideas()
     elif name == "drafts":
         reply = _cmd_drafts()
-        reply_markup = _approve_keyboard(
-            [d["id"] for d in db.drafts_by_status("draft", DRAFTS_PAGE)])
-        send_message(chat_id, reply, reply_markup=reply_markup or None)
+        ids = [d["id"] for d in db.drafts_by_status("draft", DRAFTS_PAGE)]
+        r = send_message(chat_id, reply,
+                         reply_markup=_approve_keyboard(ids) or None)
+        if r.get("message_id"):
+            _card_map.setdefault(chat_id, {})[r["message_id"]] = ids
         return
     elif name == "approve":
         reply = approve_draft_tg(cfg, _int_arg(args, "approve"))
