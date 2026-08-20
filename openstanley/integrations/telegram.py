@@ -70,8 +70,7 @@ HELP_TEXT = (
     "(approval cards and /drafts carry one-tap buttons — tap, done)\n"
     "/img <id> — attach a photo to a draft (send the photo with this caption,\n"
     "           or just reply to a draft card with a photo)\n"
-    "/post <text> — save your own text as a draft for review
-"
+    "/post <text> — save your own text as a draft for review\n"
     "or just send a VOICE NOTE — heard, transcribed, drafted from your words\n"
     "/digest — today's report, on demand\n"
     "/study — study your X account fully & refresh my brain\n"
