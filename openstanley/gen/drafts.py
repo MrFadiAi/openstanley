@@ -150,7 +150,8 @@ def generate_quote_draft(cfg: Config, tweet: dict, angle: str = "") -> int:
 
 def _draft_one(cfg: Config, idea: dict, temp: str, language: str | None = None,
                quote: dict | None = None, image: str | None = None) -> dict | None:
-    t = {"safe": 0.7, "bold": 0.95, "experimental": 1.15}[temp]
+    # z.ai rejects temperature > 1 — experimental tops out AT the cap
+    t = {"safe": 0.7, "bold": 0.95, "experimental": 1.0}[temp]
     voice = voice_prompt_block(language)
     user = f"""IDEA: {idea['title']}
 ANGLE: {idea['angle']}
