@@ -39,10 +39,26 @@ Rules:
 VOICE_MATCH_THRESHOLD = 55
 
 
+QUEUE_DEEP = 12   # pending drafts at which create stops adding (user value:
+                  # production must never outrun approval by 10x again)
+
+
 def generate_drafts(cfg: Config, count: int = None,
                      acct: int | None = None) -> list[int]:
-    """Create `count` drafts from the freshest ideas of ONE account."""
+    """Create `count` drafts from the freshest ideas of ONE account.
+
+    Queue-aware: when the approval queue is already deep the loop drafts
+    less or nothing, production follows the human's actual pace."""
     count = count or cfg.agent.daily_draft_target
+    with db.connect() as c:
+        (pending,) = c.execute(
+            "SELECT COUNT(*) FROM drafts WHERE account_id=? AND status='draft'",
+            (db._acct(acct),)).fetchone()
+    if pending >= QUEUE_DEEP:
+        db.log("create", f"queue deep ({pending} pending >= {QUEUE_DEEP}) "
+                        f", skipping this round, approve or reject first")
+        return []
+    count = max(1, min(count, QUEUE_DEEP - pending))
     ideas = db.fresh_ideas(limit=count, acct=acct)
     if not ideas:
         db.log("create", f"[account {db._acct(acct)}] no fresh ideas — run study loop first")

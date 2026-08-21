@@ -1935,6 +1935,19 @@ def start_scheduler():
             db.log("metrics", f"nightly refresh: {res.get('refreshed')} posts captured")
         except Exception as e:  # noqa: BLE001
             db.log("metrics", f"nightly refresh failed: {e}", level="error")
+        # expire unapproved drafts older than 3 days — a stale queue is noise,
+        # not opportunity; production follows the human's approval pace
+        try:
+            from datetime import timedelta
+            cutoff = (datetime.now() - timedelta(days=3)).isoformat(timespec="seconds")
+            with db.connect() as c:
+                cur = c.execute("UPDATE drafts SET status='rejected' "
+                                "WHERE status='draft' AND created_at < ?", (cutoff,))
+                n = cur.rowcount
+            if n:
+                db.log("create", f"expired {n} unapproved drafts older than 3 days")
+        except Exception as e:  # noqa: BLE001
+            db.log("metrics", f"draft expiry sweep failed: {e}", level="warn")
 
     sched.add_job(_metrics_job, CronTrigger(hour=4, minute=17),
                   id="metrics_refresh")
