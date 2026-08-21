@@ -297,22 +297,50 @@ class XCookie(XClient):
         c = await self._ensure()
         await self._throttle_reads()
         u = await c.get_user_by_screen_name(username)
-        tl = await c.get_user_tweets(u.id, tweet_type="Tweets", count=min(limit, 100))
-        out = []
-        for t in tl:
-            out.append(self._tw(t, own=(username == self.username)))
-        return out
+        # page through the timeline until `limit` or the well runs dry —
+        # twikit returns ≤100/page, and a fresh account deserves its history
+        out: list[dict] = []
+        cursor = None
+        seen: set[str] = set()
+        while len(out) < limit:
+            tl = await c.get_user_tweets(u.id, tweet_type="Tweets",
+                                         count=min(limit - len(out), 100),
+                                         cursor=cursor)
+            for t in tl:
+                tid = str(getattr(t, "id", ""))
+                if tid and tid in seen:
+                    continue
+                if tid:
+                    seen.add(tid)
+                out.append(self._tw(t, own=(username == self.username)))
+            cursor = getattr(tl, "next_cursor", None)
+            if not cursor or not tl:
+                break
+        return out[:limit]
 
     @_auto_heal()
     async def user_replies(self, username: str, limit: int = 100) -> list[dict]:
         c = await self._ensure()
         await self._throttle_reads()
         u = await c.get_user_by_screen_name(username)
-        tl = await c.get_user_tweets(u.id, tweet_type="Replies", count=min(limit, 100))
-        out = []
-        for t in tl:
-            out.append(self._tw(t, own=(username == self.username)))
-        return out
+        out: list[dict] = []
+        cursor = None
+        seen: set[str] = set()
+        while len(out) < limit:
+            tl = await c.get_user_tweets(u.id, tweet_type="Replies",
+                                         count=min(limit - len(out), 100),
+                                         cursor=cursor)
+            for t in tl:
+                tid = str(getattr(t, "id", ""))
+                if tid and tid in seen:
+                    continue
+                if tid:
+                    seen.add(tid)
+                out.append(self._tw(t, own=(username == self.username)))
+            cursor = getattr(tl, "next_cursor", None)
+            if not cursor or not tl:
+                break
+        return out[:limit]
 
     @_auto_heal()
     async def get_tweet(self, x_id: str) -> dict:
