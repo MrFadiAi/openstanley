@@ -950,6 +950,36 @@ def _cmd_ideas() -> str:
         f"{BULLET} {idea['title']} (score {idea['score']})" for idea in ideas))
 
 
+def _latest_draft_id() -> int:
+    with db.connect() as c:
+        (m,) = c.execute("SELECT MAX(id) FROM drafts").fetchone() or (0,)
+        return int(m or 0)
+
+
+def _push_mini_card(chat_id: int, before_id: int) -> None:
+    """Anything that created a draft during this TG interaction gets a
+    one-tap approve/reject card right after — chat candidates, /thread,
+    /post, tool saves. Tapping behaves exactly like the loop cards
+    (live rewrite, slot shown)."""
+    try:
+        with db.connect() as c:
+            rows = c.execute(
+                "SELECT id, substr(text,1,80) FROM drafts "
+                "WHERE id > ? AND status = 'draft' ORDER BY id LIMIT 5",
+                (before_id,)).fetchall()
+    except Exception:  # noqa: BLE001
+        return
+    if not rows:
+        return
+    ids = [r["id"] for r in rows]
+    lines = ["saved, your call:"]
+    lines += [f"#{r['id']}, {r[1]}" for r in rows]
+    r = send_message(chat_id, chr(10).join(lines),
+                     reply_markup=_approve_keyboard(ids))
+    if r.get("message_id"):
+        _card_map.setdefault(chat_id, {})[r["message_id"]] = ids
+
+
 def _cmd_thread(cfg: Config, args: str) -> str:
     """/thread <topic> — compose a 3-6 tweet thread draft (approval-gated)."""
     import httpx as _hx
@@ -1323,7 +1353,9 @@ def _handle_update(cfg: Config, upd: dict) -> None:
 
     cmd = parse_command(text)
     if cmd is None:
+        before = _latest_draft_id()
         send_stream(chat_id, chat_reply_tg_stream(cfg, chat_id, text))
+        _push_mini_card(chat_id, before)
         return
     name, args = cmd
     if name in ("start", "help"):
@@ -1345,9 +1377,17 @@ def _handle_update(cfg: Config, upd: dict) -> None:
     elif name == "reject":
         reply = reject_draft_tg(_int_arg(args, "reject"))
     elif name == "post":
+        before = _latest_draft_id()
         reply = post_draft_tg(cfg, args)
+        send_message(chat_id, reply)
+        _push_mini_card(chat_id, before)
+        return
     elif name == "thread":
+        before = _latest_draft_id()
         reply = _cmd_thread(cfg, args)
+        send_message(chat_id, reply)
+        _push_mini_card(chat_id, before)
+        return
     elif name == "digest":
         reply = _cmd_digest(cfg)
     elif name == "study":

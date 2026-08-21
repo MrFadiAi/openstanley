@@ -335,7 +335,7 @@ def test_post_creates_voice_locked_draft_with_source_tg(monkeypatch):
     assert "queued" in sent_text.lower()
     # too-short text gets a nudge instead of a draft
     tg.handle_update(CFG, _upd(2, CHAT, "/post hi"))
-    assert "15+" in fake.sent()[1][1]
+    assert any("15+" in t for _c, t in fake.sent())
 
 
 # ---------------- chat over the dashboard engine ----------------
@@ -1078,3 +1078,33 @@ def test_voice_note_stranger_refused(monkeypatch):
     monkeypatch.setattr(tg, "httpx", fake)
     tg._handle_update(CFG, _voice_update(chat_id=666999))
     assert calls == []                              # never transcribed
+
+
+# ---------------- mini one-tap cards after chat-born drafts ----------------
+
+def test_mini_card_after_chat_draft(monkeypatch):
+    """Ask Stanley in chat, a draft gets saved, a tappable card follows."""
+    _enable()
+    before = tg._latest_draft_id()
+    d = db.add_draft(text="hot take born in chat")   # simulate the chat save
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._push_mini_card(CHAT, before)
+    sends = [(u, p) for u, m, p in fake.calls if m == "sendMessage"]
+    assert sends and "reply_markup" in sends[-1][1]
+    kb = json.loads(sends[-1][1]["reply_markup"])
+    datas = [b["callback_data"] for row in kb["inline_keyboard"] for b in row]
+    assert f"a:{d}" in datas
+    assert 4242 in tg._card_map.get(CHAT, {})          # live-card registered
+    with db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id=?", (d,))
+
+
+def test_no_mini_card_when_nothing_created(monkeypatch):
+    _enable()
+    before = tg._latest_draft_id()
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._push_mini_card(CHAT, before)
+    sends = [(u, p) for u, m, p in fake.calls if m == "sendMessage"]
+    assert not [p for u, p in sends if "reply_markup" in p]
