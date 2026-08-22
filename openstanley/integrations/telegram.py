@@ -1084,13 +1084,17 @@ def approve_draft_tg(cfg: Config, draft_id: int) -> str:
 
 
 def _next_static_slot(cfg: Config) -> str:
+    """Next cadence slot that isn't already holding an approved draft —
+    mass one-tap approvals must spread, not stack on one 09:00."""
+    from ..gen.slots import nudge_free, taken_slots
     now = datetime.now()
-    for offset in range(3):
+    for _offset in range(3):
         for t in (cfg.agent.post_times or ["09:00"]):
             hh, mm = map(int, str(t).split(":")[:2])
             slot = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
             if slot > now:
-                return slot.isoformat(timespec="seconds")
+                at, _why = nudge_free(slot, cfg, taken_slots())
+                return at.isoformat(timespec="seconds")
     return (now.replace(second=0, microsecond=0)).isoformat(timespec="seconds")
 
 

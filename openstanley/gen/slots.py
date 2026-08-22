@@ -166,6 +166,41 @@ def pick_slot(cfg: Config, draft_kind: str, now: datetime) -> datetime:
     return pick_slot_with_reason(cfg, draft_kind, now)[0]
 
 
+def taken_slots(acct: Optional[int] = None) -> set[str]:
+    """ISO timestamps already occupied by approved-but-unpublished drafts.
+    Slot picking must never stack 14 posts onto one 09:00 (user report
+    2026-08-21: mass one-tap approvals all landed on the same slot)."""
+    with db.connect() as c:
+        rows = c.execute(
+            "SELECT scheduled_at FROM drafts WHERE account_id=? "
+            "AND status='approved' AND scheduled_at IS NOT NULL",
+            (db.active_account() if acct is None else acct,)).fetchall()
+    return {r["scheduled_at"][:16] for r in rows if r["scheduled_at"]}
+
+
+def nudge_free(at: datetime, cfg: Config, taken: set[str],
+               horizon_days: int = 14) -> tuple[datetime, str]:
+    """If `at` is taken, walk day by day / slot by slot until a free one.
+    Returns the original `at` untouched when it's free."""
+    key = at.isoformat(timespec="minutes")[:16]
+    if key not in taken:
+        return at, ""
+    times = sorted(cfg.agent.post_times or ["09:00", "13:00", "18:00"])
+    per_day = cfg.x.max_posts_per_day or 4
+    cur = at.date()
+    for _d in range(horizon_days):
+        by_day = {t[:10] for t in taken}
+        for ts in times:
+            h, m = (int(x) for x in ts.split(":")[:2])
+            cand = datetime.combine(cur, dtime(h, m))
+            k2 = cand.isoformat(timespec="minutes")[:16]
+            same_day = sum(1 for t in taken if t[:10] == cur.isoformat())
+            if k2 not in taken and same_day < per_day and cand > datetime.now():
+                return cand, f"spread to {k2} ({k2[:10]} had {same_day} queued)"
+        cur += timedelta(days=1)
+    return at, ""
+
+
 def pick_slot_with_reason(cfg: Config, draft_kind: str,
                           now: datetime) -> tuple[datetime, str]:
     """The scheduling decision, with its reason.
@@ -183,9 +218,16 @@ def pick_slot_with_reason(cfg: Config, draft_kind: str,
         chosen = (min(window, key=lambda s: s["at"]) if window else ranked[0])
     else:
         chosen = ranked[0]
-    db.log("slots", f"picked {chosen['at'].isoformat(timespec='minutes')} for "
-                    f"{draft_kind}: {chosen['reason']}")
-    return chosen["at"], chosen["reason"]
+    at = chosen["at"]
+    reason = chosen["reason"]
+    taken = taken_slots()
+    if at.isoformat(timespec="minutes")[:16] in taken:
+        at, nudge = nudge_free(at, cfg, taken)
+        if nudge:
+            reason = f"{reason} · {nudge}"
+    db.log("slots", f"picked {at.isoformat(timespec='minutes')} for "
+                    f"{draft_kind}: {reason}")
+    return at, reason
 
 
 def day_slots(cfg: Config, day: date, now: Optional[datetime] = None,

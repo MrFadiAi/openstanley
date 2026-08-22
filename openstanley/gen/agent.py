@@ -243,18 +243,24 @@ class Agent:
                 db.log("publish", f"[account {acct}] published draft {nxt['id']} → x_id={x_id}")
                 published.append({"draft_id": nxt["id"], "x_id": x_id})
             except SafetyCapExceeded as e:
-                # reschedule to tomorrow's best slot — never lose approved content
+                # reschedule to the next FREE slot — cap-bounced drafts must
+                # spread across days/times, not pile onto tomorrow 09:00
+                from . import slots as slots_mod
+                tomorrow = (datetime.now() + timedelta(days=1)).date()
                 if self.cfg.agent.smart_slots:
-                    from . import slots as slots_mod
-                    tomorrow = (datetime.now() + timedelta(days=1)).date()
                     best = slots_mod.day_slots(self.cfg, tomorrow)
-                    tmr = best[0]["at"].isoformat(timespec="seconds") if best else \
-                        (datetime.now() + timedelta(days=1)).isoformat(timespec="seconds")
+                    base_at = best[0]["at"] if best else \
+                        datetime.combine(tomorrow, datetime.min.time()) + timedelta(hours=9)
                 else:
-                    tmr = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d") + "T" + \
-                          (self.cfg.agent.post_times[0] if self.cfg.agent.post_times else "09:00") + ":00"
+                    t0 = (self.cfg.agent.post_times or ["09:00"])[0]
+                    hh, mm = (int(x) for x in str(t0).split(":")[:2])
+                    base_at = datetime.combine(tomorrow, datetime.min.time()) + timedelta(hours=hh, minutes=mm)
+                at, why = slots_mod.nudge_free(base_at, self.cfg,
+                                               slots_mod.taken_slots(acct))
+                tmr = at.isoformat(timespec="seconds")
                 db.update_draft(nxt["id"], acct=acct, scheduled_at=tmr)
-                db.log("publish", f"[account {acct}] daily cap reached — draft {nxt['id']} rescheduled to {tmr}", level="warn")
+                db.log("publish", f"[account {acct}] daily cap reached — draft {nxt['id']} rescheduled to {tmr}"
+                       + (f" ({why})" if why else ""), level="warn")
                 break
             except Exception as e:  # noqa: BLE001
                 db.log("publish", f"[account {acct}] draft {nxt['id']} failed: {e}", level="error")
