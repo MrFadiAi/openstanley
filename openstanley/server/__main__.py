@@ -528,6 +528,9 @@ async def approve_draft(draft_id: int, body: DraftAction | None = None):
 
 
 def _next_slot():
+    """Next FREE cadence slot — collision-aware like every other picker, so
+    mass-approving on the web Inbox can never stack onto one timestamp."""
+    from ..gen.slots import nudge_free, taken_slots
     times = cfg.agent.post_times
     now = datetime.now()
     for offset_days in range(3):
@@ -535,7 +538,8 @@ def _next_slot():
             hh, mm = map(int, t.split(":"))
             slot = now.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(days=offset_days)
             if slot > now:
-                return slot.isoformat(timespec="seconds")
+                at, _why = nudge_free(slot, cfg, taken_slots())
+                return at.isoformat(timespec="seconds")
     return (now + timedelta(hours=1)).isoformat(timespec="seconds")
 
 
@@ -1997,6 +2001,23 @@ async def on_startup():
         db.log("system", "scheduler disabled (OPENSTANLEY_NO_SCHEDULER=1)")
     else:
         scheduler = start_scheduler()
+    # pre-warm the voice model in the background — the FIRST voice note
+    # otherwise downloads ~75MB inside the chat handler and the bot goes
+    # silent for minutes (user-facing latency, not correctness)
+    import os as _os
+    if _os.environ.get("OPENSTANLEY_NO_TELEGRAM") != "1":
+        import threading as _th
+
+        def _warm():
+            try:
+                from ..gen.voice_notes import _get_model
+                _get_model()
+                db.log("voice", "whisper model warm")
+            except Exception as e:  # noqa: BLE001 — warm is best-effort
+                db.log("voice", f"model warm skipped: {e}", level="warn")
+
+        _th.Thread(target=_warm, daemon=True, name="whisper-warm").start()
+
     # v0.4.4 — Telegram poller (no-op unless enabled + token; tests set
     # OPENSTANLEY_NO_TELEGRAM=1 so no TestClient boot ever touches the network)
     await telegram_mod.start(cfg)

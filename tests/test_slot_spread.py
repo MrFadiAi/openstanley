@@ -66,3 +66,19 @@ def test_taken_slots_reads_approved_only():
     taken = slots_mod.taken_slots()
     assert "2026-09-01T09:00" in taken
     _clear()
+
+
+def test_web_next_slot_spreads_too(monkeypatch):
+    """The server's static picker must respect taken slots (web Inbox path)."""
+    from openstanley.server import __main__ as srv
+    base = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    with db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id >= 960000")
+    for i in range(3):
+        d = db.add_draft(text=f"web busy {i}", acct=1)
+        db.update_draft(d, acct=1, status="approved",
+                        scheduled_at=f"{base}T09:00:00")
+    picked = srv._next_slot()
+    assert picked[:10] != base or picked[11:16] != "09:00", picked
+    with db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id >= 960000")

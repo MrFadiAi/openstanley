@@ -261,7 +261,8 @@ class Agent:
                 db.update_draft(nxt["id"], acct=acct, scheduled_at=tmr)
                 db.log("publish", f"[account {acct}] daily cap reached — draft {nxt['id']} rescheduled to {tmr}"
                        + (f" ({why})" if why else ""), level="warn")
-                break
+                continue  # a post hitting the 4/day cap must not block a
+                          # reply that still has its own 10/day budget
             except Exception as e:  # noqa: BLE001
                 db.log("publish", f"[account {acct}] draft {nxt['id']} failed: {e}", level="error")
                 db.update_draft(nxt["id"], acct=acct, status="failed")
