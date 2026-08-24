@@ -359,10 +359,18 @@ def _tool_trend_post(cfg, topic: str = "", source: str = "web") -> dict:
     text = (data.get("text") or "").strip() if isinstance(data, dict) else ""
     if not text:
         return {"ok": True, "error": "draft generation failed — try again"}
+    # eligible trend posts get the auto hook-card, same as the create loop
+    image = None
+    try:
+        from . import quote_card
+        image = quote_card.make_card(text)
+    except Exception:  # noqa: BLE001 — never lose the draft over art
+        image = None
     did = db_mod.add_draft(text=text, kind="post", temperature="bold",
+                           image=image,
                            meta={"source": "trend-post", "topic": topic,
                                  "search_source": where})
-    return {"ok": True, "draft_id": did, "text": text,
+    return {"ok": True, "draft_id": did, "text": text, "image": image,
             "sources": [r.get("url") or r.get("author") for r in found[:3]]}
 
 
