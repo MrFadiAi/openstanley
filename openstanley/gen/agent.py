@@ -219,7 +219,10 @@ class Agent:
         import time as _time
         t0 = _time.time()
         acct = db.active_account()
-        me = db.get_me(acct) or await self.x.me()
+        try:
+            me = await self.x.me()          # live identity wins — training
+        except Exception:                    # noqa: BLE001 — stored is a fine
+            me = db.get_me(acct) or {}       # fallback when X is unreachable
         db.set_me(me, acct)
 
         # 1. full history: own posts + own replies, paged deep
