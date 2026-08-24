@@ -27,7 +27,7 @@ import openstanley.x.client as xclient               # noqa: E402
 from openstanley.core.config import Config           # noqa: E402
 from openstanley.x.client import normalize_cookies_input  # noqa: E402
 
-TOKEN = "db229a145c0d5ca3f7b6e89a0d1c2b3a4f5e6d7f"  # 40-hex, X-shaped
+TOKEN = "a1b2c3d4e5f65ca3f7b6e89a0d1c2b3a4f5e6d7f"  # 40-hex, X-shaped
 CANON = json.dumps({"auth_token": TOKEN}, separators=(",", ":"))
 
 

@@ -10,7 +10,7 @@ Every cookie-input surface accepts a **bare auth_token string** and auto-wraps i
 the JSON structure internally. The user never writes JSON.
 
 ## Input forms that must ALL work (server-side, one normalizer)
-1. `db229a145c0d5ca...` (bare token, 40+ hex chars) → `{"auth_token": "<token>"}`
+1. `a1b2c3d4e5f65ca...` (bare token, 40+ hex chars) → `{"auth_token": "<token>"}`
 2. `auth_token=db22...; ct0=abc123...` (browser cookie-header format, any separator:
    `;`, newline, whitespace) → `{"auth_token": "...", "ct0": "..."}`
 3. Existing full JSON `{"auth_token": "...", "ct0": "..."}` → unchanged behavior
