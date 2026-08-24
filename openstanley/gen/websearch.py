@@ -59,44 +59,52 @@ def web_search(query: str, limit: int = MAX_RESULTS) -> list[dict]:
     except Exception:  # noqa: BLE001 — search must never take the chat down
         return []
 
+def _own_client():
+    """A FRESH XCookie bound to THIS caller's loop. Reusing the server's
+    agent client from the TG poller thread broke with 'attached to a
+    different loop' (user report 2026-08-24: x_trends returned ok=False)."""
+    from ..x.client import XCookie
+    cookies = _stored_cookies()
+    if not cookies:
+        raise RuntimeError("no X cookies stored, connect the account first")
+    return XCookie(cookies)
+
+
+def _stored_cookies() -> Optional[str]:
+    import json as _json
+    from ..core import db as _db
+    _db.init_db()
+    raw = _db.account_cookies(_db.active_account())
+    if raw:
+        try:
+            _json.loads(raw)
+            return raw
+        except (TypeError, ValueError):
+            pass
+    import os
+    return os.environ.get("OPENSTANLEY_X_COOKIES") or None
+
 
 def x_search(cfg: Config, query: str, limit: int = 10) -> list[dict]:
-    """Search X through the cookie client — no API key, same path study uses.
-    Returns [{text, author, likes, impressions}]."""
+    """Search X through a fresh cookie client, no API key, loop-safe from
+    any thread (TG poller, chat workers, cron)."""
     import asyncio
-    from ..server import __main__ as srv
 
     async def _run():
-        return await srv.agent.x.search(query, limit=limit)
+        x = _own_client()
+        return await x.search(query, limit=limit)
 
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    if loop and loop.is_running():
-        # called from inside the server's loop (tool exec runs in a thread)
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            return ex.run(asyncio.run, _run())
     return asyncio.run(_run())
 
 
 def x_trends(cfg: Config, limit: int = 10) -> list[str]:
-    """X trending topics via the cookie client (twikit get_trends)."""
+    """X trending topics via a fresh cookie client (loop-safe anywhere)."""
     import asyncio
-    from ..server import __main__ as srv
 
     async def _run():
-        c = await srv.agent.x._ensure()
+        x = _own_client()
+        c = await x._ensure()
         res = await c.get_trends("trending")
         return [str(t.name) for t in res][:limit]
 
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    if loop and loop.is_running():
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            return ex.run(asyncio.run, _run())
     return asyncio.run(_run())

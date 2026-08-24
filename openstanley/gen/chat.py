@@ -284,7 +284,8 @@ def _run_tools(cfg: Config, reply: str) -> list[dict]:
     for act in tools_mod.parse_actions(reply):
         res = tools_mod.execute_tool(cfg, act["tool"], act["args"])
         results.append({"name": act["tool"], "args": act["args"], **res})
-        db.log("chat", f"tool {act['tool']} → ok={res.get('ok')}")
+        db.log("chat", f"tool {act['tool']} → ok={res.get('ok')}"
+                       + ("" if res.get("ok") else f" error={res.get('error', '')[:150]}"))
     return results
 
 
