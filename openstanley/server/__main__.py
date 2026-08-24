@@ -568,6 +568,19 @@ async def regen_draft(draft_id: int):
         raise HTTPException(500, str(e)) from e
 
 
+@app.post("/api/deep-train")
+async def deep_train_ep():
+    """Deep-train the brain on the ACTIVE account — the full immersion
+    chain (history+replies 800, metrics, voice rebuild, niche, reflection).
+    Read-only on X; can take several minutes."""
+    try:
+        res = await agent.deep_train()
+        return {"ok": True, "report": res}
+    except Exception as e:  # noqa: BLE001
+        db.log("api", f"deep train error: {e}", level="error")
+        raise HTTPException(500, str(e)) from e
+
+
 @app.post("/api/metrics/refresh")
 async def metrics_refresh_ep():
     """Nightly metrics refresh — keeps Insights (heatmap/growth/milestones)
