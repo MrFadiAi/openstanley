@@ -609,8 +609,56 @@ def _scan_fallback_files(stats: dict, profile: dict) -> list[tuple[str, str]]:
                 f"- engages with: {', '.join(topics[:8]) or 'topics being learned'}",
                 f"- most active around hours: {', '.join(str(h) + ':00' for h in hours) or 'n/a'}",
                 f"- languages spoken (by content mix): {lang_txt}"]
+
+    topics_l = (stats.get("topics") or {}) if isinstance(stats.get("topics"), dict) else {}
+    pillars = [f"# Content Pillars (scan {date})", ""]
+    if topics_l:
+        for t, w in list(topics_l.items())[:6]:
+            pillars.append(f"- **{t}**: recurring theme (scan weight {w})")
+    else:
+        for t in topics[:5]:
+            pillars.append(f"- **{t}**: high-frequency term the audience engages with")
+    pillars += ["", "Pillars refine as reflect(scan)/strategy accumulate evidence."]
+
+    cas = stats.get("casing") or {}
+    emo = (stats.get("emoji") or {}).get("per_post")
+    punct = stats.get("punctuation") or {}
+    vc = [f"# Voice Cards (scan {date})", "",
+          "One card per speaking mode detected in the corpus:", "",
+          f"- **Standard post**: avg {stats.get('avg_length_chars')} chars, "
+          f"casing {cas or 'n/a'}, emoji/post {emo}"]
+    if punct.get("question"):
+        vc.append(f"- **Question mode**: asks directly ({punct['question']}/post) "
+                  "— the engagement-bait register")
+    if punct.get("colon"):
+        vc.append(f"- **Colon-led mode**: {punct['colon']}/post — 'hot take:' style openers")
+    if punct.get("ellipsis"):
+        vc.append(f"- **Trailing-thought mode**: {punct['ellipsis']}/post — '...' endings")
+    vc += [f"- languages: {lang_txt}", ""]
+
+    comp = [f"# Competitor Notes (scan {date})", ""]
+    try:
+        with db.connect() as _c:
+            rows = _c.execute(
+                "SELECT author_handle, COUNT(*) n, SUM(engagement) e "
+                "FROM posts WHERE is_own=0 AND engagement > 0 "
+                "AND account_id=? GROUP BY author_handle "
+                "ORDER BY 3 DESC LIMIT 6",
+                (db.active_account(),)).fetchall()
+        for r in rows:
+            comp.append(f"- **@{r['author_handle']}**: {r['n']} posts studied, "
+                        f"{int(r['e'] or 0)} total engagement — study their hooks")
+        if not rows:
+            comp.append("- (no niche competitor posts stored yet — run study)")
+    except Exception:  # noqa: BLE001
+        comp.append("- (competitor data pending next study)")
+    comp.append("")
+
     return [("niche-map", "\n".join(niche) + "\n"),
-            ("audience-personas", "\n".join(personas) + "\n")]
+            ("audience-personas", "\n".join(personas) + "\n"),
+            ("content-pillars", "\n".join(pillars) + "\n"),
+            ("voice-cards", "\n".join(vc) + "\n"),
+            ("competitor-notes", "\n".join(comp) + "\n")]
 
 
 def reflect(cfg, trigger: str, payload: Optional[dict] = None,

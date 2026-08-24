@@ -405,7 +405,7 @@ def test_reflect_scan_updates_niche_and_persona_files():
     finally:
         monkey.undo()
 
-    assert res["applied"]["file_updates"] == ["niche-map", "audience-personas"]
+    assert res["applied"]["file_updates"][:2] == ["niche-map", "audience-personas"]
     assert "builders shipping with ai agents" in brain.read("files/niche-map")
     # deterministic fallback filled the personas doc from scan stats
     personas = brain.read("files/audience-personas")
@@ -428,7 +428,7 @@ def test_reflect_scan_fallback_when_llm_proposes_no_files():
     finally:
         monkey.undo()
     # both docs still refreshed deterministically
-    assert set(res["applied"]["file_updates"]) == {"niche-map", "audience-personas"}
+    assert {"niche-map", "audience-personas"} <= set(res["applied"]["file_updates"])
     assert "agents" in brain.read("files/niche-map")
 
 
