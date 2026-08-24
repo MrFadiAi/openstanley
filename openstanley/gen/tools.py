@@ -352,7 +352,7 @@ def _tool_trend_post(cfg, topic: str = "", source: str = "web") -> dict:
         where = "the web (DuckDuckGo)"
     if not material:
         return {"ok": True, "error": f"nothing found on {where} for '{topic}'"}
-    voice = voice_mod.load_rubric() if hasattr(voice_mod, "load_rubric") else ""
+    voice = voice_mod.voice_prompt_block()  # ACTIVE account voice+style
     user = (f"TOPIC: {topic}" + chr(10) +
             f"LIVE FINDINGS ({where}):" + chr(10) + material[:2400] + chr(10) +
             f"USER VOICE: {str(voice)[:300]}" + chr(10) +

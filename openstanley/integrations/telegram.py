@@ -62,7 +62,8 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024   # matches the /api/media upload cap
 HELP_TEXT = (
     "I'm OpenStanley — your AI Head of Content, now on Telegram.\n\n"
     "/status — active account, autopilot, health, bank, today's caps\n"
-    "/account — list accounts; /account <id> switches the active one\n"
+    "/account — list accounts; /account <id> switches the active one.\n"
+    "   ALL drafts follow the SELECTED account's voice + language.\n"
     "/ideas — top idea-bank angles\n"
     "/drafts — drafts waiting for your approval\n"
     "/approve <id> — approve a draft (it gets scheduled)\n"

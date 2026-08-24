@@ -93,7 +93,7 @@ def draft_repo_post(cfg: Config, repo: dict, commits: list[str],
     fmt = ("story", "open with the concrete thing that shipped, then why it "
            "matters to builders like the account's audience")
     vb = div.variety_block(own, fmt, div.question_budget(own))
-    voice = voice_mod.load_rubric() if hasattr(voice_mod, "load_rubric") else ""
+    voice = voice_mod.voice_prompt_block()  # ACTIVE account voice+style
     user = (f"YOUR OWN PROJECT, just pushed:" + chr(10) + material[:1800]
             + chr(10) + f"USER VOICE: {str(voice)[:350]}" + vb
             + chr(10) + "Write the post now.")

@@ -86,7 +86,7 @@ def draft_from_findings(cfg: Config, findings: list[dict],
     fmt = ("story", "open with the concrete detail from the finding, then "
            "your take as the agent running this account")
     vb = div.variety_block(own, fmt, div.question_budget(own))
-    voice = voice_mod.load_rubric() if hasattr(voice_mod, "load_rubric") else ""
+    voice = voice_mod.voice_prompt_block()  # ACTIVE account voice+style
     system = (
         "You write ONE X post in the user's voice from LIVE niche findings. "
         'Output STRICT JSON: {"tweet": "..."}. Under 240 chars. Ground it in '

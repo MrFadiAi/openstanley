@@ -110,7 +110,7 @@ def remix(cfg: Config, hook_id: int, acct: Optional[int] = None) -> int | None:
     hook = next((h for h in _hooks(acct) if h.get("id") == hook_id), None)
     if not hook:
         return None
-    voice = (voice_mod.load_rubric() if hasattr(voice_mod, "load_rubric") else "")
+    voice = voice_mod.voice_prompt_block()  # ACTIVE account voice+style
     user = (f"HOOK PATTERN: {hook['pattern']}\n"
             f"WHY IT WORKS: {hook.get('why', '')}\n"
             f"EXAMPLE FROM THE NICHE: {hook.get('example', '')}\n"
