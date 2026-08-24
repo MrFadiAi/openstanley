@@ -47,9 +47,12 @@ def test_create_throttles_to_headroom(monkeypatch):
         db.add_draft(text=f"filler {i}", acct=1)
     heads = []
 
+    bodies = ["the debugger lied to me for an hour, the fix was one import",
+              "grandmother bread baking taught me patience in code review",
+              "market crashed while everyone argued about tabs vs spaces"]
     def fake_draft_one(cfg, idea, temp, language=None, **k):
-        heads.append(1)
-        return {"text": f"new {len(heads)}", "kind": "post"}
+        i = len(heads); heads.append(1)
+        return {"text": bodies[i % len(bodies)], "kind": "post"}
 
     monkeypatch.setattr(drafts_mod, "_draft_one", fake_draft_one)
     import openstanley.gen.quote_card as _qc

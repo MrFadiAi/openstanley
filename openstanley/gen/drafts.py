@@ -64,19 +64,41 @@ def generate_drafts(cfg: Config, count: int = None,
         db.log("create", f"[account {db._acct(acct)}] no fresh ideas — run study loop first")
         return []
 
+    from . import diversity as div
     temps = ["safe", "bold", "experimental"]
     draft_ids = []
+    recent = div.recent_draft_texts(acct)
     for i, idea in enumerate(ideas[:count]):
         temp = temps[i % len(temps)]
         # language rotation for bilingual accounts: follow the profile mix
         lang = _language_rotation()
         try:
-            draft = _draft_one(cfg, idea, temp, language=lang)
+            fmt = div.format_for_run(i)
+            vb = div.variety_block(recent, fmt, div.question_budget(recent))
+            draft = _draft_one(cfg, idea, temp, language=lang, variety=vb)
         except LLMError as e:
             db.log("create", f"draft failed for idea {idea['id']}: {e}", level="error")
             continue
         if draft is None:  # voice-lock rejection — idea stays fresh for a retry
             continue
+        # sameness gate: too close to a recent draft → ONE retry demanding
+        # difference, then the idea waits for a day with fresher eyes
+        clash = div.too_similar(draft["text"], recent)
+        if clash:
+            db.log("create", f"draft too similar to a recent one "
+                            f"({div.similarity(draft['text'], clash):.0%}) — "
+                            f"retrying with a difference demand")
+            fmt = div.format_for_run(i)
+            vb = div.variety_block(recent, fmt, div.question_budget(recent))
+            draft = _draft_one(cfg, idea, temp, language=lang, variety=vb,
+                               demand_difference=" YOUR PREVIOUS ATTEMPT WAS "
+                               "TOO SIMILAR TO EXISTING DRAFTS. Take a "
+                               "genuinely different angle or frame.")
+            if draft is None or div.too_similar(draft["text"], recent):
+                db.log("create", f"idea {idea['id']} still too similar after "
+                                f"retry — skipped, stays fresh")
+                continue
+        recent = [draft["text"]] + recent[:div.RECENT_WINDOW - 1]
         image = draft.get("image")
         if not image and draft.get("kind", "post") == "post" and not draft.get("thread"):
             # media auto-attach: a clean typographic card beats no image —
@@ -177,7 +199,8 @@ def generate_quote_draft(cfg: Config, tweet: dict, angle: str = "") -> int:
 
 
 def _draft_one(cfg: Config, idea: dict, temp: str, language: str | None = None,
-               quote: dict | None = None, image: str | None = None) -> dict | None:
+               quote: dict | None = None, image: str | None = None,
+               variety: str = "", demand_difference: str = "") -> dict | None:
     # z.ai rejects temperature > 1 — experimental tops out AT the cap
     t = {"safe": 0.7, "bold": 0.95, "experimental": 1.0}[temp]
     voice = voice_prompt_block(language)
@@ -185,7 +208,7 @@ def _draft_one(cfg: Config, idea: dict, temp: str, language: str | None = None,
 ANGLE: {idea['angle']}
 FORMAT: {idea.get('format', 'one-liner')}
 Temperature intent: {temp} — {'play it straight, highest fidelity to voice' if temp == 'safe' else 'stronger opinion, bolder hook' if temp == 'bold' else 'unusual structure or framing, still on voice'}
-{draft_language_instruction(language)}"""
+{draft_language_instruction(language)}{variety}{demand_difference}"""
     if quote:
         user += f"""
 QUOTED TWEET (your post is the comment above it):

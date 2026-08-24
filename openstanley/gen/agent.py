@@ -147,16 +147,30 @@ class Agent:
                 break
 
     async def create(self) -> dict:
-        """Daily: generate drafts from the bank (replenishing it first when low
-        — the create loop must never silently starve on an empty bank)."""
+        """Daily: scout LIVE niche trends first, then bank drafts (replenished
+        when low — the create loop must never silently starve)."""
         acct = db.active_account()
+        # trend scout: today's niche conversation → one grounded draft, so the
+        # queue always has something born from what's happening RIGHT NOW
+        trend_ids: list[int] = []
+        try:
+            from . import trend_scout as ts
+            found = await ts.scout(self.cfg, self.x, acct)
+            did = await asyncio.to_thread(ts.draft_from_findings,
+                                          self.cfg, found["found"], acct)
+            if did:
+                trend_ids = [did]
+                _tg_draft_cards(trend_ids)
+        except Exception as e:  # noqa: BLE001 — scouting never blocks create
+            db.log("trend-scout", f"scout skipped: {e}", level="warn")
         rep = await ideas_mod.replenish(self.cfg, x=self.x, acct=acct)  # no-op unless low
         if rep["added"]:
             db.log("create", f"[account {acct}] bank low ({rep['bank_before']}) — replenished "
                              f"+{rep['added']} from {','.join(rep['sources'])}")
         ids = await asyncio.to_thread(drafts_mod.generate_drafts, self.cfg, acct=acct)
         _tg_draft_cards(ids)
-        out = {"drafts": len(ids), "account": acct}
+        out = {"drafts": len(trend_ids + ids), "account": acct,
+               "trend_drafted": len(trend_ids)}
         if rep["ran"]:
             out["bank_replenished"] = rep["added"]
         return out
