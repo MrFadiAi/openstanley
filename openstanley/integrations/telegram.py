@@ -1393,7 +1393,7 @@ def _handle_update(cfg: Config, upd: dict) -> None:
                               "I'll report when done.")
         import httpx as _hx
         try:
-            r = _hx.post("http://127.0.0.1:7878/api/loops/deep-train",
+            r = _hx.post("http://127.0.0.1:7878/api/deep-train",
                          timeout=900)
             body = r.json().get("report", {}) if r.status_code == 200 else {}
             if body:
