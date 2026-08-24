@@ -70,6 +70,9 @@ Available tools:
 - trend_post {topic, source?: "web"|"x"}
     → one-shot: searches the live web/X for the topic, then drafts an
       on-voice post FROM the real findings (approval-gated as always)
+- github_drafts {user?, count?: 2}
+    → drafts one post per the user's LATEST pushed GitHub repos, grounded
+      in the repo description + newest commits (their own real work)
 
 Rules: never invent results — the system executes and appends real results.
 Keep the prose reply short; let the action carry the work. If the user asks
@@ -378,3 +381,23 @@ register("web_search", _tool_web_search)
 register("x_search", _tool_x_search)
 register("x_trends", _tool_x_trends)
 register("trend_post", _tool_trend_post)
+
+
+
+# ---------- GitHub: draft from the user's own repos ----------
+
+def _tool_github_drafts(cfg, user: str = "", count: int = 2) -> dict:
+    from . import github_posts as gh
+    from ..core import db as db_mod
+    user = (user or "").strip() or gh.github_handle(cfg)
+    if not user:
+        return {"ok": True, "error": "no github user configured — pass user="
+                                     '"your-gh-name" or add it to the strategy file'}
+    ids = gh.run(cfg, user, int(count))
+    if not ids:
+        return {"ok": True, "ids": [], "note": "no drafts — repos missing "
+                "descriptions or drafts too similar to recent ones"}
+    return {"ok": True, "draft_ids": ids, "repos": len(ids)}
+
+
+register("github_drafts", _tool_github_drafts)
