@@ -237,26 +237,59 @@ class Agent:
         db.log("train", f"[account {acct}] history: {len(own)} posts + "
                         f"{len(replies)} replies ingested")
 
+        # X rate-limits long read bursts: breathe between phases so a 429
+        # never kills a training run that already ingested the history
+        import asyncio as _aio
+
+        async def _breathe(seconds: float) -> None:
+            await _aio.sleep(seconds)
+
         # 2. metrics ground truth (time series + identity)
         from . import metrics as metrics_mod
+        await _breathe(20)
         try:
             await metrics_mod.refresh_metrics(self.x, self.cfg, limit=60,
                                               acct=acct)
         except Exception as e:  # noqa: BLE001
             db.log("train", f"metrics refresh skipped: {e}", level="warn")
 
-        # 3. style + voice rebuild from the full corpus
-        scan_res = await self.scan()
+        # 3. style + voice rebuild from the full corpus (retry once on 429)
+        await _breathe(30)
+        scan_res: dict = {}
+        for attempt in (1, 2):
+            try:
+                scan_res = await self.scan()
+                break
+            except Exception as e:  # noqa: BLE001
+                if attempt == 1 and "429" in str(e):
+                    db.log("train", "X rate limit on scan — cooling 90s, "
+                                    "retrying once", level="warn")
+                    await _breathe(90)
+                else:
+                    db.log("train", f"scan phase skipped: {e}", level="warn")
+                    break
 
-        # 4. niche study + deep pull + hooks
-        study_res = await self.study()
+        # 4. niche study + deep pull + hooks (retry once on 429)
+        await _breathe(30)
+        for attempt in (1, 2):
+            try:
+                await self.study()
+                break
+            except Exception as e:  # noqa: BLE001
+                if attempt == 1 and "429" in str(e):
+                    db.log("train", "X rate limit on study — cooling 90s, "
+                                    "retrying once", level="warn")
+                    await _breathe(90)
+                else:
+                    db.log("train", f"study phase skipped: {e}", level="warn")
+                    break
 
         # 5. dedicated reflection over everything
         brain_res = await _reflect("scan", self.cfg, acct)
         try:
-            brain_res2 = await _reflect("learn", self.cfg, acct)
+            await _reflect("learn", self.cfg, acct)
         except Exception:  # noqa: BLE001
-            brain_res2 = ""
+            pass
 
         # 6. the report card
         from . import brain as brain_mod
