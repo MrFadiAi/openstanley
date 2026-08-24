@@ -58,6 +58,18 @@ Available tools:
     → runs the deep style scan of the connected account
 - regenerate_draft {draft_id}
     → re-rolls an existing draft hotter
+- web_search {query, limit?: 6}
+    → searches the open web (DuckDuckGo, no API) for news/trends; returns
+      real titles + snippets — use for "what's trending about X" questions,
+      then cite what you actually found in the draft
+- x_search {query, limit?: 10}
+    → searches X THROUGH THE COOKIE SESSION (no paid API) for live posts
+      about a topic — use for "what are people saying about X on X"
+- x_trends {limit?: 10}
+    → X trending topics right now (cookie session, no API)
+- trend_post {topic, source?: "web"|"x"}
+    → one-shot: searches the live web/X for the topic, then drafts an
+      on-voice post FROM the real findings (approval-gated as always)
 
 Rules: never invent results — the system executes and appends real results.
 Keep the prose reply short; let the action carry the work. If the user asks
@@ -281,3 +293,80 @@ register("regenerate_draft", _tool_regenerate_draft)
 
 # Tools run inside a worker thread (server: asyncio.to_thread) — the
 # asyncio.run() calls above get a fresh loop there safely.
+
+
+
+# ---------- live search tools (web + X-without-API) ----------
+
+def _tool_web_search(cfg, query: str = "", limit: int = 6) -> dict:
+    from . import websearch
+    res = websearch.web_search(query, limit=int(limit))
+    if not res:
+        return {"ok": True, "results": [],
+                "note": "no results (or search unreachable) — say so honestly"}
+    return {"ok": True, "results": res}
+
+
+def _tool_x_search(cfg, query: str = "", limit: int = 10) -> dict:
+    from . import websearch
+    res = websearch.x_search(cfg, query, limit=int(limit))
+    return {"ok": True, "results": [
+        {"text": (p.get("text") or "")[:200],
+         "author": p.get("author_handle") or p.get("author") or "?",
+         "likes": p.get("likes", 0)} for p in res]}
+
+
+def _tool_x_trends(cfg, limit: int = 10) -> dict:
+    from . import websearch
+    return {"ok": True, "trends": websearch.x_trends(cfg, limit=int(limit))}
+
+
+_TREND_POST_SYSTEM = (
+    "You write ONE X post in the user's voice from LIVE search findings. "
+    "Output STRICT JSON: {\"text\": \"...\"}. Under 240 chars, concrete, "
+    "reference the actual finding (a number, a name, a launch), no hashtags."
+)
+
+
+def _tool_trend_post(cfg, topic: str = "", source: str = "web") -> dict:
+    """Search live (web or X), then draft from the real findings."""
+    from . import websearch
+    from .llm import chat, extract_json
+    from . import voice as voice_mod
+    from ..core import db as db_mod
+    topic = (topic or "").strip()
+    if not topic:
+        return {"ok": True, "error": "topic required"}
+    if source == "x":
+        found = websearch.x_search(cfg, topic, limit=8)
+        material = chr(10).join(
+            f"@{p.get('author_handle','?')}: {(p.get('text') or '')[:200]}" for p in found)
+        where = "X (live posts)"
+    else:
+        found = websearch.web_search(topic, limit=6)
+        material = chr(10).join(
+            f"{r['title']}: {r['snippet']}" for r in found)
+        where = "the web (DuckDuckGo)"
+    if not material:
+        return {"ok": True, "error": f"nothing found on {where} for '{topic}'"}
+    voice = voice_mod.load_rubric() if hasattr(voice_mod, "load_rubric") else ""
+    user = (f"TOPIC: {topic}" + chr(10) +
+            f"LIVE FINDINGS ({where}):" + chr(10) + material[:2400] + chr(10) +
+            f"USER VOICE: {str(voice)[:300]}" + chr(10) +
+            "Write the post now, grounded in a specific finding.")
+    raw = chat(cfg.llm, _TREND_POST_SYSTEM, user, json_mode=True)
+    data = extract_json(raw)
+    text = (data.get("text") or "").strip() if isinstance(data, dict) else ""
+    if not text:
+        return {"ok": True, "error": "draft generation failed — try again"}
+    did = db_mod.add_draft(text=text, kind="post", temperature="bold",
+                           meta={"source": "trend-post", "topic": topic,
+                                 "search_source": where})
+    return {"ok": True, "draft_id": did, "text": text,
+            "sources": [r.get("url") or r.get("author") for r in found[:3]]}
+
+
+register("web_search", _tool_web_search)
+register("x_search", _tool_x_search)
+register("x_trends", _tool_x_trends)
+register("trend_post", _tool_trend_post)
