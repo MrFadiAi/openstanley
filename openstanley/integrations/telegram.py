@@ -1387,6 +1387,29 @@ def _handle_update(cfg: Config, upd: dict) -> None:
         send_message(chat_id, reply)
         _push_mini_card(chat_id, before)
         return
+    elif name == "train":
+        send_message(chat_id, "Deep training the brain on the active "
+                              "account. This takes a few minutes, "
+                              "I'll report when done.")
+        import httpx as _hx
+        try:
+            r = _hx.post("http://127.0.0.1:7878/api/loops/deep-train",
+                         timeout=900)
+            body = r.json().get("report", {}) if r.status_code == 200 else {}
+            if body:
+                report = (f"Deep train done for @{body.get('handle')} "
+                          f"({body.get('seconds')}s):" + chr(10)
+                          + f"posts {body.get('posts_ingested')} + replies "
+                            f"{body.get('replies_ingested')} ingested" + chr(10)
+                          + f"brain: {body.get('brain_rules')} rules, "
+                            f"{body.get('journal_entries')} journal entries, "
+                            f"{body.get('hooks')} hooks")
+            else:
+                report = f"Deep train failed: {r.text[:150]}"
+        except Exception as e:  # noqa: BLE001
+            report = f"Deep train failed: {e}"
+        send_message(chat_id, report)
+        return
     elif name == "thread":
         before = _latest_draft_id()
         reply = _cmd_thread(cfg, args)

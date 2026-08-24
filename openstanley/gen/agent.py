@@ -136,7 +136,7 @@ class Agent:
     async def _paged_user_tweets(self, handle: str, per_call: int = 100):
         """Yield pages of a user's timeline until exhaustion (delegates to
         the client's paginated user_tweets in bounded chunks)."""
-        remaining = 400
+        remaining = 800
         while remaining > 0:
             page = await self.x.user_tweets(handle, limit=min(per_call, remaining))
             if not page:
@@ -209,6 +209,75 @@ class Agent:
         _tg_draft_cards(new_ids)
         return {"mentions_new": len(fetched), "replies_drafted": drafted,
                 "account": acct}
+
+    async def deep_train(self) -> dict:
+        """DEEP TRAINING of the brain on the ACTIVE account — the full
+        immersion chain, deeper than /study: max history import (posts AND
+        replies, paged to 800), metrics ground truth, style+voice rebuild,
+        niche study with deep pull + hooks, and a dedicated long reflection.
+        Returns the brain report card. Read-only on X (no writes)."""
+        import time as _time
+        t0 = _time.time()
+        acct = db.active_account()
+        me = db.get_me(acct) or await self.x.me()
+        db.set_me(me, acct)
+
+        # 1. full history: own posts + own replies, paged deep
+        own = await self.x.user_tweets(me["username"], limit=800)
+        replies = []
+        try:
+            replies = await self.x.user_replies(me["username"], limit=400)
+        except Exception as e:  # noqa: BLE001 — replies are bonus, not a gate
+            db.log("train", f"replies pull skipped: {e}", level="warn")
+        for p in own + replies:
+            db.upsert_post(p, acct)
+        db.log("train", f"[account {acct}] history: {len(own)} posts + "
+                        f"{len(replies)} replies ingested")
+
+        # 2. metrics ground truth (time series + identity)
+        from . import metrics as metrics_mod
+        try:
+            await metrics_mod.refresh_metrics(self.x, self.cfg, limit=60,
+                                              acct=acct)
+        except Exception as e:  # noqa: BLE001
+            db.log("train", f"metrics refresh skipped: {e}", level="warn")
+
+        # 3. style + voice rebuild from the full corpus
+        scan_res = await self.scan()
+
+        # 4. niche study + deep pull + hooks
+        study_res = await self.study()
+
+        # 5. dedicated reflection over everything
+        brain_res = await _reflect("scan", self.cfg, acct)
+        try:
+            brain_res2 = await _reflect("learn", self.cfg, acct)
+        except Exception:  # noqa: BLE001
+            brain_res2 = ""
+
+        # 6. the report card
+        from . import brain as brain_mod
+        from . import hooks as hooks_mod
+        with db.connect() as c:
+            (posts,) = c.execute(
+                "SELECT COUNT(*) FROM posts WHERE account_id=? AND is_own=1",
+                (acct,)).fetchone()
+            (niche,) = c.execute(
+                "SELECT COUNT(*) FROM posts WHERE account_id=? AND is_own=0",
+                (acct,)).fetchone()
+        report = {
+            "account": acct, "handle": me.get("username"),
+            "posts_ingested": len(own), "replies_ingested": len(replies),
+            "own_total": posts, "niche_total": niche,
+            "hooks": len(hooks_mod.list_hooks(acct)),
+            "brain_rules": len(brain_mod.parse_rules(
+                brain_mod.read("rules", acct))),
+            "journal_entries": brain_mod.read("journal", acct).count("## "),
+            "voice": scan_res.get("voice"), "brain": brain_res,
+            "seconds": round(_time.time() - t0),
+        }
+        db.log("train", f"deep train complete: {report}")
+        return report
 
     async def scan(self) -> dict:
         """Deep style scan — up to 800 posts+replies → style_profile."""
