@@ -965,7 +965,7 @@ def _push_mini_card(chat_id: int, before_id: int) -> None:
     try:
         with db.connect() as c:
             rows = c.execute(
-                "SELECT id, substr(text,1,80) FROM drafts "
+                "SELECT id, kind, text, meta_json FROM drafts "
                 "WHERE id > ? AND status = 'draft' ORDER BY id LIMIT 5",
                 (before_id,)).fetchall()
     except Exception:  # noqa: BLE001
@@ -974,7 +974,18 @@ def _push_mini_card(chat_id: int, before_id: int) -> None:
         return
     ids = [r["id"] for r in rows]
     lines = ["saved, your call:"]
-    lines += [f"#{r['id']}, {r[1]}" for r in rows]
+    # FULL text, same quote contract as the loop cards — the human approves
+    # what they actually read, never a truncated 80-char preview
+    import json as _json
+    for r in rows:
+        try:
+            meta = _json.loads(r["meta_json"] or "{}")
+        except Exception:  # noqa: BLE001
+            meta = {}
+        lines.append(_draft_head({"id": r["id"], "kind": r["kind"],
+                                  "meta": meta}, show_target=False))
+        lines.append(_quote(r["text"] or ""))
+        lines.append("")
     r = send_message(chat_id, chr(10).join(lines),
                      reply_markup=_approve_keyboard(ids))
     if r.get("message_id"):
