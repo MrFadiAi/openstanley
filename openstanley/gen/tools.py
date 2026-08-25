@@ -41,10 +41,12 @@ user wants, emit ONE fenced block per action at the END of your reply:
 ```
 
 Available tools:
-- schedule_draft {text, when: "9pm"|"18:00"|"tomorrow 9am"|"in 2 hours", language?: "ar"|"en"}
+- schedule_draft {text, when: "9pm"|"18:00"|"tomorrow 9am"|"in 2 hours", language?: "ar"|"en", link?: "https://..."}
     → saves the post as an approved calendar draft at that time (the user's
       explicit instruction here IS the approval; publishing still waits for
-      the schedule + safety caps)
+      the schedule + safety caps). With `link`: the URL posts as the first
+      REPLY under the post — clean body, link still ships (counts vs the
+      reply cap; a cap bounce skips only the link, never the post)
 - create_quote_draft {tweet_url, angle?}
     → fetches the tweet, drafts an on-voice quote post for approval
 - query_analytics {timeframe?: "week"|"month"|"all"}
@@ -176,7 +178,8 @@ def execute_tool(cfg, name: str, args: dict) -> dict:
 # ---------- the tools (each takes cfg first) ----------
 
 def _tool_schedule_draft(cfg, text: str = "", when: Optional[str] = None,
-                         language: Optional[str] = None) -> dict:
+                         language: Optional[str] = None,
+                         link: Optional[str] = None) -> dict:
     text = (text or "").strip()
     if not text:
         return {"ok": False, "error": "no text"}
@@ -184,11 +187,13 @@ def _tool_schedule_draft(cfg, text: str = "", when: Optional[str] = None,
     lang = language or detect(text)
     hour = int(scheduled[11:13]) if scheduled else None
     alg = score_draft(text, now_hour=hour)
+    link_reply = (link or "").strip() or None
     did = db.add_draft(
         text=text, kind="post", temperature="chat",
         scheduled_at=scheduled, status="approved" if scheduled else "draft",
         meta={"source": "chat-tool", "approved_via": "chat-instruction",
-              "language": lang, "alg": alg, "voice_match": voice_match(text)})
+              "language": lang, "alg": alg, "voice_match": voice_match(text),
+              **({"link_reply": link_reply} if link_reply else {})})
     db.log("chat", f"tool schedule_draft → #{did} at {scheduled}")
     return {"draft_id": did, "scheduled_at": scheduled,
             "note": "queued on the calendar" if scheduled

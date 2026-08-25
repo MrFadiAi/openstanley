@@ -115,7 +115,10 @@ def draft_repo_post(cfg: Config, repo: dict, commits: list[str],
                        image=image, acct=db._acct(acct),
                        meta={"source": "github", "repo": repo["name"],
                              "repo_url": repo["url"],
-                             "commits": commits[:3]})
+                             "commits": commits[:3],
+                             # the repo link ships as the FIRST REPLY under
+                             # the post — clean body, link still delivered
+                             "link_reply": repo["url"]})
     db.log("github", f"draft #{did} for {repo['name']}")
     return did
 

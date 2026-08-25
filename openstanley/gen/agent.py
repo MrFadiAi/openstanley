@@ -361,6 +361,24 @@ class Agent:
                                 published_at=datetime.now().isoformat(timespec="seconds"))
                 db.log("publish", f"[account {acct}] published draft {nxt['id']} → x_id={x_id}")
                 published.append({"draft_id": nxt["id"], "x_id": x_id})
+                # link-reply (v0.6.x): a clean post can carry its link in the
+                # FIRST REPLY instead of the body — keeps the main tweet
+                # readable while the link still ships under it. Charged
+                # against the reply cap; a cap bounce just skips the link,
+                # the post itself is already out.
+                link = (nxt.get("meta") or {}).get("link_reply")
+                if link and x_id and nxt.get("kind") == "post":
+                    try:
+                        await self.x.post_tweet(str(link), reply_to=str(x_id))
+                        db.log("publish", f"[account {acct}] link reply under "
+                                          f"{x_id}: {str(link)[:60]}")
+                    except SafetyCapExceeded:
+                        db.log("publish", f"[account {acct}] link reply skipped "
+                                          f"(reply cap) — post {x_id} is out",
+                               level="warn")
+                    except Exception as e:  # noqa: BLE001 — never lose the post
+                        db.log("publish", f"[account {acct}] link reply failed: "
+                                          f"{e}", level="warn")
             except SafetyCapExceeded as e:
                 # reschedule to the next FREE slot — cap-bounced drafts must
                 # spread across days/times, not pile onto tomorrow 09:00
