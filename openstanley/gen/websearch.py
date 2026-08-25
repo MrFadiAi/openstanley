@@ -108,3 +108,34 @@ def x_trends(cfg: Config, limit: int = 10) -> list[str]:
         return [str(t.name) for t in res][:limit]
 
     return asyncio.run(_run())
+
+
+def web_read(url: str, max_chars: int = 6000) -> dict:
+    """Fetch a URL and return readable text — the agent's way IN to any page
+    (articles, docs, dashboards), like a browser's reader mode. No JS, no
+    auth; honest error when the page refuses."""
+    import re as _re
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    try:
+        r = httpx.get(url, headers=UA, timeout=20, follow_redirects=True)
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"fetch failed: {type(e).__name__}"}
+    if r.status_code != 200:
+        return {"ok": False, "error": f"HTTP {r.status_code}"}
+    html = r.text
+    # strip the noise: scripts, styles, tags, entities — reader-mode style
+    html = _re.sub(r"<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ",
+                   html, flags=_re.DOTALL | _re.IGNORECASE)
+    text = _re.sub(r"<[^>]+>", " ", html)
+    text = _html.unescape(text)
+    text = _re.sub(r"\s+", " ", text).strip()
+    title = ""
+    m = _re.search(r"<title[^>]*>(.*?)</title>", html,
+                    _re.IGNORECASE | _re.DOTALL)
+    if m:
+        title = _html.unescape(m.group(1)).strip()[:120]
+    if not text:
+        return {"ok": False, "error": "no readable text (JS-only page?)"}
+    return {"ok": True, "title": title, "url": str(r.url), "length": len(text),
+            "text": text[:max_chars]}

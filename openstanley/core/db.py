@@ -576,6 +576,17 @@ def chat_history_for_chat(chat_id: int, limit: int = 40) -> list[dict]:
 
 # ---------- posts ----------
 
+def _norm_created_at(v) -> str:
+    """twikit emits 'Fri Apr 03 16:25:49 +0000 2026'; some paths lose the
+    year, leaving 25 chars no date parser accepts — the engage gate then
+    rejects every target as 'age unknown'. Append the current year to the
+    year-less shape so all readers parse real ages."""
+    s = str(v or "")
+    if len(s) == 25 and s[3] == " " and "+" in s[19:25]:
+        return f"{s} {datetime.now().year}"
+    return s
+
+
 def upsert_post(p: dict, acct: Optional[int] = None) -> None:
     # Algorithm-weighted engagement (X 2025-26 weights: reply ≈27-75x like, RT ≈2x like).
     # Pragmatic skew 1:3:8 (likes:reposts:replies) — full 1:2:54 ratio overweights
@@ -594,7 +605,7 @@ def upsert_post(p: dict, acct: Optional[int] = None) -> None:
                  bookmarks=excluded.bookmarks, engagement=excluded.engagement""",
             (
                 _acct(acct), p.get("x_id"), p.get("author_handle", ""), int(p.get("is_own", 0)),
-                p.get("created_at"), p.get("text", ""),
+                _norm_created_at(p.get("created_at")), p.get("text", ""),
                 int(p.get("impressions", 0)), int(p.get("likes", 0)),
                 int(p.get("reposts", 0)), int(p.get("replies", 0)),
                 int(p.get("bookmarks", 0)), round(rate, 5),

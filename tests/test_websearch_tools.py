@@ -69,3 +69,24 @@ def test_trend_post_no_findings_is_honest(monkeypatch):
     monkeypatch.setattr(websearch, "web_search", lambda q, limit=6: [])
     out = tools.execute_tool(CFG, "trend_post", {"topic": "zzz nothing"})
     assert out["ok"] is True and "nothing found" in (out.get("error") or "")
+
+
+def test_web_read_live_page():
+    r = websearch.web_read("https://example.com")
+    assert r["ok"] is True
+    assert "Example Domain" in r["title"] or "example" in r["text"].lower()
+
+
+def test_web_read_bad_url_is_honest():
+    r = websearch.web_read("https://nonexistent.invalid")
+    assert r["ok"] is False
+
+
+def test_web_read_tool_registered():
+    from openstanley.gen import tools
+    assert "web_read" in tools.TOOL_REGISTRY
+    out = tools.execute_tool(websearch.Config() if hasattr(websearch, "Config") else None,
+                             "web_read", {}) if False else tools.execute_tool(
+        __import__("openstanley.core.config", fromlist=["Config"]).Config(),
+        "web_read", {})
+    assert out["ok"] is True and "url required" in out.get("error", "")

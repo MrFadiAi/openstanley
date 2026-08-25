@@ -116,9 +116,23 @@ def _age_hours(tweet: dict, now: datetime) -> tuple[Optional[float], bool]:
     raw = tweet.get("created_at")
     if not raw:
         return None, False
+    s = str(raw).replace("Z", "+00:00")
+    ts = None
     try:
-        ts = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        ts = datetime.fromisoformat(s)
     except ValueError:
+        pass
+    if ts is None:
+        # twikit's English shape: 'Fri Aug 21 00:20:34 +0000 2026' — the
+        # only-ISO parser rejected every stored post, hard-rejecting all 9
+        # targets per pass as 'age unknown' (engage loop ran dead for days)
+        for fmt in ("%a %b %d %H:%M:%S %z %Y", "%a %b %d %H:%M:%S %Y"):
+            try:
+                ts = datetime.strptime(s, fmt)
+                break
+            except ValueError:
+                continue
+    if ts is None:
         return None, False
     if ts.tzinfo is not None and now.tzinfo is None:
         ts = ts.replace(tzinfo=None)  # compare in naive-local like the rest of the app

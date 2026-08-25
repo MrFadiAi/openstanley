@@ -73,6 +73,10 @@ Available tools:
 - github_drafts {user?, count?: 2}
     → drafts one post per the user's LATEST pushed GitHub repos, grounded
       in the repo description + newest commits (their own real work)
+- web_read {url}
+    → opens ANY url and returns the readable page text (reader mode) —
+      follow up a web_search hit, read the full article/docs before
+      drafting from it
 
 Rules: never invent results — the system executes and appends real results.
 Keep the prose reply short; let the action carry the work. If the user asks
@@ -408,3 +412,20 @@ def _tool_github_drafts(cfg, user: str = "", count: int = 2) -> dict:
 
 
 register("github_drafts", _tool_github_drafts)
+
+
+
+# ---------- web_read: the agent's way into any page ----------
+
+def _tool_web_read(cfg, url: str = "") -> dict:
+    from . import websearch
+    if not (url or "").strip():
+        return {"ok": True, "error": "url required"}
+    res = websearch.web_read(url.strip())
+    if not res.get("ok"):
+        return {"ok": True, "error": res.get("error", "unreadable")}
+    return {"ok": True, "title": res["title"], "url": res["url"],
+            "text": res["text"][:4000]}
+
+
+register("web_read", _tool_web_read)
