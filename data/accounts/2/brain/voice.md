@@ -4,8 +4,8 @@
      hand-edits are overwritten on the next scan. -->
 
 lowercase_first: false
-length_band_post: 49-147
-length_band_reply: 16-82
+length_band_post: 100-280
+length_band_reply: 33-167
 emoji_max: 2
 hashtags_max: 0
-misspelling_band: 0.4-2.2
+misspelling_band: 0.0-1.5

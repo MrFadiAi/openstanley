@@ -46,3 +46,17 @@ def test_thread_tweets_scrubbed_too():
     finally:  # never leak rows into other suites' deterministic ranges
         with db.connect() as c:
             c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_post_band_floor_is_60pct_of_avg(tmp_path, monkeypatch):
+    """Short-draft guard: the lock's floor must sit at 60% of the account's
+    average, not 40% — 69-char 'posts' must fail for a 167-char account."""
+    from openstanley.gen import voice_lock
+    monkeypatch.setattr(voice_lock, "voice_md_path",
+                        lambda acct=None: tmp_path / "voice.md")
+    stats = {"avg_length_chars": 167.0}
+    path = voice_lock.write_voice_md(stats, acct=1)
+    band = [ln for ln in path.read_text(encoding="utf-8").splitlines()
+            if ln.startswith("length_band_post")][0]
+    lo = int(band.split(":")[1].split("-")[0])
+    assert lo >= 100, band   # 60% of 167

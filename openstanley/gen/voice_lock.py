@@ -216,7 +216,8 @@ def write_voice_md(stats: dict, acct: int | None = None) -> Optional[Path]:
     lower_pct = float((stats.get("casing") or {}).get("pct_lowercase_start") or 0)
     m = float(stats.get("misspellings_per_100_words") or 0)
 
-    p_lo, p_hi = max(15, round(avg * 0.4)), min(280, round(avg * 1.8))
+    # floor at 60% of avg: the account's own short tail, not half its voice
+    p_lo, p_hi = max(15, round(avg * 0.6)), min(280, round(avg * 1.8))
     if p_hi <= p_lo:
         p_hi = min(280, p_lo + 40)
     r_lo, r_hi = max(5, round(avg * 0.2)), min(200, round(avg * 1.0))

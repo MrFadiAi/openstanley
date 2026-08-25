@@ -174,7 +174,7 @@ def test_write_voice_md_derives_scan_keys(tmp_path, monkeypatch):
     rules = voice_lock.load_persona_rules()
     assert rules["source"] == "brain"
     assert rules["lowercase_first"] is True
-    assert rules["bands"]["post"] == (40, 180)
+    assert rules["bands"]["post"] == (60, 180)  # 60% floor (2026-08-25)
     assert rules["emoji_max"] == 0 and rules["hashtags_max"] == 0
     assert rules["misspelling_band"] == (2.0, 8.5)
 

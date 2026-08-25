@@ -249,8 +249,15 @@ def style_prompt_block() -> str:
     if not p:
         return ""
     s = p.get("stats") or {}
+    dist = s.get("length_dist") or {}
+    dist_txt = (f"under80 {int(dist.get('under_80', 0) * 100)}% · 80-160 "
+                f"{int(dist.get('80_160', 0) * 100)}% · 160-240 "
+                f"{int(dist.get('160_240', 0) * 100)}% · over240 "
+                f"{int(dist.get('over_240', 0) * 100)}%")
     return f"""STYLE PROFILE (measured from the account — match these numbers):
-- avg post length {s.get('avg_length_chars', '?')} chars; sentence p50 {s.get('sentence', {}).get('p50', '?')} words
+- avg post length {s.get('avg_length_chars', '?')} chars — WRITE TO THE
+  AVERAGE, NOT BELOW IT; short posts are the minority of this account's voice
+- real length mix: {dist_txt}
 - emoji per post {s.get('emoji', {}).get('per_post', 0)} (top: {', '.join(s.get('emoji', {}).get('top', []) or [])})
 - hashtags per post {s.get('hashtags', {}).get('per_post', 0)} ({int(s.get('hashtags', {}).get('pct_with', 0) * 100)}% of posts have any)
 - starts lowercase {int(s.get('casing', {}).get('pct_lowercase_start', 0) * 100)}% of posts
