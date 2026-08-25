@@ -788,8 +788,29 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
 
     # post candidates (markdown quote blocks) → real drafts, exactly what the
     # dashboard's approval cards hold. Saving is safe; publishing is not ours.
+    # Two guards (user report 22:48): quotes that repeat an EXISTING draft
+    # ("show me the post" re-quotes it) are skipped, and a run of SHORT
+    # quote lines is a THREAD — saved as one threaded draft, not fragments.
     draft_ids: list[int] = []
-    for cand in chat_mod._extract_candidates(clean, cfg):
+    cands = chat_mod._extract_candidates(clean, cfg)
+    with db.connect() as _c:
+        recent = {r["text"].strip() for r in _c.execute(
+            "SELECT text FROM drafts WHERE status IN ('draft','approved') "
+            "ORDER BY id DESC LIMIT 60")}
+    cands = [c for c in cands if c["text"].strip() not in recent]
+    if len(cands) >= 3 and all(len(c["text"]) < 110 for c in cands):
+        texts = [c["text"] for c in cands]
+        try:
+            did = db.add_draft(text=texts[0], thread=texts, kind="post",
+                               temperature="chat",
+                               meta={"source": "chat", "via": "tg-thread-merge",
+                                     "language": cands[0].get("language")})
+            draft_ids.append(did)
+            db.log("chat", f"thread candidate merged: {len(texts)} lines → #{did}")
+            cands = []
+        except Exception as e:  # noqa: BLE001
+            db.log("telegram", f"thread merge failed: {e}", level="warn")
+    for cand in cands:
         try:
             draft_ids.append(chat_mod.draft_from_chat(cfg, cand["text"]))
         except Exception as e:  # noqa: BLE001 — a failed save must not kill the reply
