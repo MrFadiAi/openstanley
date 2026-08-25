@@ -163,3 +163,16 @@ def test_chat_stream_events():
     done = next(e for e in events if e["type"] == "done")
     assert done["reply_id"] > 0
     assert isinstance(done["actions"], list)
+
+
+def test_parse_actions_accepts_flat_args_shape():
+    """Models emit both {tool,args:{}} and flat {tool,topic:...} — the flat
+    shape dropped every argument (user report: trend_post 'topic required')."""
+    flat = '```action\n{"tool": "trend_post", "topic": "AI agents", "source": "x"}\n```'
+    acts = tools.parse_actions(flat)
+    assert acts and acts[0]["tool"] == "trend_post"
+    assert acts[0]["args"].get("topic") == "AI agents"
+    assert acts[0]["args"].get("source") == "x"
+    nested = '```action\n{"tool": "trend_post", "args": {"topic": "crypto", "source": "web"}}\n```'
+    acts2 = tools.parse_actions(nested)
+    assert acts2[0]["args"] == {"topic": "crypto", "source": "web"}

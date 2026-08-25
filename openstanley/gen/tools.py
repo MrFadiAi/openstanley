@@ -127,7 +127,10 @@ ACTION_RE = re.compile(r"```action\s*(\{.*?\})\s*```", re.DOTALL)
 
 
 def parse_actions(reply: str) -> list[dict]:
-    """Extract action blocks from an LLM reply. Tolerant to prose around them."""
+    """Extract action blocks from an LLM reply. Tolerant to prose around them
+    AND to both arg shapes — models emit {"tool","args":{...}} or flat
+    {"tool","topic":...}; flat fields merge into args (user report 2026-08-25:
+    trend_post got 'topic required' despite the model naming the topic)."""
     actions = []
     for m in ACTION_RE.finditer(reply):
         raw = m.group(1).strip().rstrip(",")
@@ -136,7 +139,11 @@ def parse_actions(reply: str) -> list[dict]:
         except json.JSONDecodeError:
             continue
         if isinstance(obj, dict) and obj.get("tool") in TOOL_REGISTRY:
-            actions.append({"tool": obj["tool"], "args": obj.get("args") or {}})
+            args = dict(obj.get("args") or {})
+            for k, v in obj.items():
+                if k not in ("tool", "args"):
+                    args.setdefault(k, v)
+            actions.append({"tool": obj["tool"], "args": args})
     return actions
 
 
