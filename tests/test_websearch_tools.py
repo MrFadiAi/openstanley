@@ -90,3 +90,34 @@ def test_web_read_tool_registered():
         __import__("openstanley.core.config", fromlist=["Config"]).Config(),
         "web_read", {})
     assert out["ok"] is True and "url required" in out.get("error", "")
+
+
+def test_deep_research_registered():
+    from openstanley.gen import tools
+    assert "deep_research" in tools.TOOL_REGISTRY
+
+
+def test_thinking_budget_reaches_anthropic_body(monkeypatch):
+    import openstanley.gen.llm as llm
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["body"] = json
+        class R:
+            status_code = 200
+            text = '{"ok":true}'
+            def json(self):
+                return {"content": [{"type": "text", "text": "thought then said"}]}
+        return R()
+
+    monkeypatch.setattr(llm.httpx, "post", fake_post)
+    from openstanley.core.config import LLMConfig
+    cfg = LLMConfig(api_key_env="X", base_url="https://z", model="m",
+                     transport="anthropic")
+    import os
+    os.environ["X"] = "k"
+    out = llm.chat(cfg, "s", "u", thinking_budget=1500)
+    assert out == "thought then said"
+    assert captured["body"]["thinking"] == {"type": "enabled",
+                                            "budget_tokens": 1500}
+    assert "temperature" not in captured["body"]

@@ -77,6 +77,11 @@ Available tools:
     → opens ANY url and returns the readable page text (reader mode) —
       follow up a web_search hit, read the full article/docs before
       drafting from it
+- deep_research {topic}
+    → multi-step research: searches the web, READS the top pages, and
+      drafts from the full material with thinking mode on. Slower
+      (30-90s) but the draft cites what the articles actually say —
+      use for 'research X properly' requests
 
 Rules: never invent results — the system executes and appends real results.
 Keep the prose reply short; let the action carry the work. If the user asks
@@ -429,3 +434,78 @@ def _tool_web_read(cfg, url: str = "") -> dict:
 
 
 register("web_read", _tool_web_read)
+
+
+
+# ---------- deep research: search → read → think → draft ----------
+
+def _tool_deep_research(cfg, topic: str = "") -> dict:
+    """Multi-step: web_search → web_read the top hits → one thinking-mode
+    LLM pass over the FULL material → grounded draft. Approval-gated."""
+    from . import websearch
+    from .llm import chat, extract_json
+    from . import voice as voice_mod
+    from . import diversity as div
+    from ..core import db as db_mod
+    from ..core.text import scrub_ai_punctuation
+    topic = (topic or "").strip()
+    if not topic:
+        return {"ok": True, "error": "topic required"}
+    results = websearch.web_search(topic, limit=6)
+    if not results:
+        return {"ok": True, "error": "nothing found on the web for that topic"}
+    # read up to 3 of the top hits — full pages, not snippets
+    pages: list[dict] = []
+    for r in results[:3]:
+        page = websearch.web_read(r["url"], max_chars=4000)
+        if page.get("ok"):
+            pages.append({"title": r["title"], "url": r["url"],
+                          "text": page["text"]})
+    if not pages:
+        # pages unreadable → fall back to snippet material
+        pages = [{"title": r["title"], "url": r["url"], "text": r["snippet"]}
+                 for r in results[:4]]
+    own = div.recent_draft_texts()
+    fmt = ("observation", "the specific finding from the research, stated "
+           "plainly, then why it matters")
+    vb = div.variety_block(own, fmt, div.question_budget(own))
+    voice = voice_mod.voice_prompt_block()
+    material = chr(10) * 2
+    material = material.join(
+        f"SOURCE: {p['title']} ({p['url']})" + chr(10) + p["text"][:3500]
+        for p in pages)
+    system = (
+        "You researched a topic by reading multiple web sources and now write "
+        "ONE X post in the user's voice from the FULL material. Output STRICT "
+        'JSON: {"tweet": "..."}. Under 240 chars. Cite a SPECIFIC finding '
+        "(a number, name, or claim) that appears in the sources — never "
+        "invent. No hashtags, no question mark at the end.")
+    user = (f"TOPIC: {topic}" + chr(10) + f"RESEARCH MATERIAL (read "
+            f"{len(pages)} pages):" + chr(10) + material[:7000] + chr(10)
+            + f"USER VOICE: {str(voice)[:350]}" + vb + chr(10)
+            + "Write the post now.")
+    raw = chat(cfg.llm, system, user, json_mode=True, thinking_budget=2500)
+    data = extract_json(raw)
+    text = scrub_ai_punctuation(
+        (data.get("tweet") or "").strip()) if isinstance(data, dict) else ""
+    if not text or div.too_similar(text, own):
+        return {"ok": True, "error": "research draft rejected (empty or too "
+                "similar) — try rephrasing the topic"}
+    image = None
+    try:
+        from . import quote_card
+        image = quote_card.make_card(text)
+    except Exception:  # noqa: BLE001
+        image = None
+    did = db_mod.add_draft(text=text, kind="post", temperature="bold",
+                           image=image,
+                           meta={"source": "deep-research", "topic": topic,
+                                 "sources": [p["url"] for p in pages[:3]]})
+    db_mod.log("research", f"deep research draft #{did} on '{topic[:40]}' "
+                           f"from {len(pages)} pages")
+    return {"ok": True, "draft_id": did, "text": text,
+            "pages_read": len(pages),
+            "sources": [p["url"] for p in pages[:3]]}
+
+
+register("deep_research", _tool_deep_research)

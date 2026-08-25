@@ -18,7 +18,8 @@ class LLMError(RuntimeError):
 
 
 def chat(cfg: LLMConfig, system: str, user: str, temperature: Optional[float] = None,
-         json_mode: bool = False, retries: int = 2) -> str:
+         json_mode: bool = False, retries: int = 2,
+         thinking_budget: int = 0) -> str:
     """Blocking call. The agent loops run in threads; server handlers call via threadpool."""
     if not cfg.api_key:
         raise LLMError(
@@ -31,7 +32,8 @@ def chat(cfg: LLMConfig, system: str, user: str, temperature: Optional[float] = 
     for attempt in range(retries + 1):
         try:
             if cfg.transport == "anthropic":
-                return _chat_anthropic(cfg, system, user, temp, json_mode)
+                return _chat_anthropic(cfg, system, user, temp, json_mode,
+                                       thinking_budget=thinking_budget)
             return _chat_openai(cfg, system, user, temp, json_mode)
         except LLMError as e:
             last_err = str(e)
@@ -62,7 +64,8 @@ def _chat_openai(cfg: LLMConfig, system: str, user: str, temp: float, json_mode:
     raise LLMError(f"HTTP {r.status_code}: {r.text[:300]}")
 
 
-def _chat_anthropic(cfg: LLMConfig, system: str, user: str, temp: float, json_mode: bool) -> str:
+def _chat_anthropic(cfg: LLMConfig, system: str, user: str, temp: float,
+                    json_mode: bool, thinking_budget: int = 0) -> str:
     headers = {
         "x-api-key": cfg.api_key,
         "anthropic-version": "2023-06-01",
@@ -76,6 +79,13 @@ def _chat_anthropic(cfg: LLMConfig, system: str, user: str, temp: float, json_mo
         "system": sys_text,
         "messages": [{"role": "user", "content": user}],
     }
+    if thinking_budget > 0:
+        # GLM-5.3 on z.ai honors the Anthropic thinking parameter: the model
+        # reasons in private scratch-space before the visible answer. Temp
+        # must be unset with thinking on Anthropic-style APIs.
+        body["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
+        body.pop("temperature", None)
+        body["max_tokens"] = max(cfg.max_tokens, thinking_budget + 1000)
     url = cfg.base_url.rstrip("/")
     if not url.endswith("/v1/messages"):
         url = url + "/v1/messages"
