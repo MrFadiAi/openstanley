@@ -1351,6 +1351,7 @@ def _handle_callback(cfg: Config, cb: dict) -> None:
         draft_id = -1
     if action == "s":
         # read-only: the full draft as its own message, card stays live
+        db.log("telegram", f"show tap for draft #{draft_id}")
         d = db.get_draft(draft_id)
         if d and d["status"] in ("draft", "approved"):
             full = (f"#{draft_id} [{d.get('kind') or 'post'}] FULL DRAFT:" + chr(10)
