@@ -361,3 +361,15 @@ def test_chat_candidates_and_saved_draft_carry_voice(persona, monkeypatch):
     d = db.get_draft(did)
     assert d["meta"]["voice"]["score"] >= 75
     assert d["text"] == cand["text"], "the human-approved text is never swapped"
+
+
+def test_rtl_guard_english_opening_rejected():
+    from openstanley.gen.voice_lock import score_deterministic
+    s, v = score_deterministic("KINO studio جاهز اليوم صار شغله")
+    assert s <= 70 and any("opens with English" in x for x in v)
+
+
+def test_rtl_guard_arabic_opening_clean():
+    from openstanley.gen.voice_lock import score_deterministic
+    s, v = score_deterministic("شغلتني الفكرة وقررت أطلعها open source")
+    assert not any("opens with English" in x for x in v)

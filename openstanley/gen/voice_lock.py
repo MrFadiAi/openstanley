@@ -297,6 +297,15 @@ def score_deterministic(text: str, kind: str = "post",
         score -= penalty
         violations.append(msg)
 
+    # RTL guard (user rule 2026-08-25, deterministic): X renders
+    # Arabic-dominant posts that OPEN with a Latin word broken — the first
+    # word must be Arabic. English tech terms stay inside the sentence.
+    arabic_ratio = sum(1 for ch in t if "؀" <= ch <= "ۿ") / max(len(t), 1)
+    first_word = t.split()[0] if t.split() else ""
+    if arabic_ratio > 0.2 and first_word and first_word.isascii() and first_word[:1].isalpha():
+        hit(30, f"opens with English word '{first_word[:14]}' on an Arabic-dominant "
+                "account — X breaks RTL rendering; the first word must be Arabic")
+
     low = t.lower()
     for phrase in [p for p in BANNED_PHRASES if p in low][:2]:  # cap at 2 hits
         hit(30, f"corporate phrase: '{phrase}'")
