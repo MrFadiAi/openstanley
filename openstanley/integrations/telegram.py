@@ -634,10 +634,12 @@ def _send_and_capture(token: str, chat_id: int, text: str,
 
 
 def _approve_keyboard(draft_ids: list[int]) -> str:
-    """One [approve, reject] row per draft — one-tap decisions on the card.
-    callback_data stays tiny (a:<id> / r:<id>) well under Telegram's 64 bytes."""
+    """One [approve, reject, show] row per draft — one-tap decisions plus a
+    read-only full-text view. callback_data stays tiny (a:/r:/s: + id) well
+    under Telegram's 64 bytes."""
     rows = [[{"text": f"approve {i}", "callback_data": f"a:{i}"},
-             {"text": f"reject {i}", "callback_data": f"r:{i}"}]
+             {"text": f"reject {i}", "callback_data": f"r:{i}"},
+             {"text": "show", "callback_data": f"s:{i}"}]
             for i in draft_ids[:DRAFTS_PAGE]]
     return json.dumps({"inline_keyboard": rows})
 
@@ -1320,7 +1322,7 @@ def _rebuild_card(chat_id: int, message_id: int) -> None:
     lines = ["⏳ Approvals — tap a button; this card tracks the rest:"]
     lines.extend(_card_status_line(r) for r in rows)
     lines.append("")
-    lines.append("/drafts — full previews")
+    lines.append("tap show on the card for any full draft")
     _api_edit_text(token, chat_id, message_id, chr(10).join(lines))
     markup = {"reply_markup": _approve_keyboard(pending)} if pending else {}
     _api(token, "editMessageReplyMarkup",
@@ -1347,6 +1349,25 @@ def _handle_callback(cfg: Config, cb: dict) -> None:
         draft_id = int(sid)
     except ValueError:
         draft_id = -1
+    if action == "s":
+        # read-only: the full draft as its own message, card stays live
+        d = db.get_draft(draft_id)
+        if d and d["status"] in ("draft", "approved"):
+            full = (f"#{draft_id} [{d.get('kind') or 'post'}] FULL DRAFT:" + chr(10)
+                    + _quote(d["text"] or ""))
+            if d.get("thread"):
+                full += chr(10) + chr(10).join(
+                    f"{n+1}. {_quote(t)}" for n, t in enumerate(d["thread"][1:]))
+            link = (d.get("meta") or {}).get("link_reply")
+            if link:
+                full += chr(10) + f"link in first reply: {link}"
+            send_message(chat_id, full)
+            reply = ""  # silent toast; the full text IS the response
+        else:
+            reply = f"No draft #{draft_id} waiting — /drafts lists them."
+        _api(token, "answerCallbackQuery",
+             {"callback_query_id": cb.get("id"), "text": reply[:190]})
+        return  # show never rewrites or clears the card
     if action == "a":
         reply = approve_draft_tg(cfg, draft_id)
     elif action == "r":

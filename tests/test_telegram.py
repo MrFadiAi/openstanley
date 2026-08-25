@@ -1108,3 +1108,29 @@ def test_no_mini_card_when_nothing_created(monkeypatch):
     tg._push_mini_card(CHAT, before)
     sends = [(u, p) for u, m, p in fake.calls if m == "sendMessage"]
     assert not [p for u, p in sends if "reply_markup" in p]
+
+
+# ---------------- [show] button: full draft on demand ----------------
+
+def test_show_button_in_keyboard():
+    kb = json.loads(tg._approve_keyboard([77]))
+    row = kb["inline_keyboard"][0]
+    assert [b["callback_data"] for b in row] == ["a:77", "r:77", "s:77"]
+    assert row[2]["text"] == "show"
+
+
+def test_show_sends_full_draft_keeps_card(monkeypatch):
+    _enable()
+    d = db.add_draft(text="full body of the draft here, every word " * 3, acct=1)
+    fake = _FakeTGHttpx()
+    monkeypatch.setattr(tg, "httpx", fake)
+    tg._card_map.clear()
+    tg.notify_new_drafts([d])          # card msg 4242 with [show] button
+    tg._handle_update(CFG, _cb_update("cbS", f"s:{d}", msg_id=4242))
+    texts = [t for _c, t in fake.sent()]
+    assert any("FULL DRAFT" in t and "every word" in t for t in texts)
+    # read-only: card NOT rewritten, buttons NOT cleared
+    edits = [m for _u, m, _p in fake.calls if m == "editMessageText"]
+    assert not edits
+    with db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id=?", (d,))
