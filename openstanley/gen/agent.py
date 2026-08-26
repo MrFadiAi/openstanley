@@ -179,6 +179,12 @@ class Agent:
         """Hourly: pull mentions, draft replies + SCHEDULED niche replies."""
         acct = db.active_account()
         new = await replies_mod.pull_engagements(self.cfg, self.x, acct=acct)
+        # live targets first: the gate can only pass what exists RIGHT NOW —
+        # stored-only targets were 37-45h stale every single pass
+        try:
+            await replies_mod.refresh_niche_targets(self.cfg, self.x, acct)
+        except Exception as e:  # noqa: BLE001 — refresh never blocks engage
+            db.log("engage", f"live refresh skipped: {e}", level="warn")
         ids = await asyncio.to_thread(replies_mod.draft_replies, self.cfg, acct=acct)
         niche_ids = await asyncio.to_thread(replies_mod.draft_niche_replies, self.cfg,
                                             acct=acct)

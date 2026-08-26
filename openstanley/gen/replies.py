@@ -174,6 +174,30 @@ def _pick_niche_targets(cfg: Config, limit: int = 5,
     return [p for rel, p in scored[:limit] if rel > 0]
 
 
+async def refresh_niche_targets(cfg: Config, x_client, acct=None) -> int:
+    """Search the account's themes LIVE and upsert fresh posts, so the gate
+    judges targets that actually exist right now — not posts stored days ago
+    (user report: 9/9 targets rejected 37-45h stale every 30 minutes)."""
+    acct = acct if acct is not None else db.active_account()
+    themes = list(cfg.agent.evergreen_themes or [])[:3]
+    added = 0
+    for theme in themes:
+        try:
+            posts = await x_client.search(theme, limit=15)
+        except Exception as e:  # noqa: BLE001 — one theme failing is fine
+            db.log("engage", f"live search '{theme}' failed: {e}", level="warn")
+            continue
+        for p in posts:
+            before = db._post_exists(p.get("x_id"), acct)
+            db.upsert_post(p, acct)
+            if not before:
+                added += 1
+    if added:
+        db.log("engage", f"live target refresh: +{added} fresh posts "
+                        f"across {len(themes)} themes")
+    return added
+
+
 def draft_niche_replies(cfg: Config, limit: int = 3,
                        acct: int | None = None) -> list[int]:
     """Draft SCHEDULED replies to niche targets → approval flow, never auto-send.

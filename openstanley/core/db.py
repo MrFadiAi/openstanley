@@ -587,6 +587,13 @@ def _norm_created_at(v) -> str:
     return s
 
 
+def _post_exists(x_id, acct: Optional[int] = None) -> bool:
+    with connect() as c:
+        row = c.execute("SELECT 1 FROM posts WHERE account_id=? AND x_id=?",
+                        (_acct(acct), x_id)).fetchone()
+    return row is not None
+
+
 def upsert_post(p: dict, acct: Optional[int] = None) -> None:
     # Algorithm-weighted engagement (X 2025-26 weights: reply ≈27-75x like, RT ≈2x like).
     # Pragmatic skew 1:3:8 (likes:reposts:replies) — full 1:2:54 ratio overweights

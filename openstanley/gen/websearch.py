@@ -98,14 +98,24 @@ def x_search(cfg: Config, query: str, limit: int = 10) -> list[dict]:
 
 
 def x_trends(cfg: Config, limit: int = 10) -> list[str]:
-    """X trending topics via a fresh cookie client (loop-safe anywhere)."""
+    """X trending topics via a fresh cookie client (loop-safe anywhere).
+    The trends endpoint 404s transiently (code 34) — one retry fixes it."""
     import asyncio
+    import time as _time
 
     async def _run():
         x = _own_client()
         c = await x._ensure()
-        res = await c.get_trends("trending")
-        return [str(t.name) for t in res][:limit]
+        last = None
+        for attempt in (1, 2):
+            try:
+                res = await c.get_trends("trending")
+                return [str(t.name) for t in res][:limit]
+            except Exception as e:  # noqa: BLE001 — transient 404s clear on retry
+                last = e
+                if attempt == 1:
+                    _time.sleep(2)
+        raise last
 
     return asyncio.run(_run())
 

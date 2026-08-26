@@ -279,14 +279,39 @@ def _intent_actions(reply: str, cfg: Config) -> list[dict]:
     return actions
 
 
-def _run_tools(cfg: Config, reply: str) -> list[dict]:
-    results = []
-    for act in tools_mod.parse_actions(reply):
-        res = tools_mod.execute_tool(cfg, act["tool"], act["args"])
-        results.append({"name": act["tool"], "args": act["args"], **res})
-        db.log("chat", f"tool {act['tool']} → ok={res.get('ok')}"
-                       + ("" if res.get("ok") else f" error={res.get('error', '')[:150]}"))
-    return results
+def _run_tools(cfg: Config, reply: str, max_rounds: int = 3) -> tuple[str, list[dict]]:
+    """Hermes-grade agentic loop: execute tool actions, feed results back for
+    a follow-up turn, and KEEP GOING while the model chains more actions —
+    search → read → draft happens in one conversation turn (bounded at
+    max_rounds so a confused model can never loop forever). Returns the
+    final prose (with each round's follow-up folded in) + all tool results."""
+    results: list[dict] = []
+    clean = reply
+    seen_actions: set[tuple] = set()
+    for _round in range(max_rounds):
+        actions = tools_mod.parse_actions(clean)
+        if not actions:
+            break
+        # skip exact repeats (a re-emitted identical action adds nothing)
+        actions = [a for a in actions
+                   if (a["tool"], json.dumps(a["args"], sort_keys=True))
+                   not in seen_actions]
+        if not actions:
+            break
+        for act in actions:
+            res = tools_mod.execute_tool(cfg, act["tool"], act["args"])
+            results.append({"name": act["tool"], "args": act["args"], **res})
+            seen_actions.add((act["tool"],
+                             json.dumps(act["args"], sort_keys=True)))
+            db.log("chat", f"tool {act['tool']} → ok={res.get('ok')}"
+                           + ("" if res.get("ok") else
+                              f" error={res.get('error', '')[:150]}"))
+        extra = _followup(cfg, clean, results[-len(actions):])
+        if extra:
+            clean = extra  # the follow-up may chain the next action
+        else:
+            break
+    return clean, results
 
 
 def _followup(cfg: Config, reply: str, tool_results: list[dict]) -> str:
@@ -316,7 +341,7 @@ def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -
     except LLMError as e:
         reply = f"(LLM error: {e})"
 
-    tool_results = _run_tools(cfg, reply)
+    clean, tool_results = _run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
     if tool_results:
         extra = _followup(cfg, reply, tool_results)
@@ -358,7 +383,7 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
     reply = "".join(full)
 
     # tools + follow-up run AFTER the stream so tokens land fast
-    tool_results = _run_tools(cfg, reply)
+    clean, tool_results = _run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
     for res in tool_results:
         yield {"type": "tool", "name": res["name"], "args": res.get("args"),

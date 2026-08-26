@@ -777,7 +777,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
         return
 
     reply = "".join(full)
-    tool_results = chat_mod._run_tools(cfg, reply)
+    clean, tool_results = chat_mod._run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
     if tool_results:
         extra = chat_mod._followup(cfg, reply, tool_results)
