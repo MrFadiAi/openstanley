@@ -154,14 +154,40 @@ def _existing_reply_targets(acct: int | None = None) -> set[str]:
 
 def _pick_niche_targets(cfg: Config, limit: int = 5,
                        acct: int | None = None) -> list[dict]:
-    """High-engagement niche posts matched by account relevance."""
+    """Fresh-first niche targets: only posts inside the ~24h reply window
+    (the gate rejects older anyway), THEN ranked by engagement — the old
+    engagement-first ordering let days-old viral posts crowd out the fresh
+    conversations the live refresh just stored."""
+    from datetime import datetime as _dt
     already = _existing_reply_targets(acct)
     niche_accounts = set(cfg.agent.niche_accounts or [])
     profile = db.get_acct_setting("style_profile", acct=acct) or {}
     topics = set((profile.get("stats") or {}).get("topics") or [])
+    cutoff = _dt.now().timestamp() - 26 * 3600  # parse margin under the 24h wall
+
+    def _fresh(p: dict) -> bool:
+        raw = str(p.get("created_at") or "")
+        ts = None
+        try:
+            ts = _dt.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            for fmt in ("%a %b %d %H:%M:%S %z %Y", "%a %b %d %H:%M:%S %Y"):
+                try:
+                    ts = _dt.strptime(raw, fmt)
+                    break
+                except ValueError:
+                    continue
+        if ts is None:
+            return False
+        if ts.tzinfo is not None:
+            ts = ts.replace(tzinfo=None)
+        return ts.timestamp() >= cutoff
+
     scored = []
-    for p in db.niche_posts(limit=80, acct=acct):
+    for p in db.niche_posts(limit=200, acct=acct):
         if p.get("x_id") in already or not p.get("text"):
+            continue
+        if not _fresh(p):
             continue
         relevance = 0.0
         if p.get("author_handle") in niche_accounts:

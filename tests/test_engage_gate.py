@@ -243,7 +243,10 @@ def test_engage_loop_gates_before_llm_and_attaches_meta(monkeypatch):
     with db.connect() as c:
         rows = c.execute("SELECT message FROM agent_log WHERE loop='engage' "
                          "AND message LIKE 'gate: rejected%'").fetchall()
-    assert rows and "3/4" in rows[0]["message"]
+    # fresh-first picker (2026-08-26): dead targets are filtered BEFORE
+    # the gate, so it no longer logs "3/4" — none may reach the gate at
+    # all. The LLM-budget proof is len(calls) == 1 above.
+    assert all("dead" not in r["message"] for r in rows)
 
 
 def test_engage_loop_all_rejected_calls_no_llm(monkeypatch):
