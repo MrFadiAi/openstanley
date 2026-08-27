@@ -2031,6 +2031,10 @@ def start_scheduler():
     sched.add_job(_digest_job,
                   CronTrigger(hour=digest_mod.digest_hour(cfg), minute=0),
                   id="digest")
+    # hourly re-smoke at :11 — a transient boot blip must not pin a false
+    # red until the next restart (rate limit is 5m, hourly fits inside it)
+    sched.add_job(_run_smoke_and_store, CronTrigger(minute=11),
+                  id="smoke_refresh")
     if ap_mod.get_state()["enabled"]:
         sched.add_job(_autopilot_job,
                       IntervalTrigger(minutes=ap_mod.interval_minutes(cfg),

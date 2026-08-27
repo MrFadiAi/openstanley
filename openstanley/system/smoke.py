@@ -38,7 +38,9 @@ from ..gen.llm import chat as llm_chat
 
 # per-probe wall-clock caps (s) — monkeypatchable in tests
 PROBE_TIMEOUTS: dict[str, float] = {
-    "identity": 15,
+    "identity": 45,  # includes ONE delayed retry — transient X 404s on the
+                     # identity endpoint are established (live 08-25..27);
+                     # 15s + call + call fits, and boot smoke is backgrounded
     "timeline_read": 15,
     "search_read": 15,
     "notifications_read": 15,
@@ -46,6 +48,9 @@ PROBE_TIMEOUTS: dict[str, float] = {
     "brain": 5,
     "db": 5,
 }
+
+# delay before the identity retry (patched to 0 in tests)
+IDENTITY_RETRY_S = 15
 
 # a probe whose failure downgrades to WARN instead of FAIL
 WARN_ONLY = {"notifications_read"}
@@ -105,7 +110,15 @@ class _CountingX:
 
 def _identity(x, shared: dict) -> Awaitable[str]:
     async def run() -> str:
-        me = await x.me()
+        try:
+            me = await x.me()
+        except Exception:
+            # Transient X identity 404s are established (a boot-time blip
+            # pinned a false red for a full hour, live 2026-08-27 — a fresh
+            # client succeeded 2/2 seconds later). ONE delayed retry before
+            # declaring the wiring broken.
+            await asyncio.sleep(IDENTITY_RETRY_S)
+            me = await x.me()
         shared["username"] = me.get("username", "")
         if not shared["username"]:
             raise RuntimeError("me() returned no username")

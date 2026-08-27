@@ -296,3 +296,41 @@ def test_startup_smoke_does_not_block_boot(monkeypatch):
         stored = db.get_setting("smoke_last")
         assert stored is not None and stored["status"] == "green"
     print("[ok] startup smoke: background task, / served during, report stored")
+
+
+def test_identity_transient_failure_retries_once(monkeypatch):
+    """A transient identity 404 (live 08-25..27: boot blip pinned a false
+    red for an hour while a fresh client succeeded 2/2) must retry once and
+    pass — and never write to X doing it."""
+    from openstanley.system import smoke
+
+    class FlakyOnceX(FakeX):
+        def __init__(self):
+            super().__init__()
+            self.me_calls = 0
+
+        async def me(self):
+            self.calls.append("me")
+            self.me_calls += 1
+            if self.me_calls == 1:
+                raise RuntimeError("NotFound: status: 404")
+            return await super().me()
+
+    monkeypatch.setattr(smoke, "IDENTITY_RETRY_S", 0)
+    rep = run(x=FlakyOnceX())
+    ident = next(p for p in rep.probes if p.name == "identity")
+    assert ident.ok is True and "404" not in ident.detail
+
+
+def test_identity_hard_failure_still_fails_after_retry(monkeypatch):
+    from openstanley.system import smoke
+
+    class DeadX(FakeX):
+        async def me(self):
+            self.calls.append("me")
+            raise RuntimeError("NotFound: status: 404")
+
+    monkeypatch.setattr(smoke, "IDENTITY_RETRY_S", 0)
+    rep = run(x=DeadX())
+    ident = next(p for p in rep.probes if p.name == "identity")
+    assert ident.ok is False
