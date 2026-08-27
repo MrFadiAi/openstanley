@@ -7,6 +7,7 @@ punctuation habits, emoji density → 0-100 per draft, averaged for the suite.
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 from ..base import EvalContext, sample_posts
 from ...gen.style_scan import load_profile, voice_match
@@ -79,7 +80,24 @@ def run(ctx: EvalContext) -> dict:
         samples.append({"idea": p["idea"], "text": p["text"][:140],
                         "voice_match": vm, "style_distance": sd,
                         "combined": combined})
-    score = round(sum(s["combined"] for s in samples) / max(1, len(samples)), 1)
+    mean_combined = round(
+        sum(s["combined"] for s in samples) / max(1, len(samples)), 1)
+    base = real_post_baseline(profile)
+    if base:
+        # CALIBRATED score: drafts measured RELATIVE to the account's own
+        # posts on the same metrics. The absolute scale is compressed (live
+        # account 2: real posts 61.7 vs drafts 62.2 — drafts already match
+        # reality), so "100" now means "indistinguishable from — or better
+        # than — your own writing", which is the actual product goal.
+        rel = round(100 * mean_combined / max(base["combined"], 1.0), 1)
+        score = min(rel, 100.0)
+        note = (f"calibrated vs {base['posts']} real posts "
+                f"(baseline {base['combined']})")
+        if rel > 100.0:
+            note += f" — drafts EXCEED the real-post baseline by {rel - 100:.1f}"
+    else:
+        score = mean_combined
+        note = ""
     return {
         "score": score,
         "details": {
@@ -88,8 +106,31 @@ def run(ctx: EvalContext) -> dict:
                 sum(s["voice_match"] for s in samples) / max(1, len(samples)), 1),
             "mean_style_distance": round(
                 sum(s["style_distance"] for s in samples) / max(1, len(samples)), 1),
+            "mean_combined": mean_combined,
+            "real_post_baseline": base,
             "profile_present": bool(profile),
-            "note": "no style profile yet — run a scan for a sharper baseline"
-                    if not profile else "",
+            "note": note or ("no style profile yet — run a scan for a sharper "
+                            "baseline" if not profile
+                            else "no own posts yet — absolute scale, will "
+                                 "calibrate once the account has history"),
         },
+    }
+
+
+def real_post_baseline(profile: dict | None, limit: int = 25) -> Optional[dict]:
+    """Score the account's OWN recent posts on the same metrics — the
+    ground-truth anchor. Returns None with under 5 posts (a fresh account
+    keeps the absolute scale rather than anchoring on noise)."""
+    from ...core import db
+    posts = [p for p in db.own_posts(limit) if (p.get("text") or "").strip()]
+    if len(posts) < 5:
+        return None
+    vms = [voice_match(p["text"], profile) for p in posts]
+    sds = [style_distance(p["text"], profile) for p in posts]
+    comb = [round(0.6 * v + 0.4 * s, 1) for v, s in zip(vms, sds)]
+    return {
+        "posts": len(posts),
+        "voice_match": round(sum(vms) / len(vms), 1),
+        "style_distance": round(sum(sds) / len(sds), 1),
+        "combined": round(sum(comb) / len(comb), 1),
     }
