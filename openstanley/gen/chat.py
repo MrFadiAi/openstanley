@@ -13,7 +13,9 @@ from typing import Iterator, Optional
 
 from ..core import db
 from ..core.config import Config
+from ..system import watchdog
 from . import brain as brain_mod
+from . import instructions as instr_mod
 from . import tools as tools_mod
 from . import voice_lock
 from .algorithm import score_draft
@@ -338,7 +340,9 @@ def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -
     system = _system(cfg, user_message)
     try:
         reply = llm_chat(llm_cfg, system=system, user=_history_turn(user_message))
+        watchdog.note_chat_llm(True)
     except LLMError as e:
+        watchdog.note_chat_llm(False, str(e))
         reply = f"(LLM error: {e})"
 
     clean, tool_results = _run_tools(cfg, reply)
@@ -347,6 +351,11 @@ def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -
         extra = _followup(cfg, reply, tool_results)
         if extra:
             clean += "\n\n" + extra
+    # instruction memory: a directive-shaped message becomes a standing
+    # brain rule NOW, not whenever the next reflect("chat") might catch it
+    captured = instr_mod.capture(cfg, user_message)
+    if captured:
+        clean += "\n\n" + instr_mod.ack_line(captured)
     db.add_chat_message("assistant", clean,
                         meta={"tool_results": tool_results})
     brain_mod.maybe_reflect_chat_async(cfg)  # every 10th message → reflect
@@ -377,7 +386,9 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
         for tok in llm_chat_stream(llm_cfg, system=system, user=_history_turn(user_message)):
             full.append(tok)
             yield {"type": "token", "text": tok}
+        watchdog.note_chat_llm(True)
     except LLMError as e:
+        watchdog.note_chat_llm(False, str(e))
         yield {"type": "error", "message": str(e)}
         return
     reply = "".join(full)
@@ -394,6 +405,11 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
             clean += "\n\n" + extra
             yield {"type": "token", "text": "\n\n" + extra}
 
+    # instruction memory: capture runs after the tokens landed (the model's
+    # own reply is never delayed by it) — the ack rides the final text
+    captured = instr_mod.capture(cfg, user_message)
+    if captured:
+        clean += "\n\n" + instr_mod.ack_line(captured)
     reply_id = db.add_chat_message("assistant", clean,
                                    meta={"tool_results": tool_results})
     brain_mod.maybe_reflect_chat_async(cfg)  # every 10th message → reflect
@@ -412,6 +428,12 @@ def draft_from_chat(cfg: Config, text: str, image: str | None = None) -> int:
     The human already approved it, so the voice lock never rejects here —
     it only attaches the score (the Inbox chip shows the verdict).
     """
+    # watchdog burst guard: a confused reply storm must not be able to fill
+    # the queue — returns -1 (caller surfaces "not saved") when tripped
+    if not watchdog.allow_chat_draft():
+        db.log("chat", "chat draft save BLOCKED by watchdog burst guard",
+               level="warn")
+        return -1
     alg = score_draft(text)
     meta = {"source": "chat", "via": "openstanley-chat",
             "language": detect(text), "alg": alg,
@@ -423,5 +445,6 @@ def draft_from_chat(cfg: Config, text: str, image: str | None = None) -> int:
         db.log("voice", f"chat draft check failed: {e}", level="warn")
     did = db.add_draft(text=text, kind="post", temperature="chat",
                        meta=meta, image=image)
+    watchdog.note_chat_draft()
     db.log("chat", f"chat draft saved #{did} (alg {alg['score']})")
     return did

@@ -551,11 +551,16 @@ async def edit_draft(draft_id: int, body: DraftAction):
 
 @app.post("/api/drafts/{draft_id}/reject")
 async def reject_draft(draft_id: int):
+    from ..gen import rejection_learn
     d = next((d for d in db.drafts_by_status("draft", 500) + db.drafts_by_status("approved", 500)
               if d["id"] == draft_id), None)
     if not d:
         raise HTTPException(404, "draft not found")
     db.update_draft(draft_id, status="rejected")
+    # the owner's NO teaches: stamp why it died; the brain reflects once
+    # enough rejections accumulate (daemon thread — the tap stays instant)
+    rejection_learn.record_rejection(draft_id, reason="owner", via="web")
+    rejection_learn.maybe_reflect_async(cfg)
     return {"ok": True}
 
 
@@ -579,6 +584,27 @@ async def deep_train_ep():
     except Exception as e:  # noqa: BLE001
         db.log("api", f"deep train error: {e}", level="error")
         raise HTTPException(500, str(e)) from e
+
+
+@app.post("/api/rejection-learn")
+async def rejection_learn_ep():
+    """Force one rejection-learning pass now (the nightly job also runs one
+    at 04:17 before the expiry sweep)."""
+    from ..gen import rejection_learn
+    try:
+        res = await asyncio.to_thread(rejection_learn.run_reflection, cfg)
+        return {"ok": True, "result": res}
+    except Exception as e:  # noqa: BLE001
+        db.log("api", f"rejection-learn error: {e}", level="error")
+        raise HTTPException(500, str(e)) from e
+
+
+@app.get("/api/watchdog")
+async def watchdog_ep():
+    """Chat watchdog status: chat LLM health, tool failure rate, chat-draft
+    burst guard, TG handler streak."""
+    from ..system import watchdog
+    return {"ok": True, **watchdog.status()}
 
 
 @app.post("/api/metrics/refresh")
@@ -996,6 +1022,10 @@ async def chat_draft_ep(body: ChatDraftBody):
         raise HTTPException(404, "no such media file")
     did = await asyncio.to_thread(chat_mod.draft_from_chat, cfg,
                                   body.text, body.image)
+    if did < 0:  # watchdog burst guard refused the save
+        return JSONResponse({"ok": False, "error": "chat draft saving is "
+                            "temporarily blocked by the watchdog burst guard"},
+                            status_code=429)
     return {"ok": True, "draft_id": did}
 
 
@@ -1952,17 +1982,34 @@ def start_scheduler():
             db.log("metrics", f"nightly refresh: {res.get('refreshed')} posts captured")
         except Exception as e:  # noqa: BLE001
             db.log("metrics", f"nightly refresh failed: {e}", level="error")
+        # rejection learning FIRST: reflect on the owner's real reject taps
+        # while they're still distinguishable from what the sweeper kills
+        try:
+            from ..gen import rejection_learn
+            res = rejection_learn.run_reflection(cfg)
+            if res.get("learned_from"):
+                db.log("brain", f"nightly rejection reflection: learned from "
+                                f"{res['learned_from']} rejected drafts")
+        except Exception as e:  # noqa: BLE001
+            db.log("brain", f"nightly rejection reflection failed: {e}", level="warn")
         # expire unapproved drafts older than 3 days — a stale queue is noise,
-        # not opportunity; production follows the human's approval pace
+        # not opportunity; production follows the human's approval pace.
+        # Stamped reason=expired: queue hygiene, never learned as taste
         try:
             from datetime import timedelta
+            from ..gen import rejection_learn
             cutoff = (datetime.now() - timedelta(days=3)).isoformat(timespec="seconds")
             with db.connect() as c:
-                cur = c.execute("UPDATE drafts SET status='rejected' "
-                                "WHERE status='draft' AND created_at < ?", (cutoff,))
-                n = cur.rowcount
-            if n:
-                db.log("create", f"expired {n} unapproved drafts older than 3 days")
+                rows = c.execute(
+                    "SELECT id FROM drafts WHERE status='draft' "
+                    "AND created_at < ?", (cutoff,)).fetchall()
+            for r in rows:
+                db.update_draft(int(r["id"]), status="rejected")
+                rejection_learn.record_rejection(int(r["id"]), reason="expired",
+                                                 via="sweep")
+            if rows:
+                db.log("create", f"expired {len(rows)} unapproved drafts "
+                                 f"older than 3 days")
         except Exception as e:  # noqa: BLE001
             db.log("metrics", f"draft expiry sweep failed: {e}", level="warn")
 

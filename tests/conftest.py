@@ -42,6 +42,32 @@ def _accounts_root_sandbox(tmp_path, monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _watchdog_reset():
+    """Chat watchdog state is a shared DB setting — every test starts clean
+    so burst counters from one suite file can't trip guards in the next."""
+    from openstanley.core import db as _db
+    _db.set_setting("watchdog", {})
+    yield
+    _db.set_setting("watchdog", {})
+
+
+@pytest.fixture(autouse=True)
+def _instruction_llm_guard(monkeypatch):
+    """The directive-capture seam (gen/instructions.llm_chat) is NOT covered
+    by the per-test chat fakes other suites install — without this guard a
+    gate-matching user message in any chat test would fire a REAL LLM call
+    using the .env key (hermeticity incident class). Default: not-a-directive.
+    Tests that exercise capture patch their own seam on top of this."""
+    if os.environ.get("OPENSTANLEY_TEST_LIVE_LLM") == "1":
+        return
+    import json as _json
+    from openstanley.gen import instructions as _im
+    monkeypatch.setattr(
+        _im, "llm_chat",
+        lambda *a, **k: _json.dumps({"is_directive": False}))
+
+
 def pytest_configure(config):
     """Loud hermeticity guard: if the DB path ever resolves back to the real
     data/openstanley.db (env regression, import-order change), fail the run

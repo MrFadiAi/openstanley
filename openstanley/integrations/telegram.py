@@ -765,6 +765,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     _remember(chat_id, "user", user_message)
     llm_cfg = dataclasses.replace(cfg.llm, temperature=chat_mod._llm_temperature(),
                                   max_tokens=1200)
+    from ..system import watchdog as wd_mod
     full: list[str] = []
     try:
         for tok in chat_mod.llm_chat_stream(
@@ -772,7 +773,9 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
                 user=_history_turn(chat_id, user_message)):
             full.append(tok)
             yield tok
+        wd_mod.note_chat_llm(True)
     except LLMError as e:
+        wd_mod.note_chat_llm(False, str(e))
         yield f"(LLM error: {e})"
         return
 
@@ -803,24 +806,42 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     if len(cands) >= 3 and all(len(c["text"]) < 110 for c in cands):
         texts = [c["text"] for c in cands]
         try:
-            did = db.add_draft(text=texts[0], thread=texts, kind="post",
-                               temperature="chat",
-                               meta={"source": "chat", "via": "tg-thread-merge",
-                                     "language": cands[0].get("language")})
-            draft_ids.append(did)
-            db.log("chat", f"thread candidate merged: {len(texts)} lines → #{did}")
-            cands = []
+            from ..system import watchdog as wd_mod
+            if not wd_mod.allow_chat_draft():
+                db.log("telegram", "thread merge blocked by watchdog burst guard",
+                       level="warn")
+            else:
+                did = db.add_draft(text=texts[0], thread=texts, kind="post",
+                                   temperature="chat",
+                                   meta={"source": "chat", "via": "tg-thread-merge",
+                                         "language": cands[0].get("language")})
+                wd_mod.note_chat_draft()
+                draft_ids.append(did)
+                db.log("chat", f"thread candidate merged: {len(texts)} lines → #{did}")
+                cands = []
         except Exception as e:  # noqa: BLE001
             db.log("telegram", f"thread merge failed: {e}", level="warn")
     for cand in cands:
         try:
-            draft_ids.append(chat_mod.draft_from_chat(cfg, cand["text"]))
+            did = chat_mod.draft_from_chat(cfg, cand["text"])
+            if did > 0:  # -1 = watchdog burst guard — not saved
+                draft_ids.append(did)
         except Exception as e:  # noqa: BLE001 — a failed save must not kill the reply
             db.log("telegram", f"chat candidate draft save failed: {e}",
                    level="warn")
     if draft_ids:
         clean += "\n" + "\n".join(
             f"📝 Saved as draft #{d} — /approve {d} to publish" for d in draft_ids)
+
+    # instruction memory (same contract as the web chat): a directive-shaped
+    # message becomes a standing brain rule NOW, acked visibly with its id
+    try:
+        from ..gen import instructions as instr_mod
+        captured = instr_mod.capture(cfg, user_message)
+        if captured:
+            clean += "\n" + instr_mod.ack_line(captured)
+    except Exception as e:  # noqa: BLE001 — capture never breaks the reply
+        db.log("telegram", f"directive capture skipped: {e}", level="warn")
 
     _remember(chat_id, "assistant", clean)
     brain_mod.maybe_reflect_chat_async(cfg)  # every 10th message → reflect
@@ -930,8 +951,18 @@ def _cmd_status(cfg: Config) -> str:
         bank_line,
         f"{BULLET} **Today** {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} posts, "
         f"{caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
+        f"{BULLET} **Watchdog** {wd_health()}",
     ]
     return "\n".join(lines)
+
+
+def wd_health() -> str:
+    """Watchdog's /status line — never raises into the command."""
+    try:
+        from ..system import watchdog
+        return watchdog.health_line()
+    except Exception as e:  # noqa: BLE001 — status must always render
+        return f"unavailable ({e})"
 
 
 def _cmd_account(args: str) -> str:
@@ -1134,10 +1165,19 @@ def _next_static_slot(cfg: Config) -> str:
 
 
 def reject_draft_tg(draft_id: int) -> str:
+    from ..gen import rejection_learn
     d = db.get_draft(draft_id)
     if not d or d["status"] not in ("draft", "approved"):
         return f"No draft #{draft_id} to reject — /drafts lists them."
     db.update_draft(draft_id, status="rejected")
+    # rejection learning: the owner's NO is teaching signal — stamp it, and
+    # once enough pile up the brain reflects on what they share
+    rejection_learn.record_rejection(draft_id, reason="owner", via="tg")
+    try:
+        from ..core.config import load_config
+        rejection_learn.maybe_reflect_async(load_config())
+    except Exception as e:  # noqa: BLE001 — learning never blocks the tap
+        db.log("telegram", f"rejection-learn trigger skipped: {e}", level="warn")
     db.log("telegram", f"draft {draft_id} rejected from TG")
     return f"🗑 Draft #{draft_id} rejected."
 
@@ -1568,7 +1608,11 @@ async def _poll_loop(cfg: Config) -> None:
             async with sem:
                 try:
                     await asyncio.to_thread(handle_update, cfg, upd)
+                    from ..system import watchdog as wd_mod
+                    wd_mod.note_tg_handler(True)
                 except Exception as e:  # noqa: BLE001 — handle_update's own contract
+                    from ..system import watchdog as wd_mod
+                    wd_mod.note_tg_handler(False, str(e))
                     db.log("telegram", f"handler task error: {e}", level="error")
         finally:
             pending.discard(asyncio.current_task())

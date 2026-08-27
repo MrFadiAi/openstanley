@@ -84,6 +84,11 @@ Available tools:
       drafts from the full material with thinking mode on. Slower
       (30-90s) but the draft cites what the articles actually say —
       use for 'research X properly' requests
+- remember_rule {text}
+    → stores a STANDING rule in the brain (source=directive) — use when the
+      user says "remember…" about how to run the account ("remember my
+      audience is Saudi builders", "remember I hate hashtag soup"); returns
+      the rule id and shows the owner it stuck
 
 Rules: never invent results — the system executes and appends real results.
 Keep the prose reply short; let the action carry the work. If the user asks
@@ -168,11 +173,14 @@ def execute_tool(cfg, name: str, args: dict) -> dict:
     if fn is None:
         return {"ok": False, "error": f"unknown tool {name}"}
     try:
-        return {"ok": True, **fn(cfg, **args)}
+        res = {"ok": True, **fn(cfg, **args)}
     except TypeError as e:
-        return {"ok": False, "error": f"bad args for {name}: {e}"}
+        res = {"ok": False, "error": f"bad args for {name}: {e}"}
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": str(e)[:200]}
+        res = {"ok": False, "error": str(e)[:200]}
+    from ..system import watchdog
+    watchdog.note_tool(bool(res.get("ok")))
+    return res
 
 
 # ---------- the tools (each takes cfg first) ----------
@@ -514,3 +522,12 @@ def _tool_deep_research(cfg, topic: str = "") -> dict:
 
 
 register("deep_research", _tool_deep_research)
+
+
+def _tool_remember_rule(cfg, text: str = "") -> dict:
+    """Persist a standing rule into the brain (source=directive)."""
+    from . import instructions as instr_mod
+    return instr_mod._tool_remember_rule(cfg, text=text)
+
+
+register("remember_rule", _tool_remember_rule)

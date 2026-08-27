@@ -448,8 +448,8 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
         return ""
     ensure(acct)
     # fair-share budgets scaled to the total
-    shares = (1200, 1800, 1200, 1000, 800)  # instructions, rules, strategies,
-    #                                         pillars, recent journal lessons
+    shares = (1200, 1200, 1600, 1200, 1000, 800)  # instructions, directives,
+    #                rules, strategies, pillars, recent journal lessons
     blocks: list[str] = []
 
     instr = read("instructions", acct)
@@ -458,18 +458,29 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
                            if not ln.startswith("# "))
     blocks.append(_clip(instr_body, shares[0]))
 
-    rules = [r for r in parse_rules(read("rules", acct)) if r["status"] == "active"]
+    all_rules = [r for r in parse_rules(read("rules", acct)) if r["status"] == "active"]
+    # OWNER DIRECTIVES lead the prompt: rules the owner personally dictated
+    # (source="directive") are law, not learned heuristics — they get their
+    # own block and budget so a flood of learned rules can never crowd them
+    # out of the context window
+    directives = [r for r in all_rules if r["source"] == "directive"]
+    if directives:
+        dlines = [f"R{r['id']}: {r['text']}" for r in directives]
+        blocks.append(_clip("OWNER DIRECTIVES (absolute — the owner said these "
+                            "in their own words):\n" + "\n".join(dlines),
+                            shares[1]))
+    rules = [r for r in all_rules if r["source"] != "directive"]
     if rules:
         rule_lines = [f"R{r['id']}: {r['text']}" for r in rules]
         blocks.append(_clip("RULES (learned — obey):\n" + "\n".join(rule_lines),
-                            shares[1]))
+                            shares[2]))
 
     strat = read("strategies", acct)
     # keep "Working theses" section essence + last experiment lines
     strat_lines = [ln for ln in strat.splitlines()
                    if ln.strip() and not ln.startswith("#")][:12]
     if any(l.strip() and not l.startswith("- (none") for l in strat_lines):
-        blocks.append(_clip("STRATEGIES:\n" + "\n".join(strat_lines), shares[2]))
+        blocks.append(_clip("STRATEGIES:\n" + "\n".join(strat_lines), shares[3]))
 
     pillars_path = _files_dir(acct) / "content-pillars.md"
     if pillars_path.exists():
@@ -477,7 +488,7 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
                    if ln.strip() and not ln.startswith("#") and "(OpenStanley writes"
                    not in ln][:6]
         if pillars:
-            blocks.append(_clip("CONTENT PILLARS:\n" + "\n".join(pillars), shares[3]))
+            blocks.append(_clip("CONTENT PILLARS:\n" + "\n".join(pillars), shares[4]))
 
     # recent journal entries — the FRESHEST lessons were previously never
     # shown to the agent at all; two entries is the working set that matters
@@ -485,7 +496,7 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
     if journal_tail:
         jlines = [f"- {j.get('text', '')[:220]}" for j in journal_tail]
         blocks.append(_clip("RECENT LESSONS (newest learnings — obey):" + chr(10)
-                            + chr(10).join(jlines), shares[4]))
+                            + chr(10).join(jlines), shares[5]))
 
     out = BRAIN_HEADER + "\n" + "\n\n".join(b for b in blocks if b.strip())
     return out[:budget]
@@ -508,7 +519,12 @@ clearly supports it. Return STRICT JSON:
 Rules for rules: never propose secrets, never propose posting without approval,
 never propose anything that breaks the user's voice. retire_rule_ids must
 reference rules shown in the context below. file_updates are for reference
-docs only when the material clearly supports a rewrite."""
+docs only when the material clearly supports a rewrite.
+
+Trigger glossary: "rejection" = the owner REFUSED these drafts — mine the
+pattern (topic, tone, format, length, bait) they share, contrast with what
+the owner approved, and propose DON'T rules for that pattern. One shared
+pattern beats one rule per draft."""
 
 
 def _material_chat() -> str:
@@ -584,8 +600,17 @@ def _material_scan() -> str:
     return out
 
 
+def _material_rejections() -> str:
+    """Owner-rejected drafts vs approved contrast — what the owner refuses.
+    Empty string when nothing is pending (reflect callers treat that as a
+    no-op pass)."""
+    from .rejection_learn import build_material
+    return build_material()
+
+
 MATERIALS = {"chat": _material_chat, "learn": _material_learn,
-             "scan": _material_scan, "metrics": _material_metrics}
+             "scan": _material_scan, "metrics": _material_metrics,
+             "rejection": _material_rejections}
 
 
 def _scan_fallback_files(stats: dict, profile: dict) -> list[tuple[str, str]]:
