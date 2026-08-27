@@ -60,6 +60,39 @@ def _auto_heal(retry: bool = True):
     return deco
 
 
+def _is_transient_read_error(e: BaseException) -> bool:
+    """The two observed-transient read failure classes on X (2026-08-27,
+    three separate incidents): rate limits, and the identity/user endpoint's
+    intermittent code-34 404 (a fresh client succeeds seconds later)."""
+    s = str(e)
+    if "TooManyRequests" in type(e).__name__ or "429" in s:
+        return True
+    return "NotFound" in type(e).__name__ and '"code":34' in s.replace(" ", "")
+
+
+def _read_retry(wait_429_s: float = 60.0, wait_404_s: float = 15.0):
+    """One retry on TRANSIENT read failures — READ calls only. A write is
+    never blindly re-fired (duplicate-post risk): this decorator is applied
+    exclusively to read methods. Stacked OUTSIDE _auto_heal so auth failures
+    heal first and the transient retry wraps the whole healed attempt."""
+    def deco(fn):
+        @functools.wraps(fn)
+        async def wrapper(self, *args, **kwargs):
+            try:
+                return await fn(self, *args, **kwargs)
+            except Exception as e:  # noqa: BLE001 — re-raised unless transient
+                if not _is_transient_read_error(e):
+                    raise
+                wait = wait_429_s if "429" in str(e) or "TooManyRequests" in type(e).__name__ else wait_404_s
+                db.log("x", f"transient read failure on {fn.__name__} "
+                            f"({type(e).__name__}) — one retry in {wait:.0f}s",
+                       level="warn")
+                await asyncio.sleep(wait)
+                return await fn(self, *args, **kwargs)
+        return wrapper
+    return deco
+
+
 class XClient(ABC):
     mode = "base"
 
@@ -286,12 +319,14 @@ class XCookie(XClient):
         self._client = c
         return c
 
+    @_read_retry()
     @_auto_heal()
     async def me(self, heal: bool = True) -> dict:
         c = await self._ensure()
         u = await c.user()
         return {"username": u.screen_name, "name": u.name, "followers": u.followers_count}
 
+    @_read_retry()
     @_auto_heal()
     async def user_tweets(self, username: str, limit: int = 100) -> list[dict]:
         c = await self._ensure()
@@ -318,6 +353,7 @@ class XCookie(XClient):
                 break
         return out[:limit]
 
+    @_read_retry()
     @_auto_heal()
     async def user_replies(self, username: str, limit: int = 100) -> list[dict]:
         c = await self._ensure()
@@ -350,6 +386,7 @@ class XCookie(XClient):
         author = getattr(getattr(t, "user", None), "screen_name", "")
         return {"x_id": t.id, "text": t.text, "author": author}
 
+    @_read_retry()
     @_auto_heal()
     async def search(self, query: str, limit: int = 50) -> list[dict]:
         c = await self._ensure()
@@ -357,6 +394,7 @@ class XCookie(XClient):
         res = await c.search_tweet(query, "Top", count=min(limit, 50))
         return [self._tw(t) for t in res]
 
+    @_read_retry()
     @_auto_heal()
     async def mentions(self, limit: int = 5) -> list[dict]:
         c = await self._ensure()
