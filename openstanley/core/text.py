@@ -18,3 +18,12 @@ def scrub_ai_punctuation(text: str) -> str:
     while ", ," in out or ",," in out:
         out = out.replace(", ,", ",").replace(",,", ",")
     return out
+
+
+def err_str(e: BaseException) -> str:
+    """str(e), falling back to repr when the exception carries no message.
+
+    twikit/asyncio exceptions routinely str() to '' — live logs showed
+    "search failed for 'X': " with the cause erased. This keeps the type
+    visible so the next failure is diagnosable."""
+    return str(e) or repr(e)

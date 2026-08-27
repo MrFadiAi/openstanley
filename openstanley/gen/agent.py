@@ -10,6 +10,7 @@ import threading
 from datetime import datetime
 
 from ..core import db
+from ..core.text import err_str
 from ..core.config import Config, load_config
 from ..x.client import build_client
 from . import brain as brain_mod
@@ -67,7 +68,7 @@ class Agent:
             try:
                 res = await self.x.search(theme, limit=30)
             except Exception as e:  # noqa: BLE001
-                db.log("import", f"niche search failed for '{theme}': {e}", level="warn")
+                db.log("import", f"niche search failed for '{theme}': {err_str(e)}", level="warn")
                 continue
             for p in res:
                 db.upsert_post(p, acct)
@@ -85,7 +86,7 @@ class Agent:
             try:
                 res = await self.x.search(q, limit=30)
             except Exception as e:  # noqa: BLE001
-                db.log("study", f"search failed for '{q}': {e}", level="warn")
+                db.log("study", f"search failed for '{q}': {err_str(e)}", level="warn")
                 continue
             for p in res:
                 db.upsert_post(p, acct)

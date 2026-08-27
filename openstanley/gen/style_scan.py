@@ -254,16 +254,41 @@ def style_prompt_block() -> str:
                 f"{int(dist.get('80_160', 0) * 100)}% · 160-240 "
                 f"{int(dist.get('160_240', 0) * 100)}% · over240 "
                 f"{int(dist.get('over_240', 0) * 100)}%")
+    sent = s.get("sentence") or {}
+    punct = s.get("punctuation") or {}
+    terms = (s.get("vocabulary") or {}).get("top_terms") or []
+    # punctuation rates as share-of-posts guidance (0.685 colon = the account
+    # opens two thirds of posts colon-led — that's the signature, say it)
+    def _pct(v: object) -> str:
+        return f"{int(float(v or 0) * 100)}%"
+    punct_lines = []
+    if punct.get("colon", 0) and float(punct["colon"]) >= 0.3:
+        punct_lines.append(
+            f"- colon-led openers: {_pct(punct['colon'])} of real posts — "
+            "use 'topic: take' shape at about that rate")
+    if punct.get("question") is not None:
+        punct_lines.append(
+            f"- questions: {_pct(punct['question'])} of real posts end/mid "
+            "with one — questions are RARE here, not a default hook")
+    if punct.get("excl") is not None:
+        punct_lines.append(
+            f"- exclamation marks: {_pct(punct['excl'])} of real posts")
+    punct_txt = ("\n" + "\n".join(punct_lines) + "\n") if punct_lines else ""
+    terms_txt = (", ".join(terms[:10]) if terms else "")
+    terms_block = (f"- vocabulary this account actually uses (prefer when "
+                   f"natural): {terms_txt}") if terms_txt else ""
     return f"""STYLE PROFILE (measured from the account — match these numbers):
 - avg post length {s.get('avg_length_chars', '?')} chars — WRITE TO THE
   AVERAGE, NOT BELOW IT; short posts are the minority of this account's voice
 - real length mix: {dist_txt}
+- sentence length: median {sent.get('p50', '?')} words per sentence — write
+  in short, punchy sentences near that median, not long flowing ones
 - emoji per post {s.get('emoji', {}).get('per_post', 0)} (top: {', '.join(s.get('emoji', {}).get('top', []) or [])})
 - hashtags per post {s.get('hashtags', {}).get('per_post', 0)} ({int(s.get('hashtags', {}).get('pct_with', 0) * 100)}% of posts have any)
 - starts lowercase {int(s.get('casing', {}).get('pct_lowercase_start', 0) * 100)}% of posts
 - multiline {int(s.get('formatting', {}).get('pct_multiline', 0) * 100)}% of posts
 - language mix: {s.get('language_mix')}
-- humor markers per post: {s.get('humor_markers_per_post')}
+- humor markers per post: {s.get('humor_markers_per_post')}{punct_txt}{terms_block}
 {p.get('human_summary', '')}"""
 
 

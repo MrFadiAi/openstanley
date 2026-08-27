@@ -60,3 +60,16 @@ def test_post_band_floor_is_60pct_of_avg(tmp_path, monkeypatch):
             if ln.startswith("length_band_post")][0]
     lo = int(band.split(":")[1].split("-")[0])
     assert lo >= 100, band   # 60% of 167
+
+
+def test_err_str_never_blanks_the_cause():
+    """twikit/asyncio exceptions str() to '' — err_str keeps the type visible
+    (live logs showed 'search failed for X: ' with the cause erased)."""
+    from openstanley.core.text import err_str
+
+    class Silent(Exception):
+        pass
+
+    assert err_str(ValueError("boom")) == "boom"
+    out = err_str(Silent())
+    assert out and "Silile" not in out and "Silent" in out

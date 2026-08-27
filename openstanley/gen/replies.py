@@ -11,6 +11,7 @@ import random
 from datetime import datetime, timedelta
 
 from ..core import db
+from ..core.text import err_str
 from . import brain as brain_mod
 from . import engage_gate
 from . import voice_lock
@@ -82,7 +83,7 @@ async def pull_engagements(cfg: Config, x_client,
                 if c.total_changes > before:
                     new += 1
         except Exception as e:  # noqa: BLE001
-            db.log("engage", f"insert mention failed: {e}", level="error")
+            db.log("engage", f"insert mention failed: {err_str(e)}", level="error")
     db.log("engage", f"pulled mentions: {len(mentions)} total, {new} new")
     return new
 
@@ -221,7 +222,7 @@ async def refresh_niche_targets(cfg: Config, x_client, acct=None) -> int:
         try:
             posts = await x_client.search(theme, limit=15)
         except Exception as e:  # noqa: BLE001 — one theme failing is fine
-            db.log("engage", f"live search '{theme}' failed: {e}", level="warn")
+            db.log("engage", f"live search '{theme}' failed: {err_str(e)}", level="warn")
             continue
         for p in posts:
             before = db._post_exists(p.get("x_id"), acct)
