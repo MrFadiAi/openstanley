@@ -60,7 +60,13 @@ def _chat_openai(cfg: LLMConfig, system: str, user: str, temp: float, json_mode:
     r = httpx.post(url, headers=headers, json=body, timeout=120)
     if r.status_code == 200:
         data = r.json()
-        return data["choices"][0]["message"]["content"] or ""
+        text = data["choices"][0]["message"]["content"] or ""
+        if not text.strip():
+            raise LLMError(
+                f"empty reply (finish_reason="
+                f"{data['choices'][0].get('finish_reason')}) — the output "
+                "budget was spent before any text")
+        return text
     raise LLMError(f"HTTP {r.status_code}: {r.text[:300]}")
 
 
@@ -92,9 +98,22 @@ def _chat_anthropic(cfg: LLMConfig, system: str, user: str, temp: float,
     r = httpx.post(url, headers=headers, json=body, timeout=120)
     if r.status_code == 200:
         data = r.json()
-        parts = [b.get("text", "") for b in data.get("content", [])
-                 if b.get("type") == "text"]
-        return "".join(parts)
+        blocks = data.get("content", [])
+        text = "".join(b.get("text", "") for b in blocks
+                       if b.get("type") == "text")
+        if not text.strip():
+            # GLM always emits a thinking block FIRST — a small max_tokens
+            # cap lets thinking eat the whole budget before any text (live:
+            # smoke probe cap 16 → stop max_tokens, one empty thinking
+            # block). Silent "" hides that; raise with the shape so callers
+            # (and chat()'s retry) can react.
+            shape = ",".join(f"{b.get('type')}:{len(b.get('text') or '')}"
+                             for b in blocks)
+            raise LLMError(
+                f"empty reply (stop_reason={data.get('stop_reason')}, "
+                f"blocks=[{shape}]) — the output budget was spent before "
+                "any text")
+        return text
     raise LLMError(f"HTTP {r.status_code}: {r.text[:300]}")
 
 

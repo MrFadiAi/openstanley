@@ -179,8 +179,13 @@ def _db() -> Awaitable[str]:
 
 
 def _default_llm(llm_cfg, system: str = "", user: str = "", **kw) -> str:
-    """Tiny real round-trip: 16 max tokens, temperature 0 — pennies-free."""
-    tiny = dataclasses.replace(llm_cfg, max_tokens=16, temperature=0.0)
+    """Tiny real round-trip — still pennies-free.
+
+    Cap is 64, NOT 16: GLM always emits a thinking block before any text,
+    and at 16 the thinking alone hits stop_reason=max_tokens with zero
+    text — a HEALTHY LLM then reports red (live incident 2026-08-27).
+    64 leaves room for thinking + the one-word probe answer."""
+    tiny = dataclasses.replace(llm_cfg, max_tokens=64, temperature=0.0)
     return llm_chat(tiny, system=system, user=user)
 
 

@@ -90,3 +90,103 @@ def test_draft_temperature_ladder_within_provider_range():
     src = inspect.getsource(drafts)
     assert "1.15" not in src
     assert '"experimental": 1.0' in src
+
+
+import os as _os2
+_os2.environ["OPENSTANLEY_TEST_LLM_KEY"] = "test-key"
+
+# ---------- empty replies must DIAGNOSE, never pass silently ----------
+# Live incident 2026-08-27: GLM always emits a thinking block first; a small
+# max_tokens cap lets thinking eat the whole budget → zero text blocks. The
+# old parser returned "" silently (smoke showed a healthy LLM as red with a
+# useless "empty reply"; drafts got blank strings).
+
+def _resp(payload):
+    return type("R", (), {"status_code": 200, "json": lambda self: payload})()
+
+
+def test_anthropic_thinking_ate_budget_raises_with_shape():
+    import openstanley.gen.llm as llm
+
+    cfg = llm.LLMConfig(base_url="https://x", model="m",
+                        api_key_env="OPENSTANLEY_TEST_LLM_KEY",
+                        transport="anthropic")
+
+    def fake_post(url, json=None, timeout=None, **kw):  # noqa: A002
+        return _resp({"stop_reason": "max_tokens",
+                      "content": [{"type": "thinking", "thinking": "…"}]})
+
+    real_post = llm.httpx.post
+    llm.httpx.post = fake_post
+    try:
+        out = llm.chat(cfg, "s", "u", retries=0)
+        raise AssertionError(f"should have raised, got {out!r}")
+    except llm.LLMError as e:
+        assert "stop_reason=max_tokens" in str(e), str(e)
+        assert "thinking" in str(e), "the block shape must name the culprit"
+    finally:
+        llm.httpx.post = real_post
+
+
+def test_anthropic_normal_reply_still_parses():
+    import openstanley.gen.llm as llm
+
+    cfg = llm.LLMConfig(base_url="https://x", model="m",
+                        api_key_env="OPENSTANLEY_TEST_LLM_KEY",
+                        transport="anthropic")
+
+    def fake_post(url, json=None, timeout=None, **kw):  # noqa: A002
+        return _resp({"stop_reason": "end_turn",
+                      "content": [{"type": "thinking", "thinking": "x"},
+                                  {"type": "text", "text": "pong"}]})
+
+    real_post = llm.httpx.post
+    llm.httpx.post = fake_post
+    try:
+        assert llm.chat(cfg, "s", "u", retries=0) == "pong"
+    finally:
+        llm.httpx.post = real_post
+
+
+def test_openai_empty_content_raises_with_finish_reason():
+    import openstanley.gen.llm as llm
+
+    cfg = llm.LLMConfig(base_url="https://x", model="m",
+                        api_key_env="OPENSTANLEY_TEST_LLM_KEY",
+                        transport="openai")
+
+    def fake_post(url, json=None, timeout=None, **kw):  # noqa: A002
+        return _resp({"choices": [{"message": {"content": ""},
+                                   "finish_reason": "length"}]})
+
+    real_post = llm.httpx.post
+    llm.httpx.post = fake_post
+    try:
+        llm.chat(cfg, "s", "u", retries=0)
+        raise AssertionError("should have raised")
+    except llm.LLMError as e:
+        assert "finish_reason=length" in str(e), str(e)
+    finally:
+        llm.httpx.post = real_post
+
+
+def test_smoke_llm_probe_budget_fits_thinking_block():
+    """The probe's max_tokens cap must leave room for GLM's mandatory
+    thinking block + the one-word answer — 16 proved too small live."""
+    import dataclasses as _dc
+    from openstanley.core.config import Config
+    from openstanley.system import smoke
+
+    seen = {}
+
+    def fake_chat(cfg, system="", user="", **kw):
+        seen["max_tokens"] = cfg.max_tokens
+        return "pong"
+
+    real = smoke.llm_chat
+    smoke.llm_chat = fake_chat
+    try:
+        assert smoke._default_llm(Config().llm) == "pong"
+        assert seen["max_tokens"] >= 64, seen
+    finally:
+        smoke.llm_chat = real
