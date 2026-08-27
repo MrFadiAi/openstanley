@@ -93,8 +93,12 @@ class Agent:
                 niche_new += 1
         # deep pull: any account we barely know (own or niche) gets its real
         # history paged in, not the 30-post search sample (user report
-        # 2026-08-21: new account "has a lot of posts", learned only 30)
+        # 2026-08-21: new account "has a lot of posts", learned only 30).
+        # ONE call with the full limit — the cookie client pages via cursor
+        # WITHIN a call; chunked calls restart from page 1 every time (the
+        # 2026-08-28 finding: days of "+400 posts" logs that stored nothing)
         DEEP_MIN = 150
+        DEEP_PULL_LIMIT = 800
         try:
             me_now = db.get_me(acct) or {}
             handles = [me_now.get("username")] + list(self.cfg.agent.niche_accounts or [])
@@ -108,17 +112,21 @@ class Agent:
                         (acct, h)).fetchone()
                 if n >= DEEP_MIN:
                     continue
-                pulled = 0
-                async for page in self._paged_user_tweets(str(h), 100):
-                    for ppost in page:
-                        db.upsert_post(ppost, acct)
-                        pulled += 1
-                if pulled:
-                    db.log("study", f"deep pull @{h}: +{pulled} posts "
-                                    f"(had {n})")
-                    niche_new += pulled
+                posts = await self.x.user_tweets(str(h), limit=DEEP_PULL_LIMIT)
+                for ppost in posts:
+                    db.upsert_post(ppost, acct)
+                with db.connect() as c:
+                    (after,) = c.execute(
+                        "SELECT COUNT(*) FROM posts WHERE account_id=? "
+                        "AND lower(author_handle)=lower(?)",
+                        (acct, h)).fetchone()
+                net = int(after) - int(n)
+                if net > 0:
+                    db.log("study", f"deep pull @{h}: +{net} NEW stored posts "
+                                    f"(had {n}, fetched {len(posts)})")
+                    niche_new += net
         except Exception as e:  # noqa: BLE001 — deep pull never blocks study
-            db.log("study", f"deep pull skipped: {e}", level="warn")
+            db.log("study", f"deep pull skipped: {err_str(e)}", level="warn")
         # bank check right after the reads — usually pure DB mining (path a)
         rep = await ideas_mod.replenish(self.cfg, min_bank=16, x=self.x, acct=acct)
         # steal-this-hook: winners are in the room — distill their patterns
@@ -133,19 +141,6 @@ class Agent:
                         f"bank={db.idea_count(acct)}, hooks+{hooks_added}")
         return {"niche_new": niche_new, "bank": db.idea_count(acct),
                 "replenished": rep["added"], "account": acct}
-
-    async def _paged_user_tweets(self, handle: str, per_call: int = 100):
-        """Yield pages of a user's timeline until exhaustion (delegates to
-        the client's paginated user_tweets in bounded chunks)."""
-        remaining = 800
-        while remaining > 0:
-            page = await self.x.user_tweets(handle, limit=min(per_call, remaining))
-            if not page:
-                break
-            yield page
-            remaining -= len(page)
-            if len(page) < per_call:
-                break
 
     async def create(self) -> dict:
         """Daily: scout LIVE niche trends first, then bank drafts (replenished

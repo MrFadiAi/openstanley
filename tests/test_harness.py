@@ -74,10 +74,15 @@ def test_all_suites_deterministic_ranges(cfg):
     assert scores["safety"] == 100.0
     assert 0 <= run["total"] <= 100
 
-    # determinism: same inputs → same scores
-    again = runner.run_all(cfg, ["algorithm"])
-    a1 = {r["suite"]: r["score"] for r in run["results"] if r["suite"] == "algorithm"}
-    a2 = {r["suite"]: r["score"] for r in again["run"]["results"]}
+    # determinism: same inputs → same scores. Two CONSECUTIVE algorithm-only
+    # runs — comparing run1's algorithm against a later re-run let the
+    # tools/bilingual/safety suites execute in between, and a tool like
+    # scan_account rewrites the shared DB's style_profile (the algorithm
+    # suite reads account_topics from it) → phantom "nondeterminism".
+    first = runner.run_all(cfg, ["algorithm"])
+    second = runner.run_all(cfg, ["algorithm"])
+    a1 = {r["suite"]: r["score"] for r in first["run"]["results"]}
+    a2 = {r["suite"]: r["score"] for r in second["run"]["results"]}
     assert a1["algorithm"] == a2["algorithm"]
 
 
