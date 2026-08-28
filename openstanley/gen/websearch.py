@@ -29,7 +29,8 @@ TIMEOUT = 15.0
 MAX_RESULTS = 6
 
 TINYFISH_SEARCH_URL = "https://api.search.tinyfish.ai/search"
-TINYFISH_FETCH_URL = "https://api.fetch.tinyfish.ai/fetch"
+TINYFISH_FETCH_URL = "https://api.fetch.tinyfish.ai/"  # the ROOT — verified live
+# 2026-08-28: /fetch et al. 404 (site page); POST the root with {urls}
 
 _RES_RE = re.compile(
     r'<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?'
