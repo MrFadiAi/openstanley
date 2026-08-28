@@ -278,11 +278,19 @@ def draft_niche_replies(cfg: Config, limit: int = 3,
                        f"({target.get('likes', 0)} likes):\n{target['text']}\n\n"
                        f"Write the reply.",
                        temperature=0.85, json_mode=True)
-            reply = str(extract_json(raw).get("reply", ""))[:280]
+            data = extract_json(raw)
+            reply = str(data.get("reply") or data.get("text") or "")[:280]
         except LLMError as e:
             db.log("engage", f"niche reply draft failed: {e}", level="error")
             continue
         if not reply:
+            # silent-continue here hid a live failure mode for hours: all
+            # gate-passing targets died invisibly when the model's JSON
+            # carried neither 'reply' nor 'text' (2026-08-28 13:30)
+            db.log("engage", f"niche reply for @{target['author_handle']} came "
+                            f"back EMPTY (json keys: "
+                            f"{sorted(data.keys())[:6] if isinstance(data, dict) else type(data).__name__})",
+                   level="warn")
             continue
         reply, vmeta = voice_lock.apply_voice_lock(cfg, reply, "reply")
         if reply is None:  # off-voice — target stays in the pool for a retry

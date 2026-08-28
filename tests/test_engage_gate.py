@@ -337,3 +337,31 @@ def test_meta_is_json_safe():
     import json
     m = json.loads(json.dumps(ts.meta()))  # round-trips through the drafts table
     assert m["score"] == ts.score and "components" in m and m["age_h"] == 2.0
+
+
+def test_niche_reply_empty_json_logs_and_continues(monkeypatch):
+    """2026-08-28 13:30: 4 gate-passing targets, 0 drafts, 0 logs — the
+    empty-reply continue swallowed the failure invisibly. It must log the
+    json keys it actually got."""
+    import asyncio
+    from openstanley.gen import replies as rmod
+    from openstanley.core import db as _db
+
+    from datetime import datetime, timedelta
+    fresh = (datetime.now() - timedelta(hours=2)).isoformat(timespec="seconds")
+    monkeypatch.setattr(rmod, "_pick_niche_targets",
+                        lambda cfg, limit=9, acct=None: [
+                            {"x_id": "z1", "author_handle": "zauthor",
+                             "text": "a very interesting technical post about "
+                                     "shipping things with real detail",
+                             "likes": 40, "created_at": fresh}])
+    monkeypatch.setattr(rmod, "brain_mod", type("B", (), {
+        "brain_context": staticmethod(lambda *a, **k: "")})())
+    monkeypatch.setattr(rmod, "chat", lambda *a, **k: '{"answer": "nothing"}')
+    logs = []
+    monkeypatch.setattr(_db, "log", lambda loop, msg, level="info":
+                        logs.append((loop, msg, level)))
+    out = rmod.draft_niche_replies(None if False else __import__(
+        "openstanley.core.config", fromlist=["Config"]).Config())
+    assert out == []
+    assert any("EMPTY" in m and "zauthor" in m for _l, m, _lv in logs), logs
