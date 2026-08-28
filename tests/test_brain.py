@@ -505,3 +505,26 @@ def test_brain_context_ab_toggle():
         brain.set_brain_enabled(True)
         # token reset restores thread-local default
     assert brain.brain_context().startswith(brain.BRAIN_HEADER)
+
+
+def test_atomic_write_survives_windows_lock_race(monkeypatch):
+    """WinError 5 on os.replace (AV/indexer holding the destination, live
+    2026-08-28) must retry, not lose the write."""
+    import pathlib
+    import tempfile
+    from openstanley.gen import brain
+    calls = {"n": 0}
+    real_replace = pathlib.Path.replace
+
+    def flaky_replace(self, target):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise PermissionError(5, "Access is denied")
+        return real_replace(self, target)
+    monkeypatch.setattr(pathlib.Path, "replace", flaky_replace)
+    monkeypatch.setattr(brain._time, "sleep", lambda s: None) if hasattr(brain, "_time") else None
+    with tempfile.TemporaryDirectory() as td:
+        p = pathlib.Path(td) / "rules.md"
+        brain._atomic_write(p, "content survives the race")
+        assert p.read_text(encoding="utf-8") == "content survives the race"
+        assert calls["n"] == 3
