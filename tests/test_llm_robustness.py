@@ -190,3 +190,65 @@ def test_smoke_llm_probe_budget_fits_thinking_block():
         assert seen["max_tokens"] >= 64, seen
     finally:
         smoke.llm_chat = real
+
+
+def test_stream_empty_reply_raises_not_blank(monkeypatch):
+    """Live 2026-08-28 (the agent's own apology: 'replies glitched out
+    empty'): a stream that closes with ZERO text deltas (all thinking)
+    yielded nothing and the chat stored a blank reply silently. Both
+    stream transports now raise like their non-streaming siblings."""
+    import openstanley.gen.llm as llm
+    import os as _os
+    _os.environ["OPENSTANLEY_TEST_LLM_KEY"] = "test-key"
+    cfg = llm.LLMConfig(base_url="https://x", model="m",
+                        api_key_env="OPENSTANLEY_TEST_LLM_KEY",
+                        transport="anthropic")
+
+    class FakeStream:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        status_code = 200
+        def iter_lines(self):
+            # all-thinking: block deltas with thinking only, then end —
+            # exactly the live failure shape
+            return [
+                b'data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"..."}}',
+                b'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}',
+            ]
+
+    monkeypatch.setattr(llm.httpx, "stream",
+                        lambda *a, **k: FakeStream())
+    got = []
+    try:
+        for tok in llm.chat_stream(cfg, "s", "u"):
+            got.append(tok)
+        raise AssertionError(f"should raise, yielded {got!r}")
+    except llm.LLMError as e:
+        assert "empty stream" in str(e) and "end_turn" in str(e), str(e)
+
+
+def test_stream_with_text_still_yields(monkeypatch):
+    import openstanley.gen.llm as llm
+    import os as _os
+    _os.environ["OPENSTANLEY_TEST_LLM_KEY"] = "test-key"
+    cfg = llm.LLMConfig(base_url="https://x", model="m",
+                        api_key_env="OPENSTANLEY_TEST_LLM_KEY",
+                        transport="anthropic")
+
+    class FakeStream:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        status_code = 200
+        def iter_lines(self):
+            return [
+                b'data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}',
+                b'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}',
+            ]
+
+    monkeypatch.setattr(llm.httpx, "stream",
+                        lambda *a, **k: FakeStream())
+    assert "".join(llm.chat_stream(cfg, "s", "u")) == "hello"

@@ -175,15 +175,29 @@ def _stream_anthropic(cfg: LLMConfig, system: str, user: str, temp: float):
     with httpx.stream("POST", url, headers=headers, json=body, timeout=180) as r:
         if r.status_code != 200:
             raise LLMError(f"HTTP {r.status_code}: {r.read()[:300]!r}")
+        # EMPTY-STREAM GUARD (live 2026-08-28: TG replies "glitched out
+        # empty" — the agent's own words — when a stream closed with zero
+        # text deltas, all thinking. The non-streaming path has raised on
+        # empty since iteration 1; the stream path yielded nothing and the
+        # chat stored a blank reply silently.
+        yielded_any = False
+        stop_reason = None
         for evt in _sse_lines(r):
             if evt.get("type") == "content_block_delta":
                 delta = evt.get("delta", {})
                 if delta.get("type") == "text_delta":
                     text = delta.get("text", "")
                     if text:
+                        yielded_any = True
                         yield text
+            elif evt.get("type") == "message_delta":
+                stop_reason = evt.get("delta", {}).get("stop_reason") or stop_reason
             elif evt.get("type") == "error":
                 raise LLMError(f"stream error: {evt.get('error', {})}")
+        if not yielded_any:
+            raise LLMError(
+                f"empty stream reply (stop_reason={stop_reason}) — no text "
+                "deltas arrived (all-thinking response?)")
 
 
 def _stream_openai(cfg: LLMConfig, system: str, user: str, temp: float):
@@ -202,13 +216,17 @@ def _stream_openai(cfg: LLMConfig, system: str, user: str, temp: float):
     with httpx.stream("POST", url, headers=headers, json=body, timeout=180) as r:
         if r.status_code != 200:
             raise LLMError(f"HTTP {r.status_code}: {r.read()[:300]!r}")
+        yielded_any = False  # same empty-stream guard as the anthropic path
         for evt in _sse_lines(r):
             choices = evt.get("choices") or []
             if choices:
                 delta = choices[0].get("delta", {})
                 text = delta.get("content")
                 if text:
+                    yielded_any = True
                     yield text
+        if not yielded_any:
+            raise LLMError("empty stream reply — no content deltas arrived")
 
 
 def _repair_json_strings(text: str) -> str:
