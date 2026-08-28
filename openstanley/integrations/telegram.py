@@ -1123,6 +1123,23 @@ def _cmd_digest(cfg: Config) -> str:
     return digest_mod.render_text(d, str(db.get_setting("language") or "en"))
 
 
+def _foreign_draft_note(draft_id: int) -> str:
+    """When a draft id exists but on ANOTHER account, say that — the old
+    'No draft #N' line sent the owner hunting for a card sitting right in
+    front of them (live: 11 week-old account-1 cards, active was 2)."""
+    try:
+        with db.connect() as c:
+            row = c.execute(
+                "SELECT account_id FROM drafts WHERE id=?", (draft_id,)).fetchone()
+        if row and int(row["account_id"]) != db.active_account():
+            return (f" — it belongs to ACCOUNT {row['account_id']} "
+                    f"(active is {db.active_account()}); "
+                    f"/account {row['account_id']} to manage it")
+    except Exception:  # noqa: BLE001 — an explainer must never raise
+        pass
+    return ""
+
+
 def approve_draft_tg(cfg: Config, draft_id: int) -> str:
     """Mirror of the dashboard approve: keep any proposed slot, else smart
     slot (or static cadence when off). Same gate — approving is the human
@@ -1131,7 +1148,8 @@ def approve_draft_tg(cfg: Config, draft_id: int) -> str:
 
     d = db.get_draft(draft_id)
     if not d or d["status"] not in ("draft", "approved"):
-        return f"No approvable draft #{draft_id} — /drafts lists them."
+        return (f"No approvable draft #{draft_id}"
+                + _foreign_draft_note(draft_id) + " — /drafts lists them.")
     sched, reason = d.get("scheduled_at"), (d.get("meta") or {}).get("scheduled_reason")
     if sched is None:
         if cfg.agent.smart_slots:
@@ -1168,7 +1186,8 @@ def reject_draft_tg(draft_id: int) -> str:
     from ..gen import rejection_learn
     d = db.get_draft(draft_id)
     if not d or d["status"] not in ("draft", "approved"):
-        return f"No draft #{draft_id} to reject — /drafts lists them."
+        return (f"No draft #{draft_id} to reject"
+                + _foreign_draft_note(draft_id) + " — /drafts lists them.")
     db.update_draft(draft_id, status="rejected")
     # rejection learning: the owner's NO is teaching signal — stamp it, and
     # once enough pile up the brain reflects on what they share

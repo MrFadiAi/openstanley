@@ -405,7 +405,55 @@ class Agent:
             except Exception as e:  # noqa: BLE001
                 db.log("publish", f"[account {acct}] draft {nxt['id']} failed: {e}", level="error")
                 db.update_draft(nxt["id"], acct=acct, status="failed")
+        self._alert_stranded(acct)
         return {"published": published, "account": acct}
+
+    def _alert_stranded(self, acct: int) -> None:
+        """DUE approved drafts on OTHER accounts can never ship from this
+        loop (the X client is bound to the ACTIVE account). Live incident
+        2026-08-28: the owner approved 11 week-old account-1 cards from
+        Telegram while account 2 was active — accepted, scheduled, silently
+        unpublishable. Surface them loudly instead: log + one TG alert per
+        draft (never auto-posting cross-account, never re-alerting)."""
+        from datetime import datetime as _dt
+        try:
+            with db.connect() as c:
+                rows = c.execute(
+                    "SELECT id, account_id, scheduled_at FROM drafts "
+                    "WHERE status='approved' AND account_id != ? "
+                    "AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 10",
+                    (acct, _dt.now().isoformat(timespec="seconds"))).fetchall()
+            stranded = {int(r["id"]): dict(r) for r in rows}
+            if not stranded:
+                db.set_setting("stranded_alerted", [])
+                return
+            already = set(db.get_setting("stranded_alerted") or [])
+            fresh = [d for i, d in stranded.items() if i not in already]
+            if not fresh:
+                return
+            db.log("publish", f"{len(fresh)} DUE approved draft(s) stranded on "
+                            f"other accounts (active is {acct}): "
+                            + ", ".join(f"#{d['id']}(acct {d['account_id']}, "
+                                        f"{(d['scheduled_at'] or '')[:16]})"
+                                        for d in fresh), level="warn")
+            try:
+                from ..integrations import telegram as tg_mod
+                if tg_mod.is_enabled():
+                    body = ["⚠️ Approved drafts the publish loop CANNOT ship —",
+                            "they belong to another account:"]
+                    for d in fresh:
+                        body.append(f"• #{d['id']} — account {d['account_id']}, "
+                                    f"was due {(d['scheduled_at'] or '')[:16]}")
+                    body.append(f"Switch with /account <id> to publish them "
+                                f"(active is {acct}), or reject them.")
+                    tg_mod.notify_bg(chr(10).join(body))
+            except Exception as e:  # noqa: BLE001 — alert delivery is best-effort
+                db.log("publish", f"stranded alert delivery failed: {e}",
+                       level="warn")
+            db.set_setting("stranded_alerted",
+                           sorted(already | set(stranded)))
+        except Exception as e:  # noqa: BLE001 — never break the publish loop
+            db.log("publish", f"stranded check failed: {e}", level="warn")
 
     async def learn(self) -> dict:
         """Weekly: refresh metrics (time series + brain) + voice profile."""

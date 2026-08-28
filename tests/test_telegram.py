@@ -375,11 +375,21 @@ def _stub_voice(monkeypatch, score: int = 88) -> None:
                         lambda cfg, text, **k: vc)
 
 
+def _clear_chat_draft_residue(*texts: str) -> None:
+    """The TG chat path dedupes candidates against the last 60 drafts
+    GLOBALLY — residue from an earlier run's saved candidates makes every
+    later run skip the save. Clear this test's fixture texts first."""
+    with db.connect() as c:
+        for t in texts:
+            c.execute("DELETE FROM drafts WHERE text=?", (t.strip(),))
+
+
 def test_chat_candidates_saved_as_drafts(monkeypatch):
     """Defect 1 — a post drafted in TG chat becomes a real draft the user can
     /approve. Same draft_from_chat path as the web UI's approval cards."""
     _enable()
     post = "an ugly first version teaches what slides never will"
+    _clear_chat_draft_residue(post)
     monkeypatch.setattr(chat_mod, "llm_chat_stream",
                         lambda *a, **k: iter([f"here you go:\n> {post}\n"]))
     monkeypatch.setattr(chat_mod, "llm_chat", lambda *a, **k: "")
@@ -401,6 +411,7 @@ def test_chat_multiple_candidates_each_saved(monkeypatch):
     _enable()
     p1 = "first candidate post, long enough to count"
     p2 = "second candidate post, also long enough"
+    _clear_chat_draft_residue(p1, p2)
     monkeypatch.setattr(chat_mod, "llm_chat_stream",
                         lambda *a, **k: iter([f"> {p1}\n\n> {p2}\n"]))
     monkeypatch.setattr(chat_mod, "llm_chat", lambda *a, **k: "")
