@@ -185,21 +185,28 @@ def _llm_merge(cfg, rules: list[dict]) -> list[int]:
     data = extract_json(raw)
     if not isinstance(data, dict):
         raise LLMError("merge proposal not an object")
+    def _rid(v) -> int:
+        """The model echoes the listing's 'R72' format — accept both."""
+        t = str(v).strip()
+        if t[:1] in ("R", "r"):
+            t = t[1:]
+        return int(t)
+
     seen: set[int] = set()
     retired: list[int] = []
     valid = {r["id"] for r in rules}
     for cl in data.get("clusters") or []:
         if not isinstance(cl, dict):
             raise LLMError("bad cluster")
-        keep = int(cl.get("keep"))
-        drop = [int(x) for x in (cl.get("retire") or [])]
+        keep = _rid(cl.get("keep"))
+        drop = [_rid(x) for x in (cl.get("retire") or [])]
         for rid in [keep] + drop:
             if rid not in valid or rid in seen:
                 raise LLMError(f"id {rid} unknown or repeated")
             seen.add(rid)
         retired.extend(drop)
     for rid in data.get("solo") or []:
-        rid = int(rid)
+        rid = _rid(rid)
         if rid not in valid or rid in seen:
             raise LLMError(f"solo id {rid} unknown or repeated")
         seen.add(rid)
@@ -221,7 +228,18 @@ def _consolidate_rules(cfg, acct: Optional[int] = None) -> int:
     retired: list[int] = []
     try:
         if len(rules) >= LLM_MERGE_MIN:
-            retired = _llm_merge(cfg, rules)
+            # one retry: the merge call is one big thinking-mode pass and
+            # can outlive a slow read window (live: ReadTimeout, fallback
+            # fired, 0 merged — a retry usually lands it)
+            for attempt in (1, 2):
+                try:
+                    retired = _llm_merge(cfg, rules)
+                    break
+                except Exception:
+                    if attempt == 2:
+                        raise
+                    import time as _time
+                    _time.sleep(3)
         else:
             retired = _token_pass(rules)
     except Exception as e:  # noqa: BLE001 — consolidation never breaks learning
