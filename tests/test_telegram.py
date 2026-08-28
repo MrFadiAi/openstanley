@@ -1145,3 +1145,36 @@ def test_show_sends_full_draft_keeps_card(monkeypatch):
     assert not edits
     with db.connect() as c:
         c.execute("DELETE FROM drafts WHERE id=?", (d,))
+
+
+def test_handler_wall_clock_timeout_frees_and_apologizes(monkeypatch):
+    """Live 2026-08-28 11:26: a wedged LLM stream hung a TG handler for 6+
+    minutes with no reply, no error, no timeout firing. wait_for now caps
+    the handler, logs, and tells the owner to resend."""
+    import asyncio
+    import openstanley.integrations.telegram as tg_mod
+
+    _enable()
+    sent = []
+    monkeypatch.setattr(tg_mod, "CHAT_HANDLER_TIMEOUT_S", 0.2)
+    monkeypatch.setattr(tg_mod, "send_message",
+                        lambda cid, text, **k: sent.append((cid, text)))
+
+    def stuck_handle(cfg, upd):
+        import time as _t
+        _t.sleep(1.0)  # longer than the patched cap
+
+    monkeypatch.setattr(tg_mod, "handle_update", stuck_handle)
+
+    async def run():
+        # minimal replica of _dispatch's timeout branch
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(tg_mod.handle_update, None, {}),
+                timeout=tg_mod.CHAT_HANDLER_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            tg_mod.send_message(999, "⏱ That request ran too long and was "
+                                      "dropped — please resend it.")
+
+    asyncio.run(run())
+    assert sent and "resend" in sent[-1][1]

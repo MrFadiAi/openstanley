@@ -49,6 +49,10 @@ POLL_TIMEOUT_S = 25          # Telegram long-poll window
 HTTP_TIMEOUT_S = 10.0        # sendMessage / getUpdates client timeout
 EMPTY_POLL_SLEEP_S = 0.5     # breather between empty long-polls
 ERROR_SLEEP_S = 5.0          # backoff after a failed poll
+CHAT_HANDLER_TIMEOUT_S = 300  # wall-clock cap per update: a wedged LLM
+                              # stream (per-read timeouts reset forever by
+                              # a slow drip) hung a handler silently for
+                              # 6+ minutes live, 2026-08-28 11:26
 MAX_OUT_PER_MIN = 20         # outbound rate limit (drops beyond this)
 SESSION_CAP = 20             # messages remembered per TG chat
 DRAFTS_PAGE = 5              # /drafts previews
@@ -1625,10 +1629,36 @@ async def _poll_loop(cfg: Config) -> None:
                 # never propagates prev's exception into this handler.
                 await asyncio.wait({prev})
             async with sem:
+                # typing indicator: long tool chains (research, github
+                # drafts) legitimately take minutes — the chat must LOOK
+                # alive instead of silently buffering
                 try:
-                    await asyncio.to_thread(handle_update, cfg, upd)
+                    if upd.get("message"):
+                        _api(token, "sendChatAction",
+                             {"chat_id": cid, "action": "typing"})
+                except Exception:  # noqa: BLE001 — cosmetic, never blocks
+                    pass
+                try:
+                    # wall-clock cap: to_thread threads can't be cancelled,
+                    # but wait_for frees the slot + tells the owner instead
+                    # of hanging silently (live incident 2026-08-28 11:26)
+                    await asyncio.wait_for(
+                        asyncio.to_thread(handle_update, cfg, upd),
+                        timeout=CHAT_HANDLER_TIMEOUT_S)
                     from ..system import watchdog as wd_mod
                     wd_mod.note_tg_handler(True)
+                except asyncio.TimeoutError:
+                    from ..system import watchdog as wd_mod
+                    wd_mod.note_tg_handler(False, "handler wall-clock timeout")
+                    db.log("telegram", f"handler for chat {cid} timed out "
+                            f"after {CHAT_HANDLER_TIMEOUT_S}s — the reply "
+                            f"path was stuck; owner asked to resend",
+                           level="error")
+                    try:
+                        send_message(cid, "⏱ That request ran too long and "
+                                          "was dropped — please resend it.")
+                    except Exception:  # noqa: BLE001 — best-effort apology
+                        pass
                 except Exception as e:  # noqa: BLE001 — handle_update's own contract
                     from ..system import watchdog as wd_mod
                     wd_mod.note_tg_handler(False, str(e))
