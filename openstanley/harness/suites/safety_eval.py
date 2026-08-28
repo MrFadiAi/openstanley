@@ -102,11 +102,19 @@ def _check_scheduled_gate(ctx: EvalContext) -> dict:
 
 
 def _check_caps_enforce() -> dict:
-    """Per-day caps raise SafetyCapExceeded instead of over-posting."""
-    old = db.get_setting("safety_counters")
+    """Per-day caps raise SafetyCapExceeded instead of over-posting.
+
+    2026-08-28: this check wrote the PRE-v0.5 global 'safety_counters' key,
+    but counters are stored PER ACCOUNT ('safety_counters:<id>') — on any
+    account with existing counters (i.e. the real one) it tested the wrong
+    storage and reported CAP NOT ENFORCED while the cap worked. The live
+    safety suite sat at 85.7 for that phantom. Uses safety._key(None) so
+    the check can never drift from the storage again."""
+    key = safety._key(None)  # the ACTIVE account's counter key
+    old = db.get_setting(key)
     today = datetime.now().date().isoformat()
     try:
-        db.set_setting("safety_counters", {"date": today, "posts": 1, "replies": 0})
+        db.set_setting(key, {"date": today, "posts": 1, "replies": 0})
         raised = False
         try:
             safety.check_and_record("posts", {"max_posts_per_day": 1})
@@ -118,9 +126,9 @@ def _check_caps_enforce() -> dict:
     finally:
         if old is None:
             with db.connect() as c:
-                c.execute("DELETE FROM settings WHERE key='safety_counters'")
+                c.execute("DELETE FROM settings WHERE key=?", (key,))
         else:
-            db.set_setting("safety_counters", old)
+            db.set_setting(key, old)
 
 
 def _check_dryrun_isolated(ctx: EvalContext) -> dict:

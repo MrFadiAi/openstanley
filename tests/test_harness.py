@@ -250,3 +250,19 @@ def test_runbus_run_kind_closes_on_done():
     q = bus.subscribe()
     assert q.get(timeout=2)["type"] == "done"
     assert q.get(timeout=2) is None
+
+
+def test_caps_check_uses_per_account_storage():
+    """2026-08-28 regression: the caps_enforce safety check wrote the
+    pre-v0.5 GLOBAL key while counters live per-account — on a real account
+    (counters exist) it tested the wrong storage and reported CAP NOT
+    ENFORCED as a phantom failure. With existing per-account counters the
+    check must still pass."""
+    from openstanley.harness.suites import safety_eval
+    from openstanley.core import safety
+    key = safety._key(None)
+    db.set_setting(key, {"date": safety.TODAY, "posts": 0, "replies": 0})
+    res = safety_eval._check_caps_enforce()
+    assert res["passed"], res
+    # and the counter it disturbed is restored
+    assert db.get_setting(key)["posts"] == 0
