@@ -174,10 +174,54 @@ def test_consolidation_retires_near_duplicates():
                             "rejection", acct=1)
     r3 = brain_mod.add_rule("DO open niche replies with specific praise "
                             "and a concrete observation", "rejection", acct=1)
-    n = rl._consolidate_rules(acct=1)
+    n = rl._consolidate_rules(CFG, acct=1)
     assert n >= 1, "the near-duplicate pair should collapse"
     rules = {r["id"]: r for r in brain_mod.parse_rules(
         brain_mod.read("rules", 1))}
     assert rules[r2]["status"] == "retired", "later duplicate retired"
     assert rules[r1]["status"] == "active", "earliest kept"
     assert rules[r3]["status"] == "active", "distinct rule untouched"
+
+
+def test_llm_merge_clusters_paraphrases(monkeypatch):
+    """The live 18-rule set is PARAPHRASE duplicates — token overlap caught
+    0 of them. The LLM merge proposes clusters; only valid, complete
+    proposals apply."""
+    import json as _json
+    import openstanley.gen.llm as llm_mod
+    praise_ids = [brain_mod.add_rule(
+        f"praise variant {i}: replies must open with specific praise, not "
+        f"generic agreement templates (form {i})", "rejection", acct=1)
+        for i in range(3)]
+    meta_ids = [brain_mod.add_rule(
+        f"meta variant {i}: do not meta-comment about twitter culture "
+        f"(form {i})", "rejection", acct=1) for i in range(2)]
+    proposal = _json.dumps({"clusters": [
+        {"keep": praise_ids[0], "retire": praise_ids[1:]},
+        {"keep": meta_ids[0], "retire": [meta_ids[1]]}],
+        "solo": []})
+    monkeypatch.setattr(llm_mod, "chat", lambda *a, **k: proposal)
+    n = rl._consolidate_rules(CFG, acct=1)
+    assert n == 3, "4 paraphrase dupes retire into 2 keeps"
+    rules = {r["id"]: r for r in brain_mod.parse_rules(
+        brain_mod.read("rules", 1))}
+    assert rules[praise_ids[0]]["status"] == "active"
+    assert rules[praise_ids[2]]["status"] == "retired"
+
+
+def test_llm_merge_rejects_bad_proposal_nothing_retired(monkeypatch):
+    """A proposal naming an UNKNOWN id is rejected whole — the token-pass
+    fallback runs instead and no rule is lost to a hallucinated merge."""
+    import json as _json
+    import openstanley.gen.llm as llm_mod
+    r1 = brain_mod.add_rule("lesson one text here", "rejection", acct=1)
+    r2 = brain_mod.add_rule("a completely different lesson two",
+                            "rejection", acct=1)
+    bad = _json.dumps({"clusters": [{"keep": 99999, "retire": [r2]}],
+                       "solo": []})
+    monkeypatch.setattr(llm_mod, "chat", lambda *a, **k: bad)
+    rl._consolidate_rules(CFG, acct=1)
+    rules = {r["id"]: r for r in brain_mod.parse_rules(
+        brain_mod.read("rules", 1))}
+    assert rules[r1]["status"] == "active"
+    assert rules[r2]["status"] == "active", "bad proposal retires nothing"

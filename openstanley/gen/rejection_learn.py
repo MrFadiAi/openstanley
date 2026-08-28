@@ -127,7 +127,7 @@ def run_reflection(cfg, acct: Optional[int] = None) -> dict:
     material = build_material(acct)
     res = brain_mod.reflect(cfg, "rejection",
                             payload={"material": material}, acct=acct)
-    res["consolidated"] = _consolidate_rules(acct)
+    res["consolidated"] = _consolidate_rules(cfg, acct)
     _mark_learned([d["id"] for d in pending[:BATCH]], acct)
     res["learned_from"] = min(len(pending), BATCH)
     return res
@@ -145,33 +145,95 @@ def _tokens(text: str) -> set[str]:
     return {t.lower() for t in _re.findall(r"[\w؀-ۿ]+", text)}
 
 
-def _consolidate_rules(acct: Optional[int] = None) -> int:
-    """Retire near-duplicate rules among ACTIVE rejection/directive rules,
-    keeping the earliest id of each cluster. Returns how many were retired."""
-    from . import brain as brain_mod
-    rules = [r for r in brain_mod.parse_rules(brain_mod.read("rules", acct))
-             if r["status"] == "active" and r["source"] in ("rejection",
-                                                            "directive")]
+MERGE_SYSTEM = """You maintain a rule list for an AI content agent. The rules
+below were learned from the owner's draft rejections — the LLM that wrote
+them tends to restate the SAME lesson in different words (live: 18 rules,
+3 actual lessons). Merge semantic duplicates: pick the clearest rule of
+each cluster to KEEP, list the rest to retire. NEVER merge rules that
+teach different behavior. Return STRICT JSON:
+{"clusters": [{"keep": <rule id>, "retire": [<rule ids>]}], "solo": [<ids of
+unmatched rules>]}
+Every input id must appear exactly once across keep/retire/solo."""
+
+LLM_MERGE_MIN = 8  # below this the token pass is enough; paraphrase
+                   # clusters only matter once the list grows
+
+
+def _token_pass(rules: list[dict]) -> list[int]:
     kept: list[dict] = []
     retired: list[int] = []
     for r in sorted(rules, key=lambda x: x["id"]):
         toks = _tokens(r["text"])
-        dup = False
-        for k in kept:
-            other = _tokens(k["text"])
-            if toks and other and len(toks & other) / max(len(toks | other), 1) >= _OVERLAP:
-                dup = True
-                break
-        if dup:
+        if any(toks and _tokens(k["text"]) and
+               len(toks & _tokens(k["text"])) / max(len(toks | _tokens(k["text"])), 1) >= _OVERLAP
+               for k in kept):
             retired.append(r["id"])
         else:
             kept.append(r)
+    return retired
+
+
+def _llm_merge(cfg, rules: list[dict]) -> list[int]:
+    """One bounded LLM call clustering PARAPHRASE duplicates. Every id must
+    be accounted for exactly once and belong to the input set — anything
+    else rejects the whole proposal (deterministic validation, LLM only
+    proposes)."""
+    from .llm import chat as llm_chat, extract_json, LLMError
+    listing = chr(10).join(f"R{r['id']}: {r['text']}" for r in rules)
+    raw = llm_chat(cfg.llm, system=MERGE_SYSTEM, user=listing,
+                   temperature=0.0, json_mode=True)
+    data = extract_json(raw)
+    if not isinstance(data, dict):
+        raise LLMError("merge proposal not an object")
+    seen: set[int] = set()
+    retired: list[int] = []
+    valid = {r["id"] for r in rules}
+    for cl in data.get("clusters") or []:
+        if not isinstance(cl, dict):
+            raise LLMError("bad cluster")
+        keep = int(cl.get("keep"))
+        drop = [int(x) for x in (cl.get("retire") or [])]
+        for rid in [keep] + drop:
+            if rid not in valid or rid in seen:
+                raise LLMError(f"id {rid} unknown or repeated")
+            seen.add(rid)
+        retired.extend(drop)
+    for rid in data.get("solo") or []:
+        rid = int(rid)
+        if rid not in valid or rid in seen:
+            raise LLMError(f"solo id {rid} unknown or repeated")
+        seen.add(rid)
+    if seen != valid:
+        raise LLMError("proposal does not account for every rule exactly once")
+    return retired
+
+
+def _consolidate_rules(cfg, acct: Optional[int] = None) -> int:
+    """Retire duplicate rules among ACTIVE rejection/directive rules.
+    Small lists: cheap token-overlap pass. Large lists (>= LLM_MERGE):
+    one validated LLM clustering — paraphrases ('warn/scold/lecture' vs
+    'cynical meta-takes scolding') share too few tokens for the cheap
+    pass (live: 18 rules, 0 caught, all paraphrase dupes)."""
+    from . import brain as brain_mod
+    rules = [r for r in brain_mod.parse_rules(brain_mod.read("rules", acct))
+             if r["status"] == "active" and r["source"] in ("rejection",
+                                                            "directive")]
+    retired: list[int] = []
+    try:
+        if len(rules) >= LLM_MERGE_MIN:
+            retired = _llm_merge(cfg, rules)
+        else:
+            retired = _token_pass(rules)
+    except Exception as e:  # noqa: BLE001 — consolidation never breaks learning
+        db.log("brain", f"rule consolidation fell back to token pass: {e}",
+               level="warn")
+        retired = _token_pass(rules)
     for rid in retired:
         brain_mod.retire_rule(rid, acct=acct)
     if retired:
         brain_mod.journal_append(
-            "rejection", f"consolidated {len(retired)} near-duplicate "
-            f"learned rules (kept {len(kept)} distinct)",
+            "rejection", f"consolidated {len(retired)} duplicate learned "
+            f"rules (kept {len(rules) - len(retired)} distinct)",
             [f"retired R{r}" for r in retired], acct=acct)
     return len(retired)
 
