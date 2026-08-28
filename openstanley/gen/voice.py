@@ -39,7 +39,7 @@ def build_voice(cfg: Config, force: bool = False,
                 acct: int | None = None) -> dict:
     """Extract/update bilingual voice profile for one account's posts."""
     existing = db.load_voice(acct)
-    posts = db.own_posts(limit=300, acct=acct)
+    posts = _own_writing(db.own_posts(limit=300, acct=acct))
     if not posts:
         raise LLMError("No own posts imported yet — run an import first.")
 
@@ -80,6 +80,24 @@ def build_voice(cfg: Config, force: bool = False,
     db.log("learn", f"[account {db._acct(acct)}] voice rubric extracted "
                     f"(langs={list(rubrics)}, {len(examples)} examples)")
     return db.load_voice(acct)
+
+
+def _own_writing(posts: list[dict]) -> list[dict]:
+    """The owner's OWN writing only — retweets (RT @...) and bare links are
+    AMPLIFIED content, not their voice (live 2026-08-29: the profile's top
+    examples were RT @GoogleDeepMind / RT @BybitArabic promo posts, so every
+    draft came out like a corporate announcement instead of the owner)."""
+    out = []
+    for p in posts:
+        t = (p.get("text") or "").strip()
+        if not t:
+            continue
+        if t.upper().startswith("RT @"):
+            continue
+        if t.startswith("@") and " " not in t.split(" ")[0]:
+            continue  # bare mention-acknowledgements
+        out.append(p)
+    return out
 
 
 def _scored(posts: list[dict]) -> list[tuple[float, dict]]:
