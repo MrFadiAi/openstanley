@@ -43,6 +43,24 @@ def _accounts_root_sandbox(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _pin_active_account():
+    """The ACTIVE ACCOUNT is shared DB state — whichever account a previous
+    test (or previous SUITE RUN) switched to persists. Seeds written for
+    account 1 were read back under account 2 on later runs (2026-08-28
+    flake cluster: 5 insights tests + digest + deep_pull, pass-then-fail
+    across identical code). Pin account 1 before every test; tests that
+    deliberately switch accounts mid-run still can — this resets BETWEEN
+    tests only."""
+    from openstanley.core import db as _db
+    with _db.connect() as _c:  # account 1 must exist for the pin to land
+        _c.execute("INSERT OR IGNORE INTO accounts (id, handle, status) "
+                   "VALUES (1, 'test-primary', 'active')")
+    _db.set_active_account(1)
+    yield
+    _db.set_active_account(1)
+
+
+@pytest.fixture(autouse=True)
 def _watchdog_reset():
     """Chat watchdog state is a shared DB setting — every test starts clean
     so burst counters from one suite file can't trip guards in the next."""
