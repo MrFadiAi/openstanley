@@ -342,10 +342,33 @@ def _run_tools(cfg: Config, reply: str, max_rounds: int = 3) -> tuple[str, list[
     return clean, results
 
 
-def _followup(cfg: Config, reply: str, tool_results: list[dict]) -> str:
+def _followup(cfg: Config, reply: str, tool_results: list[dict],
+               orig_request: str = "") -> str:
     """Feed tool results back → one short LLM turn that folds them into prose."""
     if not tool_results:
         return ""
+    # DELIVERABLE MODE (live 2026-08-28: 'not long enough, add more details'
+    # -> the agent REPORTED the research and never wrote the post): when the
+    # original ask was a draft/edit, this turn WRITES THE POST grounded in
+    # the tool results — report mode stays for informational asks
+    if looks_like_draft_request(orig_request or ""):
+        ddata = dataclasses.replace(cfg.llm, temperature=0.8, max_tokens=4000)
+        duser = ("The user's request:" + chr(10) + orig_request[:600] + chr(10) * 2
+                 + "Your earlier reply:" + chr(10) + reply[:400] + chr(10) * 2
+                 + "The tools ran with REAL results (your research):" + chr(10)
+                 + json.dumps(tool_results, ensure_ascii=False, default=str)[:2500]
+                 + chr(10) * 2
+                 + "The user is waiting for THE POST. Write it NOW as one "
+                   "markdown quote block (> ...), fully grounded in the real "
+                   "results above, in the owner's voice and dialect, at the "
+                   "length the user asked for. No preamble, no report of what "
+                   "you found — the quote block IS the reply.")
+        try:
+            return llm_chat(ddata, system="You are OpenStanley. TOOL RESULTS "
+                                          "FOLLOW-UP: deliver the post now — "
+                                          "quote block, no report.", user=duser)
+        except LLMError:
+            return ""
     data = dataclasses.replace(cfg.llm, temperature=0.4, max_tokens=500)
     user = (f"Your reply was:\n{reply[:800]}\n\nThe tools executed with REAL "
             f"results:\n{json.dumps(tool_results, ensure_ascii=False, default=str)[:1500]}\n\n"
@@ -374,7 +397,7 @@ def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -
     clean, tool_results = _run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
     if tool_results:
-        extra = _followup(cfg, reply, tool_results)
+        extra = _followup(cfg, reply, tool_results, user_message)
         if extra:
             clean += "\n\n" + extra
     # instruction memory: a directive-shaped message becomes a standing
@@ -426,7 +449,7 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
         yield {"type": "tool", "name": res["name"], "args": res.get("args"),
                "ok": bool(res.get("ok")), "result": res}
     if tool_results:
-        extra = _followup(cfg, reply, tool_results)
+        extra = _followup(cfg, reply, tool_results, user_message)
         if extra:
             clean += "\n\n" + extra
             yield {"type": "token", "text": "\n\n" + extra}

@@ -788,7 +788,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     clean, tool_results = chat_mod._run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
     if tool_results:
-        extra = chat_mod._followup(cfg, reply, tool_results)
+        extra = chat_mod._followup(cfg, reply, tool_results, user_message)
         if extra:  # web parity: real tool results folded into prose
             clean += "\n\n" + extra
         else:      # LLM down → the terse fallback still says what ran
