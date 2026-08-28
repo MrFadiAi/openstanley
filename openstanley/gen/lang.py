@@ -78,7 +78,11 @@ def arabic_issues(text: str) -> list[str]:
                           f"'{_PERSIAN_LOOKALIKES[bad]}'")
     if numerals_style(text) == "mixed":
         issues.append("mixed Western + Arabic-Indic numerals — pick one system")
-    if _TATWEEL in text:
+    # RUNS only (2+ consecutive): a SINGLE tatweel is the standard الـ
+    # definite article before Latin loanwords ("بالـ API") — the owner's own
+    # posts use it 7/50 with zero runs (2026-08-28); penalizing it punished
+    # the account's real voice on 8 of 12 eval drafts.
+    if _TATWEEL * 2 in text:
         issues.append("tatweel stretch (ـ) renders broken on X")
     return issues
 

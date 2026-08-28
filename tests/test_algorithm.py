@@ -99,3 +99,28 @@ def test_prompt_block_exists():
     assert "replies" in algorithm.PROMPT_BLOCK.lower()
     assert algorithm.improvement_hints(
         {"factors": [{"name": "X", "impact": -5, "note": "n"}]}) == ["X: n"]
+
+
+# ---------- 2026-08-28: the metric mis-measured Gulf Arabic ----------
+
+def test_single_tatweel_article_is_not_a_stretch():
+    """'بالـ API' is the STANDARD definite article before Latin loanwords —
+    the owner's own posts use it 7/50 with zero runs. Only RUNS (2+) are
+    broken rendering."""
+    from openstanley.gen.lang import arabic_issues
+    assert arabic_issues("جربت اليوم الـ API الجديد وكان سريع") == []
+    assert any("tatweel" in i for i in arabic_issues("هذا الشي رائــــع جدا"))
+
+
+def test_language_quality_rewards_clean_article_usage():
+    from openstanley.gen.algorithm import _language_quality
+    f = _language_quality("تعلمت من الـ debugging أكثر من الكورسات")
+    assert f.impact > 0, f.note
+
+
+def test_topic_list_hygiene():
+    from openstanley.gen.algorithm import _clean_topics
+    dirty = ["https", "mr_cryptoyt", "x.com/news", "@friend",
+             "نموذج", "ذكاء", "qwen3"]
+    out = _clean_topics(dirty, handle="Mr_CryptoYT")
+    assert out == ["نموذج", "ذكاء", "qwen3"]

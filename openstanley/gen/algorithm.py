@@ -359,12 +359,31 @@ def score_draft_row(d: dict) -> dict:
     )
 
 
+def _clean_topics(topics: list[str], handle: str = "") -> list[str]:
+    """Drop non-topic junk: urls, the account's own handle, handles/tags,
+    anything path-ish. 'https' and '@me' are not topics this account ranks
+    for (2026-08-28: both sat in the live list)."""
+    out = []
+    h = (handle or "").lower().lstrip("@")
+    for t in topics:
+        tl = str(t).lower().strip()
+        if not tl or tl.startswith("http"):
+            continue
+        if any(c in tl for c in ":/.@_#"):
+            continue
+        if h and tl == h:
+            continue
+        out.append(str(t).strip())
+    return out
+
+
 def _account_topics() -> list[str]:
     from ..core import db
     profile = db.get_acct_setting("style_profile") or {}
     topics = (profile.get("stats") or {}).get("topics") or []
     if topics:
-        return topics
+        me = db.get_me() or {}
+        return _clean_topics(list(topics), me.get("username") or "")
     # fall back to frequent own-post terms (cheap simclusters stand-in)
     from ..core import db as _db
     words: dict[str, int] = {}
