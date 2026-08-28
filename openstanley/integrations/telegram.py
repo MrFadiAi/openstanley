@@ -767,6 +767,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     from ..gen.llm import LLMError
 
     _remember(chat_id, "user", user_message)
+    db.log("telegram", f"chat turn START chat={chat_id}")
     llm_cfg = dataclasses.replace(cfg.llm, temperature=chat_mod._llm_temperature(),
                                   max_tokens=1200)
     from ..system import watchdog as wd_mod
@@ -863,6 +864,9 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
         db.log("telegram", f"directive capture skipped: {e}", level="warn")
 
     _remember(chat_id, "assistant", clean)
+    db.log("telegram", f"chat turn END chat={chat_id} "
+                       f"(drafts saved: {len(draft_ids)}, "
+                       f"reply {len(clean)} chars)")
     brain_mod.maybe_reflect_chat_async(cfg)  # every 10th message → reflect
     # delta for the final bubble edit: what the streamed text is missing.
     # clean starts at strip_actions(reply), so the delta is the part after it;
