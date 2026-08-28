@@ -110,3 +110,26 @@ def test_handler_routes_chat_via_stream(monkeypatch, fake_api):
     upd = {"message": {"chat": {"id": 7}, "text": "plain question"}}
     tg._handle_update(_cfg(), upd)
     assert used.get("text") == "streamed answer"
+
+
+def test_chat_turn_uses_a_budget_thinking_cannot_starve(monkeypatch):
+    """The whole 'agent not responding' day (2026-08-28) was ONE number:
+    max_tokens=1200 — GLM's thinking phase consumed the entire budget
+    before emitting text (stop_reason=max_tokens, zero deltas). Chat
+    turns must budget for thinking + a full reply."""
+    import dataclasses as _dc
+    import openstanley.gen.chat as chat_mod
+    seen = {}
+
+    def fake_stream(cfg, system, user, temperature=None):
+        seen["max_tokens"] = cfg.max_tokens
+        yield "ok here is a reply"
+    monkeypatch.setattr(chat_mod, "llm_chat_stream", fake_stream)
+    monkeypatch.setattr(chat_mod, "llm_chat", lambda *a, **k: "")
+    import openstanley.integrations.telegram as tgm
+    monkeypatch.setattr(tgm, "send_stream",
+                        lambda cid, stream: {"ok": True})
+    tgm._sessions.clear()
+    from openstanley.core.config import Config
+    "".join(tgm.chat_reply_tg_stream(Config(), 123, "draft me a post"))
+    assert seen.get("max_tokens", 0) >= 4000, seen

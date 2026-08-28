@@ -336,7 +336,7 @@ def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -
     """One-shot OpenStanley reply (non-streaming path). Synchronous (LLM call)."""
     db.add_chat_message("user", user_message)
     llm_cfg = dataclasses.replace(cfg.llm, temperature=_llm_temperature(),
-                                  max_tokens=1200)
+                                  max_tokens=4000)  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number
     system = _system(cfg, user_message)
     try:
         reply = llm_chat(llm_cfg, system=system, user=_history_turn(user_message))
@@ -379,7 +379,7 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
     yield {"type": "thinking_steps", "steps": trace["steps"],
            "chunks": trace["chunks"]}
     llm_cfg = dataclasses.replace(cfg.llm, temperature=_llm_temperature(),
-                                  max_tokens=1200)
+                                  max_tokens=4000)  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number
     system = _system(cfg, user_message)
     full = []
     try:

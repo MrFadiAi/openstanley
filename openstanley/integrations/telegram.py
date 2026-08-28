@@ -769,7 +769,7 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     _remember(chat_id, "user", user_message)
     db.log("telegram", f"chat turn START chat={chat_id}")
     llm_cfg = dataclasses.replace(cfg.llm, temperature=chat_mod._llm_temperature(),
-                                  max_tokens=1200)
+                                  max_tokens=4000)  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number
     from ..system import watchdog as wd_mod
     full: list[str] = []
     try:
