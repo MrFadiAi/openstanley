@@ -144,6 +144,15 @@ EXAMPLES OF THE VOICE:
 {examples}"""
     if lang == "ar":
         base += "\n\nWhen writing Arabic, stay strictly within the Arabic rubric."
+    if lang != "en":  # Arabic or unspecified/mixed drafts carry the
+        # dialect; explicit English never does
+        try:  # the account's EXACT dialect, mined from its posts
+            from .dialect import dialect_block
+            dblock = dialect_block()
+            if dblock:
+                base += "\n\n" + dblock
+        except Exception:  # noqa: BLE001 - dialect never breaks drafting
+            pass
     if style:
         base += "\n\n" + style
     return base
