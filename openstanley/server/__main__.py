@@ -89,6 +89,7 @@ class SettingsUpdate(BaseModel):
     digest_hour: int | None = None
     # v0.4.4 telegram — token is write-only (masked in GET, never logged)
     tg_bot_token: str | None = None
+    tinyfish_api_key: str | None = None
     tg_allowed_chats: list[str] | None = None
     tg_enabled: bool | None = None
 
@@ -844,6 +845,7 @@ async def get_settings():
         "digest_last_sent": (db.get_acct_setting("digest_last") or {}).get("at"),
         # v0.4.4 telegram — token masked like the webhook, never the value
         "tg_bot_token": telegram_mod.mask_token(telegram_mod.bot_token()),
+        "tinyfish_api_key": (str(db.get_setting("tinyfish_api_key") or "")[:6] + "…" if db.get_setting("tinyfish_api_key") else ""),
         "tg_bot_set": len(telegram_mod.bot_token()) >= telegram_mod.TOKEN_MIN_LEN,
         "tg_allowed_chats": telegram_mod.allowed_chats(),
         "tg_enabled": telegram_mod.is_enabled(),
@@ -879,6 +881,14 @@ async def update_settings(body: SettingsUpdate):
                 scheduler.add_job(_digest_job, CronTrigger(hour=hour, minute=0),
                                   id="digest", replace_existing=True)
                 db.log("digest", f"digest job moved to {hour:02d}:00")
+            continue
+        if k == "tinyfish_api_key":  # free tinyfish.ai key — masked in GET
+            key = str(v).strip()
+            if key and not key.startswith("tf_") and len(key) < 16:
+                continue  # not plausible — ignore, keep stored one
+            db.set_setting("tinyfish_api_key", key)
+            db.log("websearch", "tinyfish key updated — search routes through "
+                                "it first ($0), DDG stays the fallback")
             continue
         if k == "tg_bot_token":  # secret — stored, masked in GET, never logged
             token = str(v).strip()

@@ -130,3 +130,111 @@ def test_thinking_budget_reaches_anthropic_body(monkeypatch):
     assert captured["body"]["thinking"] == {"type": "enabled",
                                             "budget_tokens": 1500}
     assert "temperature" not in captured["body"]
+
+
+# ---------- TinyFish routing (free tier, $0) — 2026-08-28 ----------
+
+def test_search_uses_tinyfish_when_keyed(monkeypatch):
+    """Keyed → results come from TinyFish (site field marks the source);
+    DDG is never touched."""
+    import openstanley.gen.websearch as ws
+
+    def fake_tf_get(url, headers=None, params=None, timeout=None, **kw):
+        class R:
+            status_code = 200
+            def json(self):
+                return {"results": [
+                    {"position": 1, "title": "TF result", "url": "https://tf.io/a",
+                     "snippet": "snip", "site_name": "tf.io"},
+                    {"position": 2, "title": "no url dropped", "snippet": "x"},
+                ]}
+        return R()
+
+    def ddg_boom(*a, **k):
+        raise AssertionError("DDG must not be called when TinyFish answers")
+    monkeypatch.setattr(ws, "_tinyfish_key", lambda: "tf_test_key_123456")
+    monkeypatch.setattr(ws.httpx, "get", fake_tf_get)
+    monkeypatch.setattr(ws, "DDG_URL", ddg_boom)  # any DDG attempt explodes
+    out = ws.web_search("anything")
+    assert out and out[0]["title"] == "TF result" and out[0]["site"] == "tf.io"
+    assert all("url" in r and r["url"] for r in out)
+
+
+def test_search_falls_back_to_ddg_when_tinyfish_fails(monkeypatch):
+    import openstanley.gen.websearch as ws
+    calls = {"tf": 0, "ddg": 0}
+
+    def tf_500(url, headers=None, params=None, timeout=None, **kw):
+        calls["tf"] += 1
+        class R:
+            status_code = 503
+        return R()
+
+    def ddg_ok(url, headers=None, timeout=None, follow_redirects=None, **kw):
+        calls["ddg"] += 1
+        class R:
+            status_code = 200
+            text = ('<a class="result__a" href="https://x.io/a">ddg hit</a>'
+                    '<a class="result__snippet" href="#">the snippet</a>')
+        return R()
+
+    monkeypatch.setattr(ws, "_tinyfish_key", lambda: "tf_test_key_123456")
+    monkeypatch.setattr(ws.httpx, "get", tf_500)
+    import openstanley.gen.websearch as w2
+    # DDG path reuses the same httpx.get — swap per-call by URL
+    def router(url, **kw):
+        if "tinyfish" in str(url):
+            return tf_500(url, **kw)
+        return ddg_ok(url, **kw)
+    monkeypatch.setattr(ws.httpx, "get", router)
+    out = ws.web_search("anything")
+    assert calls["tf"] == 1 and calls["ddg"] >= 1
+    assert out and out[0]["title"] == "ddg hit"
+
+
+def test_search_unkeyed_skips_tinyfish_entirely(monkeypatch):
+    import openstanley.gen.websearch as ws
+    seen = {}
+    monkeypatch.setattr(ws, "_tinyfish_key", lambda: "")
+
+    def router(url, **kw):
+        seen["url"] = str(url)
+        class R:
+            status_code = 200
+            text = ""
+        return R()
+    monkeypatch.setattr(ws.httpx, "get", router)
+    ws.web_search("q")
+    assert "tinyfish" not in seen.get("url", "")
+
+
+def test_web_read_uses_tinyfish_fetch_when_keyed(monkeypatch):
+    import openstanley.gen.websearch as ws
+
+    def fake_post(url, headers=None, json=None, timeout=None, **kw):
+        class R:
+            status_code = 200
+            def json(self):
+                return {"results": [{"title": "Rendered", "text": "# clean md"}]}
+        return R()
+
+    monkeypatch.setattr(ws, "_tinyfish_key", lambda: "tf_test_key_123456")
+    monkeypatch.setattr(ws.httpx, "post", fake_post)
+    r = ws.web_read("https://example.com")
+    assert r["ok"] and r["via"] == "tinyfish" and "clean md" in r["text"]
+
+
+def test_web_read_falls_back_when_fetch_fails(monkeypatch):
+    import openstanley.gen.websearch as ws
+
+    def bad_post(url, **kw):
+        class R:
+            status_code = 500
+        return R()
+
+    monkeypatch.setattr(ws, "_tinyfish_key", lambda: "tf_test_key_123456")
+    monkeypatch.setattr(ws.httpx, "post", bad_post)
+    r = ws.web_read("https://example.com")
+    # falls back to the plain reader (real page fetch here — example.com is
+    # stable) — must NOT carry via=tinyfish
+    assert r["ok"] and r.get("via") != "tinyfish"

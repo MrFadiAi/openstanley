@@ -6,6 +6,11 @@ Two sources:
   the study loop uses, now exposed on demand
 
 Both are read-only. Chat turns them into drafts via the tool registry.
+
+TinyFish (2026-08-28): when a free tinyfish.ai API key is set (Settings or
+OPENSTANLEY_TINYFISH_KEY), web_search/web_read route through it FIRST —
+ranked results + browser-rendered markdown at $0 — and fall back to the
+DDG/reader path on any error, so the agent never loses the capability.
 """
 from __future__ import annotations
 
@@ -23,6 +28,9 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
 TIMEOUT = 15.0
 MAX_RESULTS = 6
 
+TINYFISH_SEARCH_URL = "https://api.search.tinyfish.ai/search"
+TINYFISH_FETCH_URL = "https://api.fetch.tinyfish.ai/fetch"
+
 _RES_RE = re.compile(
     r'<a[^>]+class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?'
     r'class="result__snippet"[^>]*>(.*?)</a>', re.DOTALL)
@@ -32,11 +40,84 @@ def _strip_tags(s: str) -> str:
     return _html.unescape(re.sub(r"<[^>]+>", "", s)).strip()
 
 
+def _tinyfish_key() -> str:
+    """Free key from tinyfish.ai — Settings value wins, env is the fallback."""
+    import os
+    try:
+        from ..core import db as _db
+        k = _db.get_setting("tinyfish_api_key")
+        if k:
+            return str(k)
+    except Exception:  # noqa: BLE001 — settings must never break search
+        pass
+    return os.environ.get("OPENSTANLEY_TINYFISH_KEY", "")
+
+
+def _tinyfish_search(query: str, limit: int) -> list[dict]:
+    """TinyFish /search -> the same [{title, snippet, url}] shape. Empty on
+    any failure (the caller falls back to DDG — never lose the capability)."""
+    key = _tinyfish_key()
+    if not key:
+        return []
+    try:
+        r = httpx.get(TINYFISH_SEARCH_URL,
+                      headers={"X-API-Key": key},
+                      params={"query": query,
+                              "purpose": "source research for on-voice X "
+                                         "content the owner will approve"},
+                      timeout=TIMEOUT)
+        if r.status_code != 200:
+            return []
+        out = []
+        for hit in (r.json().get("results") or [])[:limit]:
+            title = str(hit.get("title") or "").strip()
+            url = str(hit.get("url") or "").strip()
+            snippet = str(hit.get("snippet") or "").strip()
+            if title and url:
+                out.append({"title": title[:120], "snippet": snippet[:280],
+                            "url": url[:300],
+                            "site": str(hit.get("site_name") or "")[:60]})
+        return out
+    except Exception:  # noqa: BLE001 — provider errors fall back silently
+        return []
+
+
+def _tinyfish_fetch(url: str, max_chars: int) -> Optional[dict]:
+    """TinyFish /fetch (browser-rendered markdown) -> web_read's dict shape,
+    or None when unkeyed/failed (caller falls back to the plain reader)."""
+    key = _tinyfish_key()
+    if not key:
+        return None
+    try:
+        r = httpx.post(TINYFISH_FETCH_URL,
+                       headers={"X-API-Key": key},
+                       json={"urls": [url], "format": "markdown"},
+                       timeout=45)
+        if r.status_code != 200:
+            return None
+        results = r.json().get("results") or []
+        if not results:
+            return None
+        page = results[0] or {}
+        text = str(page.get("text") or "").strip()
+        if not text:
+            return None
+        return {"ok": True, "title": str(page.get("title") or "")[:120],
+                "url": url, "length": len(text), "text": text[:max_chars],
+                "via": "tinyfish"}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def web_search(query: str, limit: int = MAX_RESULTS) -> list[dict]:
-    """DuckDuckGo HTML search → [{title, snippet, url}]. Empty on failure —
+    """[{title, snippet, url}] — TinyFish first when keyed ($0, ranked),
+    DuckDuckGo HTML as the always-there fallback. Empty on failure —
     the caller tells the user honestly instead of inventing results."""
     if not (query or "").strip():
         return []
+    tf = _tinyfish_search(query, limit)
+    if tf:
+        return tf[:limit]
     try:
         r = httpx.get(DDG_URL.format(q=httpx.QueryParams({"q": query}).get("q", query).replace(" ", "+")),
                       headers=UA, timeout=TIMEOUT, follow_redirects=True)
@@ -127,6 +208,9 @@ def web_read(url: str, max_chars: int = 6000) -> dict:
     import re as _re
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
+    tf = _tinyfish_fetch(url, max_chars)
+    if tf:
+        return tf
     try:
         r = httpx.get(url, headers=UA, timeout=20, follow_redirects=True)
     except Exception as e:  # noqa: BLE001
