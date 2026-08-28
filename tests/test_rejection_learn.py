@@ -39,6 +39,14 @@ def _mk_rejected(text: str, reason: str = "owner", via: str = "web") -> int:
     return did
 
 
+def _isolate() -> None:
+    """Other suites' TG-reject tests stamp owner-rejections into the shared
+    DB — pending_owner_rejections() would count them here (live: a 3rd
+    pending rejection broke the ==2 expectation). Clear the slate first."""
+    with db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE status='rejected'")
+
+
 def _cleanup(*ids: int) -> None:
     with db.connect() as c:
         for i in ids:
@@ -66,6 +74,7 @@ def test_record_rejection_idempotent_and_only_on_rejected():
 
 
 def test_pending_excludes_expired_and_learned():
+    _isolate()
     e = _mk_rejected("expired thing", reason="expired", via="sweep")
     o1 = _mk_rejected("owner hates this")
     o2 = _mk_rejected("owner hates this too")
@@ -79,6 +88,7 @@ def test_pending_excludes_expired_and_learned():
 
 
 def test_build_material_contrasts_rejected_vs_approved():
+    _isolate()
     o = _mk_rejected("bait thread ending in a question?")
     a = db.add_draft(text="calm observation the owner approved", acct=1)
     db.update_draft(a, acct=1, status="approved")
@@ -91,6 +101,7 @@ def test_build_material_contrasts_rejected_vs_approved():
 
 
 def test_run_reflection_adds_rules_and_marks_learned(monkeypatch):
+    _isolate()
     monkeypatch.setattr(brain_mod, "llm_chat",
                         lambda *a, **k: _FAKE_REFLECT_JSON)
     before = {r["id"] for r in brain_mod.parse_rules(
@@ -118,6 +129,7 @@ def test_run_reflection_noop_when_nothing_pending():
 
 
 def test_maybe_reflect_async_threshold(monkeypatch):
+    _isolate()
     fired = []
     monkeypatch.setattr(rl, "run_reflection",
                         lambda cfg, acct=None: fired.append(1) or
@@ -147,3 +159,25 @@ def test_expired_never_reaches_the_llm(monkeypatch):
     assert res["learned_from"] == 0 and called == [], \
         "expiry rejections are hygiene — never learned as taste"
     _cleanup(e1, e2, e3, e4)
+
+
+def test_consolidation_retires_near_duplicates():
+    """Live 2026-08-28: 18 rules from 10 rejections — the same 3 lessons
+    repeated 5+ times because reflect emitted one rule per draft. The
+    consolidation keeps the earliest of each near-duplicate cluster."""
+    from openstanley.gen import rejection_learn as rl
+    a = rl._consolidate_rules.__self__ if hasattr(rl._consolidate_rules, "__self__") else None
+    r1 = brain_mod.add_rule("DON'T write replies that warn, scold, or "
+                            "lecture about twitter culture", "rejection", acct=1)
+    r2 = brain_mod.add_rule("DON'T write replies that warn, scold, lecture, "
+                            "or analyze twitter culture/people",
+                            "rejection", acct=1)
+    r3 = brain_mod.add_rule("DO open niche replies with specific praise "
+                            "and a concrete observation", "rejection", acct=1)
+    n = rl._consolidate_rules(acct=1)
+    assert n >= 1, "the near-duplicate pair should collapse"
+    rules = {r["id"]: r for r in brain_mod.parse_rules(
+        brain_mod.read("rules", 1))}
+    assert rules[r2]["status"] == "retired", "later duplicate retired"
+    assert rules[r1]["status"] == "active", "earliest kept"
+    assert rules[r3]["status"] == "active", "distinct rule untouched"

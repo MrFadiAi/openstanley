@@ -61,6 +61,22 @@ def _pin_active_account():
 
 
 @pytest.fixture(autouse=True)
+def _tg_module_state_reset():
+    """The Telegram module keeps PROCESS-level state: the outbound rate
+    limiter (_rate_times, 20/min) accumulates across every test in the
+    run — earlier TG-heavy suites silently drain the budget and later
+    send-asserting tests find their reply DROPPED (live: study-command
+    tests saw sent==0 with passing-solo code). Reset between tests."""
+    from openstanley.integrations import telegram as _tg
+    _tg._rate_times.clear()
+    _tg._denied_chats.clear()
+    _tg._sessions.clear()
+    yield
+    _tg._rate_times.clear()
+    _tg._sessions.clear()
+
+
+@pytest.fixture(autouse=True)
 def _watchdog_reset():
     """Chat watchdog state is a shared DB setting — every test starts clean
     so burst counters from one suite file can't trip guards in the next."""

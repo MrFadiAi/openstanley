@@ -127,9 +127,53 @@ def run_reflection(cfg, acct: Optional[int] = None) -> dict:
     material = build_material(acct)
     res = brain_mod.reflect(cfg, "rejection",
                             payload={"material": material}, acct=acct)
+    res["consolidated"] = _consolidate_rules(acct)
     _mark_learned([d["id"] for d in pending[:BATCH]], acct)
     res["learned_from"] = min(len(pending), BATCH)
     return res
+
+
+# token-overlap dedupe for learned rules — the reflect prompt asks for one
+# shared pattern but the model still emits near-copies per draft (live:
+# 18 rules from 10 rejections, the same 3 lessons x5+). Rules cost prompt
+# budget in brain_context; duplicates are pure bloat.
+_OVERLAP = 0.55
+
+
+def _tokens(text: str) -> set[str]:
+    import re as _re
+    return {t.lower() for t in _re.findall(r"[\w؀-ۿ]+", text)}
+
+
+def _consolidate_rules(acct: Optional[int] = None) -> int:
+    """Retire near-duplicate rules among ACTIVE rejection/directive rules,
+    keeping the earliest id of each cluster. Returns how many were retired."""
+    from . import brain as brain_mod
+    rules = [r for r in brain_mod.parse_rules(brain_mod.read("rules", acct))
+             if r["status"] == "active" and r["source"] in ("rejection",
+                                                            "directive")]
+    kept: list[dict] = []
+    retired: list[int] = []
+    for r in sorted(rules, key=lambda x: x["id"]):
+        toks = _tokens(r["text"])
+        dup = False
+        for k in kept:
+            other = _tokens(k["text"])
+            if toks and other and len(toks & other) / max(len(toks | other), 1) >= _OVERLAP:
+                dup = True
+                break
+        if dup:
+            retired.append(r["id"])
+        else:
+            kept.append(r)
+    for rid in retired:
+        brain_mod.retire_rule(rid, acct=acct)
+    if retired:
+        brain_mod.journal_append(
+            "rejection", f"consolidated {len(retired)} near-duplicate "
+            f"learned rules (kept {len(kept)} distinct)",
+            [f"retired R{r}" for r in retired], acct=acct)
+    return len(retired)
 
 
 def maybe_reflect_async(cfg, acct: Optional[int] = None) -> bool:
