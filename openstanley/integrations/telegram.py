@@ -833,6 +833,21 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
         except Exception as e:  # noqa: BLE001 — a failed save must not kill the reply
             db.log("telegram", f"chat candidate draft save failed: {e}",
                    level="warn")
+    # GUARANTEED-DRAFT: the owner asked for a post and the chain delivered
+    # none (research without output, live 2026-08-28 15:53) — one forced
+    # turn so an explicit ask never walks away empty
+    if not draft_ids and chat_mod.looks_like_draft_request(user_message):
+        forced = chat_mod.force_post_candidate(cfg, user_message)
+        if forced:
+            try:
+                did = chat_mod.draft_from_chat(cfg, forced)
+                if did > 0:
+                    draft_ids.append(did)
+                    db.log("chat", "forced-draft nudge delivered the post the "
+                                   "chain left unwritten")
+            except Exception as e:  # noqa: BLE001
+                db.log("telegram", f"forced draft save failed: {e}",
+                       level="warn")
     if draft_ids:
         clean += "\n" + "\n".join(
             f"📝 Saved as draft #{d} — /approve {d} to publish" for d in draft_ids)

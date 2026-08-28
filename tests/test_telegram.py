@@ -1178,3 +1178,43 @@ def test_handler_wall_clock_timeout_frees_and_apologizes(monkeypatch):
 
     asyncio.run(run())
     assert sent and "resend" in sent[-1][1]
+
+
+def test_guaranteed_draft_nudge_when_chain_delivers_nothing(monkeypatch):
+    """Live 2026-08-28 15:53: the owner asked for a repo post, the agent
+    said 'let me pull the details', web_read ran — and NO draft ever
+    materialized. An explicit draft ask must never walk away empty: one
+    forced turn writes the post if the chain didn't."""
+    import openstanley.gen.chat as chat_mod2
+    _enable()
+    _clear_chat_draft_residue("forced nudge test post about my repo thing")
+    monkeypatch.setattr(chat_mod2, "llm_chat_stream",
+                        lambda *a, **k: iter(["sure, researching it now\n"]))
+    monkeypatch.setattr(chat_mod2, "llm_chat", lambda *a, **k: "")
+    _stub_voice(monkeypatch)
+    monkeypatch.setattr(chat_mod2, "force_post_candidate",
+                        lambda cfg, msg: "forced nudge test post about my "
+                                         "repo thing, long enough to save")
+    tg._sessions.clear()
+    out = "".join(tg.chat_reply_tg_stream(CFG, CHAT,
+                                          "draft me a post about my repo"))
+    import re as _re
+    m = _re.search(r"Saved as draft #(\d+)", out)
+    assert m, out[-300:]
+    with db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id=?", (int(m.group(1)),))
+
+
+def test_no_nudge_when_not_a_draft_request(monkeypatch):
+    import openstanley.gen.chat as chat_mod2
+    _enable()
+    fired = []
+    monkeypatch.setattr(chat_mod2, "llm_chat_stream",
+                        lambda *a, **k: iter(["just chatting, no post\n"]))
+    monkeypatch.setattr(chat_mod2, "llm_chat", lambda *a, **k: "")
+    _stub_voice(monkeypatch)
+    monkeypatch.setattr(chat_mod2, "force_post_candidate",
+                        lambda cfg, msg: fired.append(1) or "should not run")
+    tg._sessions.clear()
+    "".join(tg.chat_reply_tg_stream(CFG, CHAT, "what is my best post today?"))
+    assert not fired, "nudge must not fire for informational asks"

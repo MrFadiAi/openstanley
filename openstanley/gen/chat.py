@@ -422,6 +422,42 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
            "candidates": candidates}
 
 
+DRAFT_INTENT_RE = re.compile(
+    "(?i)" + chr(92) + "b(draft|write|compose|thread)" + chr(92) + "b"
+    "|اكتب|صيغ|منشور")
+
+
+def looks_like_draft_request(message: str) -> bool:
+    """The user is asking for a post to be written (not just chatting)."""
+    return bool(DRAFT_INTENT_RE.search(message or ""))
+
+
+def force_post_candidate(cfg: Config, user_message: str) -> Optional[str]:
+    """GUARANTEED-DRAFT nudge: the agentic chain sometimes researches
+    (web_read/github pulls) and ends its turn WITHOUT ever emitting the
+    post — the owner asked, got 'let me pull the details first', and no
+    draft materialized (live 2026-08-28 15:53). One forced turn: write the
+    post NOW as a quote block. Returns the quote text or None."""
+    dataclasses_replace = dataclasses.replace(cfg.llm, temperature=0.7,
+                                              max_tokens=600)
+    try:
+        raw = llm_chat(dataclasses_replace,
+                       system=_system_tg(cfg, user_message) + chr(10) * 2 +
+                              "The conversation above researched the topic but "
+                              "NO post was delivered. Write the post NOW — "
+                              "exactly ONE markdown quote block (> like this), "
+                              "in the owner's X voice, ready to approve. No "
+                              "preamble, no apology, just the quote block.",
+                       user=f"(original request) {user_message[:600]}")
+    except LLMError:
+        return None
+    for block in re.findall(r"^\s*>[ 	]?(.+)$", raw, re.MULTILINE):
+        text = block.strip()
+        if len(text) >= 15:
+            return text
+    return None
+
+
 def draft_from_chat(cfg: Config, text: str, image: str | None = None) -> int:
     """User approved a post written in chat → save as a real draft for the queue.
 
