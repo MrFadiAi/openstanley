@@ -53,9 +53,16 @@ Available tools:
     → pulls real engagement numbers (best post, totals, best hours)
 - pick_idea {}
     → scores the idea bank and returns the top pick with reasoning
-- list_drafts {status?: "draft"|"approved", limit?: 5}
-    → lists queued drafts with ids and previews — answer "show me my drafts"
-      with REAL ids, then suggest approving one
+- list_drafts {status?: "draft"|"approved", limit?: 10, query?: "seedance"}
+    → lists drafts with ids, times, and 280-char previews. With `query`:
+      searches the TEXT across ALL statuses (pending/approved/published/
+      rejected) — ALWAYS use this when the owner asks "where is X draft";
+      never claim a draft is missing without searching every status
+- get_schedule {}
+    → the whole calendar in ONE call: upcoming approved+pending drafts,
+      time-ordered, today first — the direct answer to "what ships today /
+      which draft at which time"; do NOT assemble it from partial
+      list_drafts calls
 - scan_account {}
     → runs the deep style scan of the connected account
 - regenerate_draft {draft_id}
@@ -284,20 +291,63 @@ def _tool_pick_idea(cfg) -> dict:
             "alternatives": [i["title"] for i in ideas[1:4]]}
 
 
-def _tool_list_drafts(cfg, status: str = "draft", limit: int = 5) -> dict:
+def _tool_list_drafts(cfg, status: str = "draft", limit: int = 5,
+                      query: str = "") -> dict:
     """Real draft ids for "show me my drafts" — natural-language parity for
-    both the dashboard chat and Telegram (which has no /drafts button)."""
+    both the dashboard chat and Telegram (which has no /drafts button).
+
+    query searches the TEXT across ALL FOUR statuses at once — 'where is
+    the seedance draft' must never get 'not among them' while the draft
+    sits approved (live 2026-08-29: the agent checked pending only and
+    said the owner's draft was posted/deleted/never-saved). Previews carry
+    280 chars: enough to read a post without a second per-draft fetch."""
+    limit = max(1, min(int(limit), 10))
+    if query:
+        q = query.lower().strip()
+        hits = []
+        for st in ("draft", "approved", "published", "rejected"):
+            for d in db.drafts_by_status(st, 60):
+                t = (d.get("text") or "")
+                if q in t.lower() or q in (d.get("meta") or {}).get(
+                        "source", "").lower() or q in str(
+                        (d.get("meta") or {}).get("repo", "")).lower():
+                    hits.append({"id": d["id"], "status": st,
+                                 "scheduled_at": d.get("scheduled_at"),
+                                 "text": " ".join(t.split())[:280]})
+            if len(hits) >= limit:
+                break
+        return {"ok": True, "query": query, "count": len(hits), "drafts": hits}
     if status not in ("draft", "approved", "published", "rejected"):
         return {"ok": False,
                 "error": f"status must be draft|approved|published|rejected, "
                          f"got {status!r}"}
-    limit = max(1, min(int(limit), 10))
     rows = db.drafts_by_status(status, limit)
-    return {"status": status, "count": len(rows),
+    return {"ok": True, "status": status, "count": len(rows),
             "drafts": [{"id": d["id"],
-                        "text": " ".join((d.get("text") or "").split())[:120],
+                        "text": " ".join((d.get("text") or "").split())[:280],
                         "scheduled_at": d.get("scheduled_at")}
                        for d in rows]}
+
+
+def _tool_get_schedule(cfg) -> dict:
+    """The calendar in ONE call — answers 'what ships today / when / which
+    draft' without the five-turn pending-then-approved dance (live
+    2026-08-29: the owner needed 5 messages to see the schedule)."""
+    from datetime import datetime as _dt
+    rows = []
+    for d in db.drafts_by_status("approved", 30):
+        rows.append({"id": d["id"], "when": d.get("scheduled_at"),
+                     "text": " ".join((d.get("text") or "").split())[:140]})
+    for d in db.drafts_by_status("draft", 30):
+        if d.get("scheduled_at"):
+            rows.append({"id": d["id"], "when": d.get("scheduled_at"),
+                         "status": "pending-approval",
+                         "text": " ".join((d.get("text") or "").split())[:140]})
+    rows.sort(key=lambda r: r.get("when") or "9999")
+    now = _dt.now().isoformat(timespec="seconds")
+    return {"ok": True, "now": now, "count": len(rows),
+            "upcoming_first": [r for r in rows if (r.get("when") or "") >= now][:12],
+            "past": [r for r in rows if (r.get("when") or "") < now][-5:]}
 
 
 def _tool_scan_account(cfg) -> dict:
@@ -571,3 +621,4 @@ def _tool_delete_draft(cfg, draft_id: int = 0, delete_all_pending: bool = False)
 
 
 register("delete_draft", _tool_delete_draft)
+register("get_schedule", _tool_get_schedule)

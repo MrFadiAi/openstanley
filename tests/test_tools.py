@@ -203,3 +203,61 @@ def test_delete_draft_bad_args_honest():
     res2 = tools.execute_tool(__import__("openstanley.core.config", fromlist=["Config"]).Config(),
                         "delete_draft", {"draft_id": 99999999})
     assert not res2["ok"]
+
+
+def test_list_drafts_query_searches_all_statuses():
+    """Live 2026-08-29: 'where is the seedance draft' got 'not among them,
+    posted/deleted/never-saved' because the agent only pulled PENDING —
+    while the draft sat APPROVED. query now searches all four statuses."""
+    from openstanley.core import db as _db
+    from openstanley.core.config import Config
+    a = _db.add_draft(text="query probe alpha zebra unique", acct=1,
+                      status="draft")
+    b = _db.add_draft(text="query probe beta zebra unique", acct=1,
+                      scheduled_at="2099-01-01T10:00:00", status="approved")
+    res = tools.execute_tool(Config(), "list_drafts",
+                             {"query": "zebra unique"})
+    found = {d["id"] for d in res["drafts"]}
+    assert a in found and b in found, res
+    statuses = {d["id"]: d["status"] for d in res["drafts"]}
+    assert statuses[b] == "approved"
+    with _db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id IN (?,?)", (a, b))
+
+
+def test_get_schedule_one_call_calendar():
+    """Near-future probes (now+2min, now+4min) always land inside the
+    next-12 slice regardless of ambient shared-queue depth — 2099 dates
+    sort last and get capped out in a deep queue."""
+    from datetime import datetime, timedelta
+    from openstanley.core import db as _db
+    from openstanley.core.config import Config
+    t_early = (datetime.now() + timedelta(minutes=2)).isoformat(timespec="seconds")
+    t_late = (datetime.now() + timedelta(minutes=4)).isoformat(timespec="seconds")
+    late = _db.add_draft(text="schedule probe gamma zebra", acct=1,
+                         scheduled_at=t_late, status="approved")
+    early = _db.add_draft(text="schedule probe delta zebra", acct=1,
+                          scheduled_at=t_early, status="approved")
+    res = tools.execute_tool(Config(), "get_schedule", {})
+    ids = [r["id"] for r in res["upcoming_first"]]
+    assert early in ids and late in ids
+    assert ids.index(early) <= ids.index(late), "time-ordered"
+    with _db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id IN (?,?)", (early, late))
+
+
+def test_list_drafts_previews_long_enough_to_read():
+    """Self-contained: seeds its own long draft — ambient queue lengths
+    are irrelevant to the preview contract."""
+    from openstanley.core import db as _db
+    from openstanley.core.config import Config
+    long_text = ("self contained preview probe kino seedance studio "
+                 "open source film studio director agent timeline editor "
+                 "transitions captions export mp4 github repo link first "
+                 "reply under the post end")
+    did = _db.add_draft(text=long_text, acct=1, status="draft")
+    res = tools.execute_tool(Config(), "list_drafts", {"limit": 10})
+    mine = next(d for d in res["drafts"] if d["id"] == did)
+    assert 120 < len(mine["text"]) <= 280, len(mine["text"])
+    with _db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id=?", (did,))
