@@ -405,6 +405,23 @@ class Agent:
             except Exception as e:  # noqa: BLE001
                 db.log("publish", f"[account {acct}] draft {nxt['id']} failed: {e}", level="error")
                 db.update_draft(nxt["id"], acct=acct, status="failed")
+                # X 186 = tweet too long: a terminal fail the owner never
+                # hears about is a silent no-ship of an APPROVED post (live
+                # 2026-08-29 20:00: both kino threads died this way, nobody
+                # was told). Alert + offer the fix path.
+                if "186" in str(e) or "bit shorter" in str(e):
+                    try:
+                        from ..integrations import telegram as _tg
+                        if _tg.is_enabled():
+                            ft = (nxt.get("thread") or [nxt.get("text") or ""])[0]
+                            _tg.notify_bg(
+                                f"⚠️ Draft #{nxt['id']} FAILED to publish: the "
+                                f"first tweet is {len(ft)} chars (X limit 280, "
+                                f"error 186). Reply 'shorten #{nxt['id']}' and "
+                                f"I'll rewrite it tighter and reschedule.")
+                    except Exception as _e:  # noqa: BLE001 — alert is best-effort
+                        db.log("publish", f"186 alert delivery failed: {_e}",
+                               level="warn")
         self._alert_stranded(acct)
         return {"published": published, "account": acct}
 

@@ -261,3 +261,40 @@ def test_list_drafts_previews_long_enough_to_read():
     assert 120 < len(mine["text"]) <= 280, len(mine["text"])
     with _db.connect() as c:
         c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_publish_186_too_long_alerts_owner(monkeypatch):
+    """Live 2026-08-29 20:00: two APPROVED kino posts failed with X 186
+    (too long) silently — the owner never learned their post didn't ship.
+    The publish loop must alert on 186 with the fix path."""
+    import openstanley.integrations.telegram as _tg
+    sent = []
+    monkeypatch.setattr(_tg, "is_enabled", lambda: True)
+    monkeypatch.setattr(_tg, "notify_bg",
+                        lambda text: sent.append(text))
+    from openstanley.gen import agent as agent_mod
+    import asyncio
+    async def fake_x_post(*a, **k):
+        raise RuntimeError("{'code': 186, 'message': 'Authorization: "
+                           "Tweet needs to be a bit shorter. (186)'}")
+    a = agent_mod.Agent.__new__(agent_mod.Agent)
+    a.x = type("X", (), {"post_tweet": fake_x_post,
+                         "post_thread": fake_x_post})()
+    from openstanley.core import db as _db
+    did = _db.add_draft(text="x" * 300, acct=1, status="approved",
+                        scheduled_at="2000-01-01T00:00:00")
+    probe = _db.get_draft(did, acct=1)
+    probe["thread"] = None
+    # ISOLATION: the real publish loop drains EVERY due draft in the
+    # shared test DB — hand it only our probe (live: it mutated other
+    # suites' fixtures mid-run, 4 tests red)
+    _it = iter([probe, None])  # ONE shared iterator: a per-call lambda
+    # built iter would return probe forever and publish() never ends (this
+    # exact bug hung the whole suite at 78% for 8+ minutes)
+    monkeypatch.setattr(agent_mod.db, "next_scheduled",
+                        lambda acct=None: next(_it))
+    asyncio.run(a.publish())
+    assert any("186" in t and str(did) in t for t in sent), sent
+    assert _db.get_draft(did, acct=1)["status"] == "failed"
+    with _db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id=?", (did,))

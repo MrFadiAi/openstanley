@@ -39,6 +39,12 @@ say so plainly and take the next real path — never fabricate what you could
 not fetch."""
 
 AGENT_DISCIPLINE += """
+X LIMIT: a single post is AT MOST 280 characters - count before saving. If the
+content runs longer, write it as a THREAD (2-3 tweets, each under 250) and save
+with the thread structure, never one oversized post (live 2026-08-29: two
+approved posts died at publish with X error 186, silently)."""
+
+AGENT_DISCIPLINE += """
 CLOSE THE LOOP: when your investigation finds a problem or an answer, the
 same response ends with the disposition — the fix applied (when it is
 safe and reversible), or exactly one clear question for the owner to
