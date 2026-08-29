@@ -38,6 +38,13 @@ of a post you are about to write. If several independent lookups are needed
 say so plainly and take the next real path — never fabricate what you could
 not fetch."""
 
+AGENT_DISCIPLINE += """
+CLOSE THE LOOP: when your investigation finds a problem or an answer, the
+same response ends with the disposition — the fix applied (when it is
+safe and reversible), or exactly one clear question for the owner to
+decide. Never stop at a diagnosis. A reply that ends describing an issue
+without resolving it or asking for the decision is incomplete."""
+
 AGENT_DISCIPLINE_TG = AGENT_DISCIPLINE + """
 
 TELEGRAM DELIVERY: when you draft a post the user asked for, the FULL text
