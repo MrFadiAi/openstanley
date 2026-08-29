@@ -102,6 +102,17 @@ Available tools:
       audience is Saudi builders", "remember I hate hashtag soup"); returns
       the rule id and shows the owner it stuck
 
+ROUTING (pick the exact tool for common asks):
+- "what's scheduled / what ships today / status" -> app_status (ONE call, has the schedule inside)
+- "where is the X draft" -> list_drafts {query: "X"}
+- "approve #N" / "approve #N at 9pm" -> approve_draft
+- "move #N to tomorrow 6pm" -> reschedule_draft
+- "change #N's text" / "make it longer" -> edit_draft (or regenerate_draft)
+- "delete #N" / "clear pending" -> delete_draft
+- "study my account" / "draft replies" / "publish now" -> run_loop
+- "what are my rules / what did I learn" -> brain_read
+- "show my ideas" -> list_ideas; "switch to account 1" -> switch_account
+
 Rules: never invent results — the system executes and appends real results.
 Keep the prose reply short; let the action carry the work. If the user asks
 something informational (best post, analytics), still answer briefly in prose
@@ -622,3 +633,7 @@ def _tool_delete_draft(cfg, draft_id: int = 0, delete_all_pending: bool = False)
 
 register("delete_draft", _tool_delete_draft)
 register("get_schedule", _tool_get_schedule)
+
+# full-app-surface tools (owner 2026-08-30: the agent drives EVERYTHING)
+from .app_tools import register_all as _register_app_tools  # noqa: E402
+_register_app_tools()
