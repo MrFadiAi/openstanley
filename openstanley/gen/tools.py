@@ -84,6 +84,11 @@ Available tools:
       drafts from the full material with thinking mode on. Slower
       (30-90s) but the draft cites what the articles actually say —
       use for 'research X properly' requests
+- delete_draft {draft_id} | {delete_all_pending: true}
+    → removes drafts from the queue (rejects them: history + learning
+      keep their data). Use when the owner says delete/remove/clear a
+      draft by id, or to clear all pending. Safe to use freely — it is
+      reversible and never touches published history
 - remember_rule {text}
     → stores a STANDING rule in the brain (source=directive) — use when the
       user says "remember…" about how to run the account ("remember my
@@ -531,3 +536,38 @@ def _tool_remember_rule(cfg, text: str = "") -> dict:
 
 
 register("remember_rule", _tool_remember_rule)
+
+
+
+def _tool_delete_draft(cfg, draft_id: int = 0, delete_all_pending: bool = False) -> dict:
+    """Remove drafts from the queue. Rejects (never hard-deletes) so the
+    owner's history and the rejection learner keep their data. Capability
+    added 2026-08-29: the agent could list and schedule drafts but had NO
+    way to remove one, forcing 'delete them from the dashboard' replies."""
+    from ..gen import rejection_learn
+    if delete_all_pending:
+        removed = []
+        for d in db.drafts_by_status("draft", 200):
+            db.update_draft(d["id"], status="rejected")
+            rejection_learn.record_rejection(d["id"], reason="owner",
+                                             via="agent-tool")
+            removed.append(d["id"])
+        db.log("chat", f"delete_draft(all pending): rejected {len(removed)}")
+        return {"ok": True, "rejected": removed,
+                "note": f"{len(removed)} pending drafts rejected"}
+    if not draft_id:
+        return {"ok": False, "error": "draft_id required (or delete_all_pending=true)"}
+    with db.connect() as c:
+        row = c.execute("SELECT id, status, account_id FROM drafts WHERE id=?",
+                        (draft_id,)).fetchone()
+    if not row:
+        return {"ok": False, "error": f"no draft #{draft_id}"}
+    db.update_draft(draft_id, status="rejected")
+    rejection_learn.record_rejection(draft_id, reason="owner", via="agent-tool")
+    rejection_learn.maybe_reflect_async(cfg)
+    return {"ok": True, "rejected": draft_id,
+            "note": f"draft #{draft_id} removed from the queue "
+                    f"(rejects, never deletes history)"}
+
+
+register("delete_draft", _tool_delete_draft)

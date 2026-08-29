@@ -178,3 +178,28 @@ def test_parse_actions_accepts_flat_args_shape():
     nested = '```action\n{"tool": "trend_post", "args": {"topic": "crypto", "source": "web"}}\n```'
     acts2 = tools.parse_actions(nested)
     assert acts2[0]["args"] == {"topic": "crypto", "source": "web"}
+
+
+def test_delete_draft_tool():
+    """2026-08-29: the agent could list and schedule drafts but had NO way
+    to remove one — 'Can u delete them now' got 'I still have no delete
+    action'. delete_draft rejects (never hard-deletes) so history and the
+    rejection learner keep their data."""
+    from openstanley.core import db as _db
+    did = _db.add_draft(text="delete me tool test draft", acct=1)
+    res = tools.execute_tool(__import__("openstanley.core.config", fromlist=["Config"]).Config(),
+                       "delete_draft", {"draft_id": did})
+    assert res["ok"] and res["rejected"] == did
+    assert _db.get_draft(did, acct=1)["status"] == "rejected"
+    assert _db.get_draft(did, acct=1)["meta"].get("rejected_reason") == "owner"
+    with _db.connect() as c:
+        c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_delete_draft_bad_args_honest():
+    res = tools.execute_tool(__import__("openstanley.core.config", fromlist=["Config"]).Config(),
+                       "delete_draft", {})
+    assert not res["ok"]
+    res2 = tools.execute_tool(__import__("openstanley.core.config", fromlist=["Config"]).Config(),
+                        "delete_draft", {"draft_id": 99999999})
+    assert not res2["ok"]
