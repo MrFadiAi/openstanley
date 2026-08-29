@@ -12,8 +12,25 @@ def scrub_ai_punctuation(text: str) -> str:
     for dash in ("\u2014", "\u2013", "\u2212"):
         out = out.replace(dash, ", ")
     out = out.replace(" -- ", ", ").replace(" --", ",")
+    # OWNER DIRECTIVE (2026-08-29): NEVER any dash at all. List-bullet
+    # hyphens and hyphenated compounds survived the em/en scrub — line
+    # leading dashes are dropped (the owner's lists run bare), inline
+    # hyphens become spaces. URLs are exempt (their dashes are structural).
+    import re as _re
+    urls: list[str] = []
+    def _stash(m):
+        urls.append(m.group(0))
+        return f"\x00{len(urls) - 1}\x00"
+    out = _re.sub(r"https?://\S+|www\.\S+", _stash, out)
+    out = "\n".join(
+        (ln.lstrip("- ").lstrip() if ln.lstrip().startswith("-") else ln)
+        for ln in out.split("\n"))
+    out = out.replace("-", " ")
     while "  " in out:
         out = out.replace("  ", " ")
+    if urls:
+        out = _re.sub("\x00(\\d+)\x00",
+                      lambda m: urls[int(m.group(1))], out)
     out = out.replace(" ,", ",").replace(", ", ", ")
     while ", ," in out or ",," in out:
         out = out.replace(", ,", ",").replace(",,", ",")

@@ -73,3 +73,14 @@ def test_err_str_never_blanks_the_cause():
     assert err_str(ValueError("boom")) == "boom"
     out = err_str(Silent())
     assert out and "Silile" not in out and "Silent" in out
+
+
+def test_total_dash_ban_owner_directive():
+    """Owner directive 2026-08-29: NEVER any dash — list-bullet hyphens and
+    hyphenated compounds survived the em/en scrub. URLs are exempt."""
+    from openstanley.core.text import scrub_ai_punctuation as sc
+    assert "-" not in sc("AI-driven content with - bullets and — em")
+    assert sc("- item one\n- item two") == "item one\nitem two"
+    url = "https://example.com/x-y"
+    assert url in sc(f"check {url} now"), "URL dashes are structural"
+    assert "www.foo-bar.com/baz" in sc("see www.foo-bar.com/baz")
