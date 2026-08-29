@@ -62,7 +62,8 @@ def test_link_reply_posts_under_the_post():
 
     class FakeX:
         mode = "dryrun"
-        async def post_tweet(self, text, reply_to=None, media_path=None, quote_of=None):
+        async def post_tweet(self, text, reply_to=None, media_path=None,
+                            quote_of=None, count_reply_cap=True):
             posted.append({"text": text, "reply_to": reply_to})
             return {"x_id": "999"}
         async def post_thread(self, tweets):

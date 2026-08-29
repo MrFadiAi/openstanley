@@ -371,13 +371,23 @@ class Agent:
                 link = (nxt.get("meta") or {}).get("link_reply")
                 if link and x_id and nxt.get("kind") == "post":
                     try:
-                        await self.x.post_tweet(str(link), reply_to=str(x_id))
+                        await self.x.post_tweet(str(link), reply_to=str(x_id),
+                                                count_reply_cap=False)
                         db.log("publish", f"[account {acct}] link reply under "
                                           f"{x_id}: {str(link)[:60]}")
                     except SafetyCapExceeded:
                         db.log("publish", f"[account {acct}] link reply skipped "
                                           f"(reply cap) — post {x_id} is out",
                                level="warn")
+                        try:  # the owner asked for this link — never silent
+                            from ..integrations import telegram as _tg
+                            if _tg.is_enabled():
+                                _tg.notify_bg(
+                                    f"⚠️ Post {x_id} shipped but its LINK was "
+                                    f"skipped (reply cap). Send the link as a "
+                                    f"reply manually: {str(link)[:80]}")
+                        except Exception:  # noqa: BLE001
+                            pass
                     except Exception as e:  # noqa: BLE001 — never lose the post
                         db.log("publish", f"[account {acct}] link reply failed: "
                                           f"{e}", level="warn")

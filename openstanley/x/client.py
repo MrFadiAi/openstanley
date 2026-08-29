@@ -414,10 +414,22 @@ class XCookie(XClient):
     @_auto_heal(retry=False)
     async def post_tweet(self, text: str, reply_to: Optional[str] = None,
                          media_path: Optional[str] = None,
-                         quote_of: Optional[str] = None) -> dict:
+                         quote_of: Optional[str] = None,
+                         count_reply_cap: bool = True) -> dict:
         c = await self._ensure()
         kind = "replies" if reply_to else "posts"
-        self._check_and_record(kind, self._caps, acct=self.account_id)  # raises SafetyCapExceeded if over
+        # count_reply_cap=False: a link reply under the owner's OWN new
+        # post is part of that approved post, not agent engagement — it
+        # must never be crowded out by the day's engagement budget (live
+        # 2026-08-29 21:10: the kino post shipped but its repo link was
+        # silently skipped, reply cap exhausted)
+        if kind == "replies" and not count_reply_cap:
+            from ..core import safety as _safety
+            cnt = _safety._counters(self.account_id)
+            cnt["replies"] = cnt.get("replies", 0) + 1
+            _safety._save(cnt, self.account_id)  # visible in usage, not gated
+        else:
+            self._check_and_record(kind, self._caps, acct=self.account_id)  # raises SafetyCapExceeded if over
         await self._human_delay((self._caps.get("min_delay_s", 5), self._caps.get("max_delay_s", 20)))
         kwargs: dict = {"text": text}
         if reply_to:

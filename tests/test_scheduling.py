@@ -189,3 +189,44 @@ def test_settings_language():
     assert r.status_code == 200 and r.json()["language"] == "ar"
     assert client.get("/api/settings").json()["language"] == "ar"
     client.post("/api/settings", json={"language": "en"})
+
+
+def test_link_reply_exempt_from_reply_cap():
+    """Live 2026-08-29 21:10: the kino post shipped but its repo link was
+    SILENTLY skipped — the reply cap (10/day) was exhausted, and link
+    replies were charged against the agent engagement budget. A link under
+    the owner's OWN new post is part of that approved post: it counts in
+    usage() but is never gated."""
+    import asyncio
+    from datetime import date
+    from openstanley.core import db as _db, safety
+    from openstanley.x.client import XCookie
+
+    safety._save({"date": date.today().isoformat(), "posts": 0,
+                  "replies": 99}, 1)  # cap well exceeded
+    x = XCookie.__new__(XCookie)
+    x._caps = {"max_posts_per_day": 4, "max_replies_per_day": 10}
+    x.account_id = 1
+    sent = {}
+
+    async def fake_post(self, text, reply_to=None, media_path=None,
+                        quote_of=None, count_reply_cap=True):
+        kind = "replies" if reply_to else "posts"
+        if kind == "replies" and not count_reply_cap:
+            cnt = safety._counters(self.account_id)
+            cnt["replies"] = cnt.get("replies", 0) + 1
+            safety._save(cnt, self.account_id)
+        else:
+            self._check_and_record(kind, self._caps,
+                                   acct=self.account_id)
+        sent["text"] = text
+        return {"x_id": "new1", "text": text}
+    XCookie.post_tweet = fake_post
+    # the gated path would raise at replies=99/10; the exempt path must not
+    asyncio.run(x.post_tweet("https://github.com/MrFadiAi/kino-seedance-studio",
+                             reply_to="parent1", count_reply_cap=False))
+    assert "kino-seedance" in sent["text"]
+    u = safety.usage(1)
+    assert u["replies"] == 100, "counted in usage but never gated"
+    safety._save({"date": date.today().isoformat(), "posts": 0,
+                  "replies": 0}, 1)
