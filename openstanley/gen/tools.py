@@ -380,6 +380,25 @@ def _tool_get_schedule(cfg, date: str = "") -> dict:
                    if (r.get("when") or "").startswith(today_iso)]
     approved_n = sum(1 for r in rows if r["status"] == "approved")
     pending_n = sum(1 for r in rows if r["status"] == "pending-approval")
+    # cross-account visibility (live 2026-08-31: 11 approved drafts sat on
+    # account 1 while account 2 was active — this tool said "0 upcoming"
+    # and the agent reported an empty calendar). The schedule never lies
+    # by omission: another account's approved items get their own bucket.
+    try:
+        with db.connect() as c:
+            orows = c.execute(
+                "SELECT account_id, COUNT(*) n, "
+                "SUM(CASE WHEN scheduled_at <= ? THEN 1 ELSE 0 END) due "
+                "FROM drafts WHERE status='approved' "
+                "AND scheduled_at IS NOT NULL AND account_id != ? "
+                "GROUP BY account_id",
+                (now.isoformat(timespec="seconds"),
+                 db.active_account())).fetchall()
+        others = [{"account": int(r["account_id"]),
+                   "approved": int(r["n"]), "due_now": int(r["due"] or 0)}
+                  for r in orows]
+    except Exception:  # noqa: BLE001 — visibility must never break the tool
+        others = []
     return {"ok": True,
             "now": now.isoformat(timespec="seconds"),
             "today": {"count": len(today_items),
@@ -391,6 +410,12 @@ def _tool_get_schedule(cfg, date: str = "") -> dict:
             "past": {"count": len(past), "items": past[-5:]},
             "status_breakdown": {"approved": approved_n,
                                 "pending_approval": pending_n},
+            "other_accounts": others,
+            "other_accounts_note": (
+                f"{sum(o['approved'] for o in others)} approved item(s) on "
+                "OTHER accounts the publish loop cannot ship while this "
+                "account is active — say so, never report an empty "
+                "calendar without them") if others else "",
             "total_active_schedule": len(rows),
             "note": "Rejected drafts excluded. 'today' is calendar-date "
                     f"{today_iso}. Counts are per-bucket, never totals "

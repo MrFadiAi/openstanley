@@ -298,3 +298,50 @@ def test_publish_186_too_long_alerts_owner(monkeypatch):
     assert _db.get_draft(did, acct=1)["status"] == "failed"
     with _db.connect() as c:
         c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_publish_killed_still_alerts_stranded(monkeypatch):
+    """Live 2026-08-31: the kill switch's early return sat ABOVE
+    _alert_stranded — while account 2 was frozen, fresh stranded drafts on
+    account 1 got zero alerts for two days. The switch stops POSTING,
+    never visibility."""
+    import asyncio
+    from openstanley.gen import agent as agent_mod
+    from openstanley.core import db as _db
+    calls = []
+    a = agent_mod.Agent.__new__(agent_mod.Agent)
+    monkeypatch.setattr(a, "_alert_stranded",
+                        lambda acct: calls.append(acct), raising=False)
+    _db.set_setting("publish_paused_1", True)
+    try:
+        res = asyncio.run(a.publish())
+    finally:
+        _db.set_setting("publish_paused_1", False)
+    assert res.get("killed") is True
+    assert calls, "stranded alert must fire even while publish is killed"
+
+
+def test_get_schedule_shows_other_accounts():
+    """Live 2026-08-31: 11 approved drafts sat on account 1 while account 2
+    was active — get_schedule said '0 upcoming' and the agent reported an
+    empty calendar. The tool now carries an other_accounts bucket so the
+    schedule never lies by omission."""
+    from openstanley.core import db as _db
+    from openstanley.core.config import Config
+    with _db.connect() as c:
+        c.execute("INSERT OR IGNORE INTO accounts (id, handle, status) "
+                  "VALUES (2, 'test-alt', 'active')")
+    _db.set_active_account(2)
+    did = _db.add_draft(text="cross account visibility probe zebra",
+                        acct=1, scheduled_at="2000-01-01T00:00:00",
+                        status="approved")
+    try:
+        res = tools.execute_tool(Config(), "get_schedule", {})
+        others = res["other_accounts"]
+        assert any(o["account"] == 1 and o["approved"] >= 1 and
+                   o["due_now"] >= 1 for o in others), res
+        assert res["other_accounts_note"], "note must flag the stranding"
+    finally:
+        _db.set_active_account(1)
+        with _db.connect() as c:
+            c.execute("DELETE FROM drafts WHERE id=?", (did,))

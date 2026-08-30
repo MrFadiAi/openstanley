@@ -339,6 +339,11 @@ class Agent:
         from ..core.safety import SafetyCapExceeded
         from datetime import timedelta
         acct = db.active_account()
+        # stranded check runs BEFORE the kill switch — the switch stops
+        # POSTING, never visibility. It sat below the early-return for two
+        # days (live 2026-08-31: 4 fresh stranded drafts on account 1 got
+        # zero alerts because the account-2 switch exited first).
+        self._alert_stranded(acct)
         # PUBLISH KILL SWITCH (owner rule 2026-08-30: nothing ships on the
         # named account without explicit re-enable) — checked FIRST so no
         # approved draft, scheduled item, or link reply can ever fire while
@@ -443,7 +448,6 @@ class Agent:
                     except Exception as _e:  # noqa: BLE001 — alert is best-effort
                         db.log("publish", f"186 alert delivery failed: {_e}",
                                level="warn")
-        self._alert_stranded(acct)
         return {"published": published, "account": acct}
 
     def _alert_stranded(self, acct: int) -> None:
