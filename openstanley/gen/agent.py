@@ -339,6 +339,15 @@ class Agent:
         from ..core.safety import SafetyCapExceeded
         from datetime import timedelta
         acct = db.active_account()
+        # PUBLISH KILL SWITCH (owner rule 2026-08-30: nothing ships on the
+        # named account without explicit re-enable) — checked FIRST so no
+        # approved draft, scheduled item, or link reply can ever fire while
+        # the switch is set
+        if db.get_setting(f"publish_paused_{acct}"):
+            db.log("publish", f"[account {acct}] publish KILLED (kill "
+                            "switch set) — nothing ships; clear "
+                            f"publish_paused_{acct} to re-enable")
+            return {"published": [], "account": acct, "killed": True}
         published = []
         while True:
             nxt = db.next_scheduled(acct)
