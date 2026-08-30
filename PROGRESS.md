@@ -151,3 +151,4 @@
 2026-08-30 05:15 — QA loop RESTARTED (job a2f261fb, hourly at :07; hard rule embedded: NEVER publish on @Mr_CryptoYT). Iteration 1 verified-clean: 569/569, zero errors, smoke green, ZERO posts since the loop's watch began (published count since 04:00 = 0).
 2026-08-30 06:15 — QA loop iteration 2 (verified-clean; 569/569, zero errors): ZERO-POST CHECK ✓ (published since 05:00 = 0 — the @Mr_CryptoYT rule holds). Quiet pre-dawn, nothing needed. Clean pass.
 2026-08-30 07:15 — QA loop iteration 3 (verified-clean; 569/569, zero errors): ZERO-POST CHECK ✓ (0 published). Clean pass.
+2026-08-30 08:15 — QA loop iteration 4 (verified-clean; 569/569, zero errors): ZERO-POST CHECK ✓ (0 published). KEEPALIVE'S FIRST REAL CATCH: the server died overnight and the crash monitor detected it (down 2 checks) + restarted it at 07:15 — scheduler, TG poller, and learn loop all resumed cleanly. The robustness tier proving itself.
