@@ -976,6 +976,13 @@ def _cmd_status(cfg: Config) -> str:
         f"{caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
         f"{BULLET} **Watchdog** {wd_health()}",
     ]
+    try:
+        from ..system.resilience import cookie_warning_line
+        cw = cookie_warning_line()
+        if cw:
+            lines.append(f"{BULLET} **Cookies** {cw}")
+    except Exception:  # noqa: BLE001 — status always renders
+        pass
     return "\n".join(lines)
 
 

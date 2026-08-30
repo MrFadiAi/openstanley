@@ -415,6 +415,8 @@ class Agent:
             except Exception as e:  # noqa: BLE001
                 db.log("publish", f"[account {acct}] draft {nxt['id']} failed: {e}", level="error")
                 db.update_draft(nxt["id"], acct=acct, status="failed")
+                from ..system.resilience import alert_x_error
+                alert_x_error(nxt["id"], str(e), acct)
                 # X 186 = tweet too long: a terminal fail the owner never
                 # hears about is a silent no-ship of an APPROVED post (live
                 # 2026-08-29 20:00: both kino threads died this way, nobody

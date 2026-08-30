@@ -104,6 +104,9 @@ Available tools:
 
 ROUTING (pick the exact tool for common asks):
 - "what's scheduled / what ships today / status" -> app_status (ONE call, has the schedule inside)
+  RENDER RULE: "show me X" means the ITEMS go in your reply as a formatted
+  list (id, time, full text) — a COUNT or summary of X is not showing it.
+  Never say "pulled 40 items" without listing what the owner asked to see.
 - "where is the X draft" -> list_drafts {query: "X"}
 - "approve #N" / "approve #N at 9pm" -> approve_draft
 - "move #N to tomorrow 6pm" -> reschedule_draft
@@ -354,12 +357,12 @@ def _tool_get_schedule(cfg) -> dict:
     rows = []
     for d in db.drafts_by_status("approved", 30):
         rows.append({"id": d["id"], "when": d.get("scheduled_at"),
-                     "text": " ".join((d.get("text") or "").split())[:140]})
+                     "text": " ".join((d.get("text") or "").split())[:200]})
     for d in db.drafts_by_status("draft", 30):
         if d.get("scheduled_at"):
             rows.append({"id": d["id"], "when": d.get("scheduled_at"),
                          "status": "pending-approval",
-                         "text": " ".join((d.get("text") or "").split())[:140]})
+                         "text": " ".join((d.get("text") or "").split())[:200]})
     rows.sort(key=lambda r: r.get("when") or "9999")
     now = _dt.now().isoformat(timespec="seconds")
     return {"ok": True, "now": now, "count": len(rows),

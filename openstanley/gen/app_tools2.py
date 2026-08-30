@@ -192,3 +192,24 @@ def register_all() -> None:
     register("reply_to_mention", reply_to_mention)
     register("competitor_scan", competitor_scan)
     register("reflect_now", reflect_now)
+
+
+def watch_topic(cfg: Config, topic: str = "", action: str = "add") -> dict:
+    """Standing trend watch: 'tell me when X trends'. add|list|remove."""
+    from . import watch as watch_mod
+    if action == "list" or not topic:
+        return {"ok": True, "watches": watch_mod.list_watches()}
+    if action == "remove":
+        return watch_mod.remove_watch(topic)
+    return watch_mod.add_watch(topic)
+
+
+def continue_thread(cfg: Config, draft_id: int = 0,
+                    addition: str = "") -> dict:
+    """Reply to your own published thread while it's warm."""
+    from . import watch as watch_mod
+    return watch_mod.continue_thread(cfg, draft_id, addition)
+
+
+register("watch_topic", watch_topic)
+register("continue_thread", continue_thread)

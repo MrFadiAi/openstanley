@@ -1992,6 +1992,14 @@ def start_scheduler():
             db.log("metrics", f"nightly refresh: {res.get('refreshed')} posts captured")
         except Exception as e:  # noqa: BLE001
             db.log("metrics", f"nightly refresh failed: {e}", level="error")
+        # DB diet: vacuum the shared test DB nightly (50MB+ was slowing
+        # every suite run)
+        try:
+            from ..system.resilience import vacuum_db
+            kb = vacuum_db()
+            db.log("system", f"nightly vacuum: DB now {kb} KB")
+        except Exception as e:  # noqa: BLE001
+            db.log("system", f"vacuum skipped: {e}", level="warn")
         # rejection learning FIRST: reflect on the owner's real reject taps
         # while they're still distinguishable from what the sweeper kills
         try:
@@ -2045,6 +2053,35 @@ def start_scheduler():
     # red until the next restart (rate limit is 5m, hourly fits inside it)
     sched.add_job(_run_smoke_and_store, CronTrigger(minute=11),
                   id="smoke_refresh")
+    # morning briefing: the agent messages the OWNER first (09:00 daily) —
+    # overnight publishes, drafts needing a decision (with one-tap cards),
+    # today's schedule. You approve from bed.
+    async def _briefing_job():
+        from ..gen import briefing as briefing_mod
+        try:
+            briefing_mod.push_briefing(cfg)
+        except Exception as e:  # noqa: BLE001
+            db.log("briefing", f"morning briefing failed: {e}", level="warn")
+    sched.add_job(_briefing_job, CronTrigger(hour=9, minute=3),
+                  id="morning_briefing")
+    # perf A/B loop: check shipped posts at +2h/+24h vs baseline
+    async def _perf_job():
+        from ..gen import perf_track
+        try:
+            perf_track.check_due_posts(cfg)
+        except Exception as e:  # noqa: BLE001
+            db.log("perf", f"perf check failed: {e}", level="warn")
+    sched.add_job(_perf_job, IntervalTrigger(hours=2),
+                  id="perf_track")
+    # trend watches: hourly check, alert when a watched topic surges
+    async def _watch_job():
+        from ..gen import watch as watch_mod
+        try:
+            watch_mod.check_watches(cfg)
+        except Exception as e:  # noqa: BLE001
+            db.log("watch", f"watch check failed: {e}", level="warn")
+    sched.add_job(_watch_job, IntervalTrigger(hours=1),
+                  id="trend_watches")
     if ap_mod.get_state()["enabled"]:
         sched.add_job(_autopilot_job,
                       IntervalTrigger(minutes=ap_mod.interval_minutes(cfg),

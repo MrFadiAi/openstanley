@@ -98,6 +98,17 @@ def generate_drafts(cfg: Config, count: int = None,
                 db.log("create", f"idea {idea['id']} still too similar after "
                                 f"retry — skipped, stays fresh")
                 continue
+        # PRECISION PRE-FLIGHT (owner data: 22% approval rate — draft
+        # fewer, each pre-vetted against every rejection rule learned)
+        from . import precision
+        ok, why = precision.preflight(draft["text"], acct, recent)
+        if not ok:
+            db.log("create", f"precision filter skipped a draft: {why}")
+            continue
+        if len(draft_ids) >= precision.PRECISION_MAX:
+            db.log("create", f"precision cap: {precision.PRECISION_MAX} "
+                            "kept this run, rest saved for tomorrow")
+            break
         recent = [draft["text"]] + recent[:div.RECENT_WINDOW - 1]
         image = draft.get("image")
         if not image and draft.get("kind", "post") == "post" and not draft.get("thread"):
