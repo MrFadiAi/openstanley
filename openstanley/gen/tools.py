@@ -349,25 +349,52 @@ def _tool_list_drafts(cfg, status: str = "draft", limit: int = 5,
                        for d in rows]}
 
 
-def _tool_get_schedule(cfg) -> dict:
-    """The calendar in ONE call — answers 'what ships today / when / which
-    draft' without the five-turn pending-then-approved dance (live
-    2026-08-29: the owner needed 5 messages to see the schedule)."""
+def _tool_get_schedule(cfg, date: str = "") -> dict:
+    """The calendar in ONE call with HONEST, EXPLICITLY LABELED counts.
+
+    Returns today_count, upcoming_count, past_count, approved_count,
+    pending_count separately — the model never guesses what a number
+    means (live 2026-08-31: the agent said '26 total today' when 26 was
+    the whole calendar including past and rejected items). Rejected
+    drafts are excluded — they are not the schedule."""
     from datetime import datetime as _dt
     rows = []
     for d in db.drafts_by_status("approved", 30):
         rows.append({"id": d["id"], "when": d.get("scheduled_at"),
+                     "status": "approved", "kind": d.get("kind", "post"),
                      "text": " ".join((d.get("text") or "").split())[:200]})
     for d in db.drafts_by_status("draft", 30):
         if d.get("scheduled_at"):
             rows.append({"id": d["id"], "when": d.get("scheduled_at"),
                          "status": "pending-approval",
+                         "kind": d.get("kind", "post"),
                          "text": " ".join((d.get("text") or "").split())[:200]})
     rows.sort(key=lambda r: r.get("when") or "9999")
-    now = _dt.now().isoformat(timespec="seconds")
-    return {"ok": True, "now": now, "count": len(rows),
-            "upcoming_first": [r for r in rows if (r.get("when") or "") >= now][:12],
-            "past": [r for r in rows if (r.get("when") or "") < now][-5:]}
+    now = _dt.now()
+    today_iso = now.date().isoformat()
+    upcoming = [r for r in rows if (r.get("when") or "") >=
+                now.isoformat(timespec="seconds")]
+    past = [r for r in rows if (r.get("when") or "") <
+            now.isoformat(timespec="seconds")]
+    today_items = [r for r in rows
+                   if (r.get("when") or "").startswith(today_iso)]
+    approved_n = sum(1 for r in rows if r["status"] == "approved")
+    pending_n = sum(1 for r in rows if r["status"] == "pending-approval")
+    return {"ok": True,
+            "now": now.isoformat(timespec="seconds"),
+            "today": {"count": len(today_items),
+                      "items": today_items[:12],
+                      "note": f"{len(today_items)} items scheduled TODAY "
+                              f"({today_iso})"},
+            "upcoming": {"count": len(upcoming),
+                         "items": upcoming[:12]},
+            "past": {"count": len(past), "items": past[-5:]},
+            "status_breakdown": {"approved": approved_n,
+                                "pending_approval": pending_n},
+            "total_active_schedule": len(rows),
+            "note": "Rejected drafts excluded. 'today' is calendar-date "
+                    f"{today_iso}. Counts are per-bucket, never totals "
+                    "masquerading as something else."}
 
 
 def _tool_scan_account(cfg) -> dict:

@@ -239,7 +239,7 @@ def test_get_schedule_one_call_calendar():
     early = _db.add_draft(text="schedule probe delta zebra", acct=1,
                           scheduled_at=t_early, status="approved")
     res = tools.execute_tool(Config(), "get_schedule", {})
-    ids = [r["id"] for r in res["upcoming_first"]]
+    ids = [r["id"] for r in res["upcoming"]["items"]]
     assert early in ids and late in ids
     assert ids.index(early) <= ids.index(late), "time-ordered"
     with _db.connect() as c:
