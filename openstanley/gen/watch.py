@@ -97,9 +97,17 @@ async def check_watches(cfg: Config) -> dict:
 
 
 def _hours_old(created) -> float:
+    """Age in hours of a searched post. Live x_search returns twikit's
+    X-format stamps — the ISO-only parser scored every real result 999h
+    old, so trend watches could NEVER alert in production (dryrun and
+    tests emit ISO, so the suite never saw it). Normalize with the same
+    canonical converter the DB write path uses."""
+    from ..core.db import _norm_created_at
     try:
-        dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
-        return (datetime.now(dt.tzinfo) - dt).total_seconds() / 3600
+        s = _norm_created_at(created)
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+        return (now - dt).total_seconds() / 3600
     except (TypeError, ValueError):
         return 999.0
 

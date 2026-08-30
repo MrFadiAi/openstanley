@@ -300,6 +300,89 @@ def test_publish_186_too_long_alerts_owner(monkeypatch):
         c.execute("DELETE FROM drafts WHERE id=?", (did,))
 
 
+def test_upsert_post_normalizes_x_time_to_iso():
+    """The DB speaks ONE timestamp language. X-format strings break every
+    lexical SQL comparison ('W' > '2'), which made week/month/all time
+    filters match everything (live 2026-08-31: 'this week: 820 posts' —
+    lifetime totals, owner: 'you are lying')."""
+    from openstanley.core import db as _db
+    _db.upsert_post({"x_id": "xera-norm-1", "author_handle": "u", "is_own": 1,
+                     "created_at": "Wed Sep 24 14:10:11 +0000 2025",
+                     "text": "normalization probe", "impressions": 10,
+                     "likes": 1, "reposts": 0, "replies": 0})
+    with _db.connect() as c:
+        ca = c.execute("SELECT created_at FROM posts WHERE x_id='xera-norm-1' "
+                       "AND account_id=1").fetchone()["created_at"]
+    assert ca.startswith("2025-09-24T"), ca
+    with _db.connect() as c:
+        c.execute("DELETE FROM posts WHERE x_id='xera-norm-1' AND account_id=1")
+
+
+def test_query_analytics_timeframe_actually_filters():
+    """THE 'you are lying' regression: 'best post this week' returned
+    lifetime totals for every timeframe because the cutoff compared
+    lexically against X-format rows. A Sept-2025 post with monster
+    engagement must never surface in week/month views."""
+    from datetime import datetime as _dt
+    from openstanley.core import db as _db
+    _db.upsert_post({"x_id": "xera-filter-1", "author_handle": "u",
+                     "is_own": 1,
+                     "created_at": "Wed Sep 24 14:10:11 +0000 2025",
+                     "text": "legacy era monster post", "impressions": 900000,
+                     "likes": 5000, "reposts": 400, "replies": 300})
+    _db.upsert_post({"x_id": "xera-filter-2", "author_handle": "u",
+                     "is_own": 1,
+                     "created_at": _dt.now().isoformat(timespec="seconds"),
+                     "text": "fresh this week post", "impressions": 1000,
+                     "likes": 10, "reposts": 1, "replies": 0})
+    try:
+        for tf in ("week", "month"):
+            res = tools.execute_tool(None, "query_analytics",
+                                     {"timeframe": tf})
+            assert res["ok"], res
+            assert res["posts"] >= 1, "the fresh post must be in range"
+            assert "legacy era" not in (res["best_post"]["text"] or ""), (
+                f"{tf} view surfaced a Sept-2025 post: {res['best_post']}")
+    finally:
+        with _db.connect() as c:
+            c.execute("DELETE FROM posts WHERE x_id IN "
+                      "('xera-filter-1','xera-filter-2') AND account_id=1")
+
+
+def test_migration_converts_legacy_x_time_rows():
+    """800 pre-normalization rows already sit in the real DB — the v0.5.x
+    migration converts them in place, idempotently."""
+    from openstanley.core import db as _db
+    with _db.connect() as c:
+        c.execute("INSERT INTO posts (account_id, x_id, is_own, created_at, "
+                  "text) VALUES (1, 'mig-xera-1', 1, "
+                  "'Wed Sep 24 14:10:11 +0000 2025', 'migration probe')")
+        rid = c.execute("SELECT last_insert_rowid() i").fetchone()["i"]
+    try:
+        _db.init_db()  # migration runs
+        with _db.connect() as c:
+            ca = c.execute("SELECT created_at FROM posts WHERE id=?",
+                           (rid,)).fetchone()["created_at"]
+        assert ca.startswith("2025-09-24T"), ca
+    finally:
+        with _db.connect() as c:
+            c.execute("DELETE FROM posts WHERE id=?", (rid,))
+
+
+def test_hours_old_parses_live_x_format():
+    """Live x_search returns twikit stamps; the ISO-only parser scored
+    every real result 999h old, so trend watches could never alert
+    outside dryrun."""
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    from openstanley.gen.watch import _hours_old
+    two_h_ago = (_dt.now(_tz.utc) - _td(hours=2)).strftime(
+        "%a %b %d %H:%M:%S +0000 %Y")
+    age = _hours_old(two_h_ago)
+    assert 1 < age < 5, age
+    # unparseable junk still falls back to ancient
+    assert _hours_old("not a timestamp") == 999.0
+
+
 def test_publish_killed_still_alerts_stranded(monkeypatch):
     """Live 2026-08-31: the kill switch's early return sat ABOVE
     _alert_stranded — while account 2 was frozen, fresh stranded drafts on

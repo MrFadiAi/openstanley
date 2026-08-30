@@ -296,6 +296,24 @@ def _migrate(c: sqlite3.Connection) -> None:
         if "account_id" not in tcols:
             c.execute(f"ALTER TABLE {table} ADD COLUMN account_id INTEGER NOT NULL DEFAULT 1")
 
+    # ---- v0.5.x: one timestamp format in posts.created_at ----
+    # Legacy imports stored X's raw 'Wed Sep 24 14:10:11 +0000 2025' —
+    # lexically greater than every ISO cutoff, so time filters matched
+    # everything and ORDER BY put the oldest era first (own_posts(500)
+    # filled with pre-pivot posts; the voice profile never saw the newest
+    # ones). Convert in place; rows that don't parse are left untouched
+    # and re-tried next boot (idempotent: ISO rows never match).
+    rows = c.execute(
+        "SELECT id, created_at FROM posts "
+        "WHERE created_at IS NOT NULL AND created_at != '' "
+        "AND substr(created_at, 1, 4) GLOB '[0-9][0-9][0-9][0-9]' = 0"
+    ).fetchall()
+    for r in rows:
+        fixed = _norm_created_at(r["created_at"])
+        if fixed != r["created_at"]:
+            c.execute("UPDATE posts SET created_at=? WHERE id=?",
+                      (fixed, r["id"]))
+
     # scoped indexes (fresh shapes); old unscoped ones get dropped first —
     # CREATE IF NOT EXISTS would silently keep the wrong definition
     for stale in ("idx_posts_own", "idx_metric_snap_post", "idx_identity_snap_time",
@@ -595,14 +613,33 @@ def chat_history_for_chat(chat_id: int, limit: int = 40) -> list[dict]:
 # ---------- posts ----------
 
 def _norm_created_at(v) -> str:
-    """twikit emits 'Fri Apr 03 16:25:49 +0000 2026'; some paths lose the
-    year, leaving 25 chars no date parser accepts — the engage gate then
-    rejects every target as 'age unknown'. Append the current year to the
-    year-less shape so all readers parse real ages."""
+    """Normalize ANY X/API timestamp shape to local-naive ISO.
+
+    twikit emits 'Fri Apr 03 16:25:49 +0000 2026'; some paths lose the
+    year, leaving 25 chars no parser accepts — the engage gate then
+    rejected every target as 'age unknown'. Worse, raw X strings break
+    EVERY lexical SQL comparison ('Wed...' > '2026-...' because 'W' >
+    '2'), so week/month/all cutoffs all matched every post: live
+    2026-08-31 'best post this week' returned the account's LIFETIME
+    totals (820 posts, 64.3M impressions) for every timeframe — owner:
+    'you are lying'. One canonical ISO form, written at this boundary
+    and migrated into old rows, so SQL means what it says again."""
     s = str(v or "")
     if len(s) == 25 and s[3] == " " and "+" in s[19:25]:
-        return f"{s} {datetime.now().year}"
-    return s
+        s = f"{s} {datetime.now().year}"
+    if s[:4].isdigit():
+        return s  # already ISO-shaped
+    # X format — parse, shift to local, drop tz: the app speaks local-naive
+    # ISO everywhere (scheduled_at, cutoffs, watermarks)
+    for fmt in ("%a %b %d %H:%M:%S %z %Y", "%a %b %d %H:%M:%S %Y"):
+        try:
+            ts = datetime.strptime(s, fmt)
+            if ts.tzinfo is not None:
+                ts = ts.astimezone().replace(tzinfo=None)
+            return ts.isoformat(timespec="seconds")
+        except ValueError:
+            continue
+    return s  # unparseable — leave for the dual-format readers
 
 
 def _post_exists(x_id, acct: Optional[int] = None) -> bool:
