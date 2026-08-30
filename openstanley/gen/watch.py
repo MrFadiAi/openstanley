@@ -48,7 +48,7 @@ def remove_watch(topic: str) -> dict:
     return {"ok": True, "removed": topic, "remaining": len(kept)}
 
 
-def check_watches(cfg: Config) -> dict:
+async def check_watches(cfg: Config) -> dict:
     """One pass over every watch: search X for the topic, alert when it
     surges. Cooldown per topic prevents spam."""
     from ..integrations import telegram as tg
@@ -64,7 +64,12 @@ def check_watches(cfg: Config) -> dict:
                 < WATCH_COOLDOWN_H * 3600:
             continue
         try:
-            posts = websearch.x_search(cfg, w["topic"], limit=10)
+            import asyncio as _aio
+            # x_search calls asyncio.run() internally — from the scheduler's
+            # event loop that raises. Run in a thread (the same loop-safety
+            # fix the TG x_trends tool needed on 2026-08-24).
+            posts = await _aio.to_thread(
+                websearch.x_search, cfg, w["topic"], 10)
         except Exception as e:  # noqa: BLE001 — X flakiness never kills checks
             db.log("watch", f"search failed for '{w['topic']}': {e}",
                    level="warn")

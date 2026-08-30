@@ -2077,7 +2077,7 @@ def start_scheduler():
     async def _watch_job():
         from ..gen import watch as watch_mod
         try:
-            watch_mod.check_watches(cfg)
+            await watch_mod.check_watches(cfg)
         except Exception as e:  # noqa: BLE001
             db.log("watch", f"watch check failed: {e}", level="warn")
     sched.add_job(_watch_job, IntervalTrigger(hours=1),
