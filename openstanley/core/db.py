@@ -541,13 +541,26 @@ def add_chat_message(role: str, content: str, meta: dict | None = None,
         return cur.lastrowid
 
 
+def session_watermark() -> str:
+    """ISO timestamp of the last 05:00 session reset ('' = carry full
+    history). Both frontends start a FRESH session each morning (like
+    Hermes): the watermark bounds what _history_turn can see."""
+    return str(get_setting("chat_session_reset_at") or "")
+
+
 def chat_history(limit: int = 40) -> list[dict]:
     """Dashboard chat history — Telegram turns (chat_id set) are excluded so
-    the two frontends never mix histories."""
+    the two frontends never mix histories. Bounded by the session
+    watermark: yesterday's conversation stays in the DB but leaves the
+    context each morning."""
+    wm = session_watermark()
     with _lock, connect() as c:
         rows = c.execute(
             "SELECT id, role, content, ts, meta_json FROM chat_messages "
-            "WHERE chat_id IS NULL ORDER BY id DESC LIMIT ?", (limit,),
+            "WHERE chat_id IS NULL"
+            + (" AND ts > ?" if wm else "") +
+            " ORDER BY id DESC LIMIT ?",
+            ((wm, limit) if wm else (limit,)),
         ).fetchall()
     out = []
     for r in reversed(rows):
@@ -559,11 +572,16 @@ def chat_history(limit: int = 40) -> list[dict]:
 
 
 def chat_history_for_chat(chat_id: int, limit: int = 40) -> list[dict]:
-    """One Telegram chat's persisted turns, oldest → newest."""
+    """One Telegram chat's persisted turns, oldest → newest, bounded by the
+    session watermark (fresh session each morning)."""
+    wm = session_watermark()
     with _lock, connect() as c:
         rows = c.execute(
             "SELECT id, role, content, ts, meta_json FROM chat_messages "
-            "WHERE chat_id=? ORDER BY id DESC LIMIT ?", (chat_id, limit),
+            "WHERE chat_id=?"
+            + (" AND ts > ?" if wm else "") +
+            " ORDER BY id DESC LIMIT ?",
+            ((chat_id, wm, limit) if wm else (chat_id, limit)),
         ).fetchall()
     out = []
     for r in reversed(rows):

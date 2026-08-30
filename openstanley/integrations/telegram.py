@@ -34,7 +34,7 @@ import secrets
 import threading
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import json
@@ -729,6 +729,22 @@ def _auth_reply(chat_id: int) -> Optional[str]:
 
 
 # ---------------- chat sessions (same engine as the dashboard) ----------------
+
+def reset_sessions() -> int:
+    """05:00 daily: both frontends start a FRESH session (like Hermes).
+    Clears the in-memory TG windows + sets the DB watermark that bounds
+    chat_history / chat_history_for_chat. Yesterday's messages stay in
+    the DB — only the live context resets."""
+    # SQLite's datetime('now','localtime') uses "YYYY-MM-DD HH:MM:SS" —
+    # the watermark must match that format or ts >= ? silently fails
+    db.set_setting("chat_session_reset_at",
+                   datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    n = len(_sessions)
+    _sessions.clear()
+    db.log("system", f"session reset: {n} TG window(s) cleared — "
+                    "fresh session for both frontends")
+    return n
+
 
 def _remember(chat_id: int, role: str, content: str) -> None:
     """One turn into the RAM session AND the DB (chat_messages) — TG sessions

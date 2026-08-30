@@ -2082,6 +2082,17 @@ def start_scheduler():
             db.log("watch", f"watch check failed: {e}", level="warn")
     sched.add_job(_watch_job, IntervalTrigger(hours=1),
                   id="trend_watches")
+    # 05:00 daily session reset (like Hermes): both the web chat and
+    # Telegram start FRESH each morning — yesterday's context stays in
+    # the DB but leaves the live window
+    async def _session_reset_job():
+        from ..integrations import telegram as _tg
+        try:
+            _tg.reset_sessions()
+        except Exception as e:  # noqa: BLE001
+            db.log("system", f"session reset failed: {e}", level="warn")
+    sched.add_job(_session_reset_job, CronTrigger(hour=5, minute=0),
+                  id="session_reset")
     if ap_mod.get_state()["enabled"]:
         sched.add_job(_autopilot_job,
                       IntervalTrigger(minutes=ap_mod.interval_minutes(cfg),

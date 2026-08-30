@@ -84,6 +84,7 @@ def _watchdog_reset():
     _db.set_setting("watchdog", {})
     yield
     _db.set_setting("watchdog", {})
+    _db.set_setting("chat_session_reset_at", "")  # session watermark
 
 
 @pytest.fixture(autouse=True)
