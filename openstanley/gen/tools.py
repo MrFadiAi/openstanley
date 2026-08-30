@@ -112,6 +112,12 @@ ROUTING (pick the exact tool for common asks):
 - "study my account" / "draft replies" / "publish now" -> run_loop
 - "what are my rules / what did I learn" -> brain_read
 - "show my ideas" -> list_ideas; "switch to account 1" -> switch_account
+- "turn #N into a thread / make it shorter / English version" -> remix_draft
+- "give me 3 versions of this" -> draft_variants
+- "today's report / digest" -> get_digest
+- "reply to this mention" (or list them) -> reply_to_mention
+- "what works for @competitor" -> competitor_scan
+- "learn from this / update your rules now" -> reflect_now
 
 Rules: never invent results — the system executes and appends real results.
 Keep the prose reply short; let the action carry the work. If the user asks
@@ -637,3 +643,5 @@ register("get_schedule", _tool_get_schedule)
 # full-app-surface tools (owner 2026-08-30: the agent drives EVERYTHING)
 from .app_tools import register_all as _register_app_tools  # noqa: E402
 _register_app_tools()
+from .app_tools2 import register_all as _register_t2  # noqa: E402
+_register_t2()

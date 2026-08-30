@@ -80,3 +80,53 @@ def test_switch_account_lists_without_id():
 def test_list_ideas_tool():
     res = tools.execute_tool(CFG, "list_ideas", {"limit": 4})
     assert res["ok"] and res["count"] >= 0
+
+
+# ---------- tier-2: repurpose, variants, digest, mentions, learn ----------
+
+def test_remix_draft_shorter():
+    from openstanley.gen import llm as llm_mod
+    did = db.add_draft(text="remix probe original long enough to rewrite "
+                            "with a real idea inside it zebra", acct=1)
+    monkey = None
+    import openstanley.gen.app_tools2 as at2
+    orig = llm_mod.chat
+    llm_mod.chat = (lambda *a, **k: '{"tweet": "shorter remix probe zebra"}')
+    try:
+        res = tools.execute_tool(CFG, "remix_draft",
+                                 {"draft_id": did, "mode": "shorter"})
+    finally:
+        llm_mod.chat = orig
+    assert res["ok"], res
+    assert "zebra" in res["text"]
+    with db.connect() as c:
+        for r in c.execute("SELECT id FROM drafts WHERE meta_json LIKE ?",
+                           ('%remix_of%',)).fetchall():
+            c.execute("DELETE FROM drafts WHERE id=?", (r["id"],))
+        c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_draft_variants_saves_all():
+    from openstanley.gen import llm as llm_mod
+    orig = llm_mod.chat
+    llm_mod.chat = (lambda *a, **k:
+                    '{"variants": ["v one zebra", "v two zebra"]}')
+    try:
+        res = tools.execute_tool(CFG, "draft_variants",
+                                 {"topic": "test topic", "count": 2})
+    finally:
+        llm_mod.chat = orig
+    assert res["ok"] and len(res["draft_ids"]) == 2
+    with db.connect() as c:
+        for i in res["draft_ids"]:
+            c.execute("DELETE FROM drafts WHERE id=?", (i,))
+
+
+def test_get_digest_on_demand():
+    res = tools.execute_tool(CFG, "get_digest", {})
+    assert res["ok"] and isinstance(res["digest"], dict)
+
+
+def test_reply_to_mention_lists_cleanly():
+    res = tools.execute_tool(CFG, "reply_to_mention", {})
+    assert res["ok"] and "pending" in res
