@@ -166,3 +166,4 @@
 2026-08-30 23:15 — QA loop iteration 16 (verified-clean; 569/569, zero errors): ZERO-POST CHECK ✓. Clean pass.
 2026-08-31 00:15 — QA loop iteration 17 (verified-clean; 569/569, zero errors): ZERO-POST CHECK ✓. Clean pass.
 2026-08-31 01:15 — QA loop iteration 18 (verified-clean; 569/569, zero errors): ZERO-POST CHECK ✓. Clean pass.
+2026-08-31 02:15 — NUMBERS LIE fixed (owner: 'he is lying about numbers'): get_schedule was returning one total count and the model labeled it 'today' — '26 total today' when 26 was the whole calendar (past + future + rejected). The tool now returns explicitly labeled buckets (today/upcoming/past/status_breakdown) with per-bucket notes the model cannot conflate. Rejected drafts excluded entirely. 569/569, deployed.
