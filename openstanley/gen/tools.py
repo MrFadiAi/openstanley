@@ -272,7 +272,9 @@ def _tool_query_analytics(cfg, timeframe: str = "week") -> dict:
     cutoff = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
     with db.connect() as c:
         rows = c.execute(
-            "SELECT * FROM posts WHERE is_own=1 AND created_at > ? ORDER BY created_at DESC",
+            "SELECT * FROM posts WHERE is_own=1 AND created_at > ? "
+            "AND (text IS NULL OR text NOT LIKE 'RT @%') "
+            "ORDER BY created_at DESC",
             (cutoff,)).fetchall()
     posts = [dict(r) for r in rows]
     if not posts:
