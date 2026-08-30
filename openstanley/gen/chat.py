@@ -382,6 +382,29 @@ def _followup(cfg: Config, reply: str, tool_results: list[dict],
                                           "quote block, no report.", user=duser)
         except LLMError:
             return ""
+    # SHOW MODE (live 2026-08-30 03:59: 'show me the scheduled posts' got
+    # a COUNT again — '40 items total, next up is...' — because the report
+    # mode summarizes instead of rendering. When the owner asked to
+    # SEE/LIST items and the tool returned them, this turn RENDERS THE
+    # ITEMS, not a summary of them.)
+    if _wants_items_rendered(orig_request or ""):
+        sdata = dataclasses.replace(cfg.llm, temperature=0.4, max_tokens=4000)
+        suser = ("The user asked:" + chr(10) + orig_request[:400] + chr(10) * 2
+                 + "The tools ran with REAL results:" + chr(10)
+                 + json.dumps(tool_results, ensure_ascii=False, default=str)[:3500]
+                 + chr(10) * 2
+                 + "The user asked to SEE these items. RENDER THEM in your "
+                   "reply as a formatted list — each item with its id, time "
+                   "(if any), and full text. A count or summary of the items "
+                   "is NOT showing them. Render every item the tool returned, "
+                   "most relevant first. Same language as your reply.")
+        try:
+            return llm_chat(sdata, system="You are OpenStanley. TOOL RESULTS "
+                                          "FOLLOW-UP: render the items the "
+                                          "owner asked to see, as a list.",
+                            user=suser)
+        except LLMError:
+            pass  # fall through to report mode
     data = dataclasses.replace(cfg.llm, temperature=0.4, max_tokens=500)
     user = (f"Your reply was:\n{reply[:800]}\n\nThe tools executed with REAL "
             f"results:\n{json.dumps(tool_results, ensure_ascii=False, default=str)[:1500]}\n\n"
@@ -392,6 +415,15 @@ def _followup(cfg: Config, reply: str, tool_results: list[dict],
                                       "report tool results tersely.", user=user)
     except LLMError:
         return ""
+
+
+def _wants_items_rendered(message: str) -> bool:
+    """The owner asked to SEE/LIST/SHOW items — not a summary of them."""
+    m = (message or "").lower()
+    show_verbs = ("show me", "show ", "list", "what are", "what is",
+                  "which post", "which draft", "where is", "display",
+                  "ارني", "اكتبلي", "شنو الجدول", "ايش منشور")
+    return any(v in m for v in show_verbs)
 
 
 def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -> dict:
