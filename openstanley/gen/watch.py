@@ -64,7 +64,7 @@ def check_watches(cfg: Config) -> dict:
                 < WATCH_COOLDOWN_H * 3600:
             continue
         try:
-            posts = websearch.x_search_query(w["topic"], limit=10)
+            posts = websearch.x_search(cfg, w["topic"], limit=10)
         except Exception as e:  # noqa: BLE001 — X flakiness never kills checks
             db.log("watch", f"search failed for '{w['topic']}': {e}",
                    level="warn")
