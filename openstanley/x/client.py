@@ -452,11 +452,20 @@ class XCookie(XClient):
         if reply_to:
             kwargs["reply_to"] = reply_to
         if quote_of:
-            kwargs["quote_tweet_id"] = quote_of
+            # twikit 2.3.3: quotes ride as attachment_url — create_tweet
+            # has no quote_tweet_id (live 2026-08-31 19:15: the owner's
+            # quote publish died with TypeError). A canonical URL needs
+            # the handle, so resolve it; '_' is X's placeholder fallback.
+            try:
+                q = await self.get_tweet(quote_of)
+                handle = (q.get("author") or "_").strip() or "_"
+            except Exception:  # noqa: BLE001 — quote must not die on lookup
+                handle = "_"
+            kwargs["attachment_url"] = f"https://x.com/{handle}/status/{quote_of}"
         if media_path:
             await self._throttle_reads()
             media = await c.upload_media(media_path)
-            kwargs["media_id"] = media
+            kwargs["media_ids"] = [media]  # 2.3.3: plural list
         t = await c.create_tweet(**kwargs)
         return {"x_id": t.id}
 
