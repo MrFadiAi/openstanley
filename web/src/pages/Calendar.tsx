@@ -140,6 +140,24 @@ function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: ()
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(it.text);
   const [busy, setBusy] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const remove = (): void => {
+    void (async () => {
+      setBusy(true);
+      try {
+        await apiPost(`drafts/${it.id}/reject`, {});
+        toast.success(t('calendar.removedToast'));
+        onClose?.();
+        onChanged?.();
+      } catch (err) {
+        toast.error(t('calendar.removeFailed', { msg: err instanceof Error ? err.message : String(err) }));
+      } finally {
+        setBusy(false);
+        setConfirmRemove(false);
+      }
+    })();
+  };
 
   const saveEdit = (): void => {
     void (async () => {
@@ -248,6 +266,22 @@ function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: ()
             <Pencil size={12} className="me-1" />
             {t('common.edit')}
           </Button>
+        ) : null}
+        {it.state !== 'published' ? (
+          confirmRemove ? (
+            <Button size="sm" variant="danger" disabled={busy} onClick={remove} className="ms-auto">
+              <Trash2 size={12} className="me-1" />
+              {t('calendar.removeConfirm')}
+            </Button>
+          ) : (
+            <Button size="sm" variant="ghost" className="ms-auto text-danger" title={t('calendar.remove')}
+                    onClick={() => {
+                      setConfirmRemove(true);
+                      window.setTimeout(() => setConfirmRemove(false), 4000);
+                    }}>
+              <Trash2 size={12} />
+            </Button>
+          )
         ) : null}
       </div>
     </PopoverContent>
