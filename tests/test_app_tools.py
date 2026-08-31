@@ -130,3 +130,47 @@ def test_get_digest_on_demand():
 def test_reply_to_mention_lists_cleanly():
     res = tools.execute_tool(CFG, "reply_to_mention", {})
     assert res["ok"] and "pending" in res
+
+
+def test_publish_draft_owner_override_beats_kill_switch():
+    """Live 2026-08-31 18:39: 'Publish it' said three times, narrated as
+    shipping, zero posts — the switch blocked the loop and no override
+    existed. An explicit owner publish ships even with publish_paused set
+    (dryrun client here: no real post)."""
+    from openstanley.core import db as _db
+    from openstanley.core.config import Config
+    from openstanley.gen import app_tools
+    from openstanley.gen.tools import arm_owner_publish, disarm_owner_publish
+    _db.set_setting("publish_paused_1", True)  # switch ON — override must win
+    # UNARMED first: an injected call must be refused (the trust gate)
+    did0 = _db.add_draft(text="injection probe never ships zebra", acct=1)
+    refused = app_tools._tool_publish_draft(Config(), did0)
+    assert refused["ok"] is False and "owner chat" in refused["error"], refused
+    assert _db.get_draft(did0, acct=1)["status"] == "draft"
+    _arm = arm_owner_publish()
+    try:
+        did = _db.add_draft(text="owner override probe post zebra",
+                            acct=1, status="approved")
+        res = app_tools._tool_publish_draft(Config(), did)
+        assert res["ok"] and res.get("x_id"), res
+        d = _db.get_draft(did, acct=1)
+        assert d["status"] == "published" and d["x_id"]
+    finally:
+        disarm_owner_publish(_arm)
+        _db.set_setting("publish_paused_1", False)
+
+
+def test_run_loop_publish_killed_is_loud():
+    """ok:true with killed buried inside let the model narrate successful
+    shipping while nothing moved. Killed must read as an error with the
+    fix path."""
+    from openstanley.core import db as _db
+    from openstanley.core.config import Config
+    from openstanley.gen.app_tools import run_loop
+    _db.set_setting("publish_paused_1", True)
+    try:
+        res = run_loop(Config(), "publish")
+        assert res["ok"] is False, res
+        assert "kill switch" in res.get("error", ""), res
+    finally:
+        _db.set_setting("publish_paused_1", False)

@@ -814,6 +814,20 @@ async def send_reply(draft_id: int):
         raise HTTPException(500, str(e)) from e
 
 
+@app.post("/api/drafts/{draft_id}/publish")
+async def publish_now_ep(draft_id: int):
+    """OWNER OVERRIDE: post this draft NOW — post, quote, or reply.
+
+    The autonomous publish loop may be kill-switched; an explicit human
+    click always ships (live 2026-08-31: 'Publish it' three times in
+    chat, narrated as shipping, zero posts)."""
+    from ..gen.app_tools import publish_now
+    res = await publish_now(draft_id)
+    if not res.get("ok"):
+        raise HTTPException(400, res.get("error", "publish failed"))
+    return res
+
+
 @app.post("/api/ideas/{idea_id}/discard")
 async def discard_idea(idea_id: int):
     db.mark_idea(idea_id, "discarded")

@@ -430,6 +430,16 @@ def _wants_items_rendered(message: str) -> bool:
 
 def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -> dict:
     """One-shot OpenStanley reply (non-streaming path). Synchronous (LLM call)."""
+    from .tools import arm_owner_publish, disarm_owner_publish
+    _arm = arm_owner_publish()  # owner chat surface: explicit commands may
+    try:                        # publish (the trust gate for publish_draft)
+        return _chat_reply_inner(cfg, user_message, history)
+    finally:
+        disarm_owner_publish(_arm)
+
+
+def _chat_reply_inner(cfg: Config, user_message: str,
+                      history: Optional[list] = None) -> dict:
     db.add_chat_message("user", user_message)
     llm_cfg = dataclasses.replace(cfg.llm, temperature=_llm_temperature(),
                                   # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number. 4000 was better but STILL starves thinking-heavy turns (live 2026-08-31 17:23: quote turn, zero text): honor the configured budget with a floor
@@ -471,6 +481,15 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
     {"type":"approval",candidate} per post candidate, {"type":"done",...},
     {"type":"error",...}. Save-to-DB happens before done.
     """
+    from .tools import arm_owner_publish, disarm_owner_publish
+    _arm = arm_owner_publish()  # owner chat surface: explicit commands may
+    try:                        # publish (the trust gate for publish_draft)
+        yield from _chat_reply_stream_inner(cfg, user_message)
+    finally:
+        disarm_owner_publish(_arm)
+
+
+def _chat_reply_stream_inner(cfg: Config, user_message: str) -> Iterator[dict]:
     db.add_chat_message("user", user_message)
     trace = _context_trace(cfg)
     yield {"type": "thinking_steps", "steps": trace["steps"],

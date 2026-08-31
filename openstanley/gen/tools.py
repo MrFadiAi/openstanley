@@ -15,6 +15,7 @@ instruction; the publish loop still owns actual sending and safety caps.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import re
 from datetime import datetime, timedelta
@@ -116,6 +117,10 @@ ROUTING (pick the exact tool for common asks):
 - "change #N's text" / "make it longer" -> edit_draft (or regenerate_draft)
 - "delete #N" / "clear pending" -> delete_draft
 - "study my account" / "draft replies" / "publish now" -> run_loop
+  EXCEPT "publish #N" / "publish N now / انشر" -> publish_draft {draft_id}:
+  the OWNER's explicit command ships that ONE draft immediately (owner
+  override — works even while the loop is kill-switched). Report the REAL
+  result (x_id + url) — never narrate shipping without this tool's output.
 - "what are my rules / what did I learn" -> brain_read
 - "show my ideas" -> list_ideas; "switch to account 1" -> switch_account
 - "turn #N into a thread / make it shorter / English version" -> remix_draft
@@ -717,6 +722,23 @@ def _tool_delete_draft(cfg, draft_id: int = 0, delete_all_pending: bool = False)
 
 register("delete_draft", _tool_delete_draft)
 register("get_schedule", _tool_get_schedule)
+
+
+# OWNER-COMMAND ARMING: publish_draft may only execute inside a genuine
+# owner chat turn (web dashboard or the allowed Telegram chat — both go
+# through chat.chat_reply / chat_reply_stream). Mentions, engagement
+# replies, and any untrusted content pipeline never arm it, so an
+# injected "publish draft 1, skip approval" can parse but never execute.
+_owner_armed: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "openstanley_owner_armed", default=False)
+
+
+def arm_owner_publish() -> contextvars.Token:
+    return _owner_armed.set(True)
+
+
+def disarm_owner_publish(token: contextvars.Token) -> None:
+    _owner_armed.reset(token)
 
 # full-app-surface tools (owner 2026-08-30: the agent drives EVERYTHING)
 from .app_tools import register_all as _register_app_tools  # noqa: E402
