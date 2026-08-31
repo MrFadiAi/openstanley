@@ -228,8 +228,11 @@ class XDry(XClient):
         for i in range(min(limit, 60)):
             txt = random.choice(self.SAMPLE_NICHE)
             likes = random.randint(40, 900)
+            handle = f"niche_user_{i}"
+            xid = f"dry-niche-{query[:12]}-{i}"
             out.append({
-                "x_id": f"dry-niche-{query[:12]}-{i}", "author_handle": f"niche_user_{i}",
+                "x_id": xid, "author_handle": handle,
+                "url": f"https://x.com/{handle}/status/{xid}",
                 "is_own": 0, "created_at": (base - timedelta(minutes=11 * i)).isoformat(timespec="seconds"),
                 "text": txt, "impressions": likes * 22,
                 "likes": likes, "reposts": int(likes * 0.25), "replies": int(likes * 0.12),
@@ -382,7 +385,11 @@ class XCookie(XClient):
     async def get_tweet(self, x_id: str) -> dict:
         c = await self._ensure()
         await self._throttle_reads()
-        t = await c.get_tweet(x_id)
+        # twikit 2.x renamed get_tweet → get_tweet_by_id (live 2026-08-31:
+        # the owner's 'quote it' died with "'Client' object has no
+        # attribute 'get_tweet'" — no tweet could ever be fetched)
+        fetch = getattr(c, "get_tweet_by_id", None) or getattr(c, "get_tweet")
+        t = await fetch(x_id)
         author = getattr(getattr(t, "user", None), "screen_name", "")
         return {"x_id": t.id, "text": t.text, "author": author}
 
@@ -464,8 +471,13 @@ class XCookie(XClient):
                 return int(x or 0)
             except (TypeError, ValueError):
                 return 0
+        handle = getattr(getattr(t, "user", None), "screen_name", "")
         return {
-            "x_id": t.id, "author_handle": getattr(getattr(t, "user", None), "screen_name", ""),
+            "x_id": t.id, "author_handle": handle,
+            # ready-built URL so quote/reply flows never have to guess a
+            # link from fragments (live 2026-08-31: the agent retried a
+            # quote with 'no URLs came back in the results')
+            "url": f"https://x.com/{handle}/status/{t.id}" if handle else "",
             "is_own": int(own),
             "created_at": getattr(t, "created_at", None) or _now_iso(),
             "text": t.text,
@@ -566,8 +578,10 @@ class XApi(XClient):
         out = []
         for t in (resp.data or []):
             m = t.public_metrics or {}
+            handle = users.get(t.author_id, "")
             out.append({
-                "x_id": t.id, "author_handle": users.get(t.author_id, ""),
+                "x_id": t.id, "author_handle": handle,
+                "url": f"https://x.com/{handle}/status/{t.id}" if handle else "",
                 "is_own": 0, "created_at": t.created_at.isoformat() if t.created_at else None,
                 "text": t.text,
                 "impressions": m.get("impression_count", 0),

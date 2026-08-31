@@ -221,3 +221,59 @@ def test_cookie_client_wires_patch_on_ensure(monkeypatch):
     # applications are idempotent no-ops, so accept either evidence)
     assert twikit_patch.applied, "compat patches should be active"
     assert logged or twikit_patch.apply() == []
+
+
+def test_cookie_get_tweet_uses_renamed_twikit_method(monkeypatch):
+    """twikit 2.x renamed get_tweet → get_tweet_by_id. Live 2026-08-31:
+    the owner's 'quote it' died with "'Client' object has no attribute
+    'get_tweet'" — no tweet could ever be fetched for quoting."""
+    from openstanley.x.client import XCookie
+
+    class _FakeUser:
+        screen_name = "ashcrypto"
+
+    class _FakeTweet:
+        id = "2094123456789"
+        text = "breaking: japan stablecoin tax news"
+        user = _FakeUser()
+
+    class _FakeTwikit:  # the 2.3.3 shape: get_tweet_by_id ONLY
+        async def get_tweet_by_id(self, x_id):
+            assert x_id == "2094123456789"
+            return _FakeTweet()
+
+    xc = XCookie("{}", username="mr")
+
+    async def _fake_ensure():
+        return _FakeTwikit()
+
+    async def _fake_throttle():
+        return None
+
+    monkeypatch.setattr(xc, "_ensure", _fake_ensure)
+    monkeypatch.setattr(xc, "_throttle_reads", _fake_throttle)
+    t = asyncio.run(xc.get_tweet("2094123456789"))
+    assert t["x_id"] == "2094123456789"
+    assert t["author"] == "ashcrypto"
+    assert t["text"].startswith("breaking")
+
+
+def test_tw_maps_url():
+    """Search results carry a ready-built URL so quote/reply flows never
+    have to guess a link from t.co fragments (live 2026-08-31: 'no URLs
+    came back in the results' blocked a quote retry)."""
+    from openstanley.x.client import XCookie
+
+    class _U:
+        screen_name = "coindesk"
+
+    class _T:
+        id = "999"
+        text = "x"
+        user = _U()
+        favorite_count = "3"
+        retweet_count = None
+
+    d = XCookie._tw(_T())
+    assert d["url"] == "https://x.com/coindesk/status/999"
+    assert d["author_handle"] == "coindesk"
