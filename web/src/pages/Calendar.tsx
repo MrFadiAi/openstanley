@@ -16,7 +16,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Pencil,
   Plus,
+  Send,
   Settings2,
   Sparkles,
   Trash2,
@@ -119,13 +121,55 @@ interface DragPayload {
 
 // ---------------- post card inside a slot ----------------
 
-function SlotPost({ item }: { item: CalendarItem }) {
+function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => void }) {
   const { t, lang } = useApp();
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(item.text);
+  const [busy, setBusy] = useState(false);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
 
+  const saveEdit = (): void => {
+    void (async () => {
+      setBusy(true);
+      try {
+        await apiPost(`drafts/${item.id}/edit`, { text });
+        toast.success(t('calendar.editedToast'));
+        setEditing(false);
+        onChanged?.();
+      } catch (err) {
+        toast.error(t('calendar.editFailed', { msg: err instanceof Error ? err.message : String(err) }));
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
+  const publishNow = (): void => {
+    void (async () => {
+      setBusy(true);
+      try {
+        const r = await apiPost<{ ok: boolean; url?: string; x_id?: string }>(`drafts/${item.id}/publish`, {});
+        toast.success(t('calendar.publishedToast'));
+        setOpen(false);
+        onChanged?.();
+        if (r.url) window.open(r.url, '_blank', 'noopener');
+      } catch (err) {
+        toast.error(t('calendar.publishFailed', { msg: err instanceof Error ? err.message : String(err) }));
+      } finally {
+        setBusy(false);
+      }
+    })();
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setEditing(false);
+      }}
+    >
       <PopoverAnchor asChild>
         <div
           ref={setNodeRef}
@@ -159,16 +203,49 @@ function SlotPost({ item }: { item: CalendarItem }) {
           </p>
         </div>
       </PopoverAnchor>
-      <PopoverContent className="w-80">
+      <PopoverContent className="w-96 max-h-[70vh] overflow-y-auto">
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           <Badge variant={item.state === 'published' ? 'green' : 'default'}>{item.state}</Badge>
           <Badge>{item.kind}</Badge>
           <Badge>{t('calendar.itemScore', { n: item.score })}</Badge>
           {item.language ? <Badge>{item.language}</Badge> : null}
+          <span className="ms-auto font-mono text-[10.5px] text-ink-3">#{item.id}</span>
         </div>
-        <div dir={hasArabic(item.text) ? 'rtl' : 'ltr'} className="whitespace-pre-wrap text-[13.5px] leading-relaxed">
-          {item.text}
-        </div>
+
+        {editing ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              dir={hasArabic(text) ? 'rtl' : 'ltr'}
+              rows={Math.min(14, Math.max(4, Math.ceil(text.length / 48)))}
+              className="w-full resize-y rounded-lg border border-line bg-field px-2.5 py-2 text-[13.5px] leading-relaxed text-ink"
+            />
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10.5px] text-ink-3">{text.length}</span>
+              <Button size="sm" disabled={busy || !text.trim()} onClick={saveEdit}>
+                {t('common.save')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setText(item.text); }}>
+                {t('common.cancel')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div dir={hasArabic(item.text) ? 'rtl' : 'ltr'} className="whitespace-pre-wrap text-[13.5px] leading-relaxed">
+            {item.text}
+          </div>
+        )}
+
+        {item.scheduled_reason && !editing ? (
+          <p className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-line bg-inset px-2 py-1.5 text-[11.5px] leading-relaxed text-ink-2">
+            <Sparkles size={11} className="mt-0.5 shrink-0" />
+            <span>
+              <span className="font-medium">{t('calendar.whySlot')}:</span> {item.scheduled_reason}
+            </span>
+          </p>
+        ) : null}
+
         <div className="mt-2 font-mono text-[11px] text-muted">
           {new Date(item.scheduled_at).toLocaleString(lang === 'ar' ? 'ar' : 'en-GB', {
             weekday: 'short',
@@ -177,6 +254,21 @@ function SlotPost({ item }: { item: CalendarItem }) {
             hour: '2-digit',
             minute: '2-digit',
           })}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          {item.state !== 'published' ? (
+            <Button size="sm" disabled={busy} onClick={publishNow}>
+              <Send size={12} className="me-1" />
+              {t('calendar.publishNow')}
+            </Button>
+          ) : null}
+          {!editing ? (
+            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+              <Pencil size={12} className="me-1" />
+              {t('common.edit')}
+            </Button>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>
@@ -191,12 +283,14 @@ function TimeSlot({
   items,
   chip,
   compact,
+  onChanged,
 }: {
   dateKeyStr: string;
   time: string;
   items: CalendarItem[];
   chip?: SmartSlotChip;
   compact?: boolean;
+  onChanged?: () => void;
 }) {
   const { t, lang } = useApp();
   const { setNodeRef, isOver } = useDroppable({ id: `slot-${dateKeyStr}-${time}` });
@@ -229,7 +323,7 @@ function TimeSlot({
         ) : null}
       </div>
       {items.map((it) => (
-        <SlotPost key={it.id} item={it} />
+        <SlotPost key={it.id} item={it} onChanged={onChanged} />
       ))}
     </div>
   );
@@ -297,6 +391,7 @@ function DayColumn({
   pendingCustom,
   onPickCustom,
   onDismissCustom,
+  onChanged,
 }: {
   cell: DayCell;
   postTimes: string[];
@@ -306,6 +401,7 @@ function DayColumn({
   pendingCustom: { id: number } | null;
   onPickCustom: (id: number, time: string) => void;
   onDismissCustom: () => void;
+  onChanged?: () => void;
 }) {
   const { t, lang } = useApp();
   const { setNodeRef, isOver } = useDroppable({ id: `day-${cell.key}` });
@@ -339,12 +435,13 @@ function DayColumn({
           compact={compact}
           items={items.filter((it) => it.time === tm)}
           chip={chipByTime.get(tm)}
+          onChanged={onChanged}
         />
       ))}
       {items
         .filter((it) => !postTimes.includes(it.time))
         .map((it) => (
-          <SlotPost key={it.id} item={it} />
+          <SlotPost key={it.id} item={it} onChanged={onChanged} />
         ))}
       <CustomTimeSlot
         dateKeyStr={cell.key}
@@ -730,6 +827,7 @@ export function CalendarPage() {
                     pendingCustom={pendingCustom?.dateKey === cell.key ? { id: pendingCustom.id } : null}
                     onPickCustom={(id, time) => place(id, cell.key, time)}
                     onDismissCustom={() => setPendingCustom(null)}
+                    onChanged={load}
                   />
                 ))}
               </div>
