@@ -40,7 +40,12 @@ class LLMConfig:
     model: str = "gpt-4o-mini"
     api_key_env: str = "OPENSTANLEY_LLM_API_KEY"
     temperature: float = 0.85
-    max_tokens: int = 1200
+    # 4000, not 1200: GLM's thinking phase spends the SAME output budget
+    # before any visible text — at 1200 every JSON-mode call (brain
+    # reflection, drafts, watches) truncates mid-string and dies as
+    # 'Unparseable JSON' (live 2026-08-31 15:45; the chat paths got this
+    # fix first, every other caller reads it from here)
+    max_tokens: int = 4000
     transport: str = "openai"  # openai | anthropic
 
     @property

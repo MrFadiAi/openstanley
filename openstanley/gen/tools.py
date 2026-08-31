@@ -471,10 +471,22 @@ def _tool_web_search(cfg, query: str = "", limit: int = 6) -> dict:
 def _tool_x_search(cfg, query: str = "", limit: int = 10) -> dict:
     from . import websearch
     res = websearch.x_search(cfg, query, limit=int(limit))
-    return {"ok": True, "results": [
-        {"text": (p.get("text") or "")[:200],
-         "author": p.get("author_handle") or p.get("author") or "?",
-         "likes": p.get("likes", 0)} for p in res]}
+    out = []
+    for p in res:
+        url = p.get("url") or ""
+        if not url and p.get("x_id"):
+            h = p.get("author_handle") or ""
+            url = f"https://x.com/{h}/status/{p['x_id']}" if h else ""
+        # url/x_id MUST ride along: the projection here used to strip both,
+        # so 'quote it' starved with 'no tweet URL/ID' even though the
+        # client had them (live 2026-08-31 15:33)
+        out.append({"url": url, "x_id": p.get("x_id") or "",
+                    "text": (p.get("text") or "")[:200],
+                    "author": p.get("author_handle") or p.get("author") or "?",
+                    "likes": p.get("likes", 0)})
+    return {"ok": True, "results": out,
+            "note": "each result carries url and x_id — pass either to "
+                    "quote/reply tools as the tweet reference"}
 
 
 def _tool_x_trends(cfg, limit: int = 10) -> dict:

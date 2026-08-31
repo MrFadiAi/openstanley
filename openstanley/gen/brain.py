@@ -719,7 +719,18 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None,
 
     raw = llm_chat(cfg.llm, system=REFLECT_SYSTEM, user=user,
                    temperature=0.4, json_mode=True)
-    data = extract_json(raw)
+    try:
+        data = extract_json(raw)
+    except LLMError:
+        # one malformed-JSON retry (live 2026-08-31 15:45: the metrics
+        # reflect died on a single bad emit with a 20000-token budget —
+        # not starvation). Log the FULL raw text, not a 200-char clip, so
+        # the next occurrence is actually diagnosable.
+        db.log("brain", f"reflect({trigger}) unparseable JSON — retrying. "
+                        f"Raw: {raw[:600]}", level="warn")
+        raw = llm_chat(cfg.llm, system=REFLECT_SYSTEM, user=user,
+                       temperature=0.2, json_mode=True)
+        data = extract_json(raw)
     if not isinstance(data, dict):
         raise LLMError(f"reflect returned non-object: {str(data)[:120]}")
 

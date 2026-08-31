@@ -528,3 +528,26 @@ def test_atomic_write_survives_windows_lock_race(monkeypatch):
         brain._atomic_write(p, "content survives the race")
         assert p.read_text(encoding="utf-8") == "content survives the race"
         assert calls["n"] == 3
+
+
+def test_reflect_retries_once_on_malformed_json(monkeypatch):
+    """Live 2026-08-31 15:45: metrics reflect died on ONE bad emit (huge
+    budget, so not starvation). A single retry at lower temperature
+    recovers instead of losing the whole reflection pass."""
+    from openstanley.core.config import Config
+    from openstanley.gen import brain as bm
+    calls = {"n": 0, "temps": []}
+
+    def fake_llm(cfg, system, user, temperature=None, json_mode=False,
+                 retries=2):
+        calls["n"] += 1
+        calls["temps"].append(temperature)
+        if calls["n"] == 1:
+            return '{"instructions_delta": "broken json never closed'
+        return '{"instructions_delta": "", "journal_entry": "recovered"}'
+
+    monkeypatch.setattr(bm, "llm_chat", fake_llm)
+    res = bm.reflect(Config(), "chat")
+    assert calls["n"] == 2, "retry must fire exactly once after bad JSON"
+    assert calls["temps"][1] < calls["temps"][0]  # calmer retry
+    assert res["ok"]
