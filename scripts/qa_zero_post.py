@@ -34,19 +34,32 @@ def main() -> int:
         "WHERE account_id=? AND status='published' "
         "AND published_at > ? ORDER BY published_at",
         (FROZEN_ACCOUNT, SWITCH_INSTALLED_AT)).fetchall()
+    # OWNER OVERRIDE posts (owner directive 2026-08-31: explicit 'publish
+    # #N' commands must ship) are marked in agent_log at publish time —
+    # they are legitimate, never violations. Only AUTONOMOUS posts trip.
+    overrides = {r["message"].split("draft ")[1].split(" ")[0]
+                 for r in con.execute(
+                     "SELECT message FROM agent_log WHERE loop='publish' "
+                     "AND message LIKE 'OWNER OVERRIDE%'")}
     paused = con.execute(
         "SELECT value FROM settings WHERE key=?",
         (f"publish_paused_{FROZEN_ACCOUNT}",)).fetchone()
     con.close()
-    if rows:
-        print(f"HARD RULE VIOLATION — {len(rows)} post(s) published on "
+    auto = [r for r in rows if str(r["id"]) not in overrides]
+    owner = [r for r in rows if str(r["id"]) in overrides]
+    for r in owner:
+        print(f"owner-directed (legitimate): #{r['id']} "
+              f"{r['published_at']}  {r['t']}")
+    if auto:
+        print(f"HARD RULE VIOLATION — {len(auto)} AUTONOMOUS post(s) on "
               f"account {FROZEN_ACCOUNT} since {SWITCH_INSTALLED_AT}:")
-        for r in rows:
+        for r in auto:
             print(f"  #{r['id']} {r['published_at']}  {r['t']}")
         return 1
-    print(f"HARD RULE holds: 0 published on account {FROZEN_ACCOUNT} "
+    print(f"HARD RULE holds: 0 autonomous posts on account {FROZEN_ACCOUNT} "
           f"since {SWITCH_INSTALLED_AT} "
-          f"(kill switch: {paused['value'] if paused else 'MISSING'})")
+          f"(kill switch: {paused['value'] if paused else 'MISSING'}; "
+          f"{len(owner)} owner-directed)")
     return 0
 
 
