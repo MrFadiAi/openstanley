@@ -39,10 +39,30 @@ say so plainly and take the next real path — never fabricate what you could
 not fetch."""
 
 AGENT_DISCIPLINE += """
-X LIMIT: a single post is AT MOST 280 characters - count before saving. If the
-content runs longer, write it as a THREAD (2-3 tweets, each under 250) and save
-with the thread structure, never one oversized post (live 2026-08-29: two
-approved posts died at publish with X error 186, silently)."""
+X LIMIT: a single post is AT MOST 280 characters on free accounts - count
+before saving. If the CONTENT CAPABILITY line says Premium, single posts may
+run long (up to the stated limit) and 'make it longer' means ONE longer post,
+never a forced thread. On a free account, content that runs longer becomes a
+THREAD (2-3 tweets, each under 250) saved with the thread structure, never one
+oversized post (live 2026-08-29: two approved posts died at publish with X
+error 186, silently)."""
+
+
+def _capability_line() -> str:
+    """The active account's REAL posting capability — the agent must never
+    claim a 280 ceiling for a Premium account (live 2026-08-31 22:15: the
+    owner asked for a long post four times and got '277/280 is the physical
+    ceiling'; the account is Premium, single posts go to 25,000)."""
+    from ..core.safety import max_post_chars
+    lim = max_post_chars()
+    if lim > 280:
+        return (f"CONTENT CAPABILITY: this account is X Premium — a single "
+                f"post may be up to {lim} characters. When the owner asks "
+                f"for a LONG post, write ONE long-form post in their voice; "
+                f"never claim a 280 ceiling; only use a thread when the "
+                f"owner asks for a thread.")
+    return ("CONTENT CAPABILITY: free account — single posts cap at 280 "
+            "characters; long content needs a thread.")
 
 AGENT_DISCIPLINE += """
 CLOSE THE LOOP: when your investigation finds a problem or an answer, the
@@ -89,7 +109,7 @@ HOW YOU BEHAVE (like getstanley.ai):
 Keep replies short and scannable. No filler, no disclaimers, no markdown
 headers unless showing a drafted post (then use a quote block).
 
-""" + AGENT_DISCIPLINE
+""" + AGENT_DISCIPLINE + "\n" + _capability_line()
 
 # The Telegram surface's persona. The dashboard prompt above is a WRITE
 # assistant: its "draft in the user's X voice" instruction leaks post-style
@@ -123,7 +143,7 @@ HOW YOU WRITE HERE — this chat is a conversation, not a post:
 
 Keep replies short and scannable. No filler, no disclaimers.
 
-""" + AGENT_DISCIPLINE_TG
+""" + AGENT_DISCIPLINE_TG + "\n" + _capability_line()
 
 FOLLOWUP_MARKER = "TOOL RESULTS FOLLOW-UP"
 

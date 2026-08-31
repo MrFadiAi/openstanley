@@ -137,7 +137,8 @@ def continue_thread(cfg: Config, draft_id: int = 0, addition: str = "") -> dict:
         text = scrub(str(extract_json(raw).get("tweet") or ""))
     except LLMError as e:
         return {"ok": False, "error": f"continuation failed: {e}"}
-    if not text or len(text) > 280:
+    from ..core.safety import max_post_chars
+    if not text or len(text) > max_post_chars():
         return {"ok": False, "error": "continuation empty or too long"}
     did = db.add_draft(
         text=text, kind="reply", temperature="bold",

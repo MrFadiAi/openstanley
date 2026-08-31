@@ -110,12 +110,18 @@ class VoiceCheck:
 
 # --- persona rules: data/brain/voice.md --------------------------------------
 
+def _cap_neutral() -> int:
+    """Neutral-rule post ceiling follows the account's real capability."""
+    from ..core.safety import max_post_chars
+    return max_post_chars()
+
+
 def _neutral_rules() -> dict:
     """Built-in fallback when voice.md is missing (warn once)."""
     return {
         "source": "neutral",
         "lowercase_first": False,          # unknown → casing unchecked
-        "bands": {"post": (15, 280), "reply": (5, 200)},
+        "bands": {"post": (15, _cap_neutral()), "reply": (5, 200)},
         "emoji_max": 2,
         "hashtags_max": 2,
         "misspelling_band": (0.0, 6.0),    # unknown → only extremes flagged
@@ -216,10 +222,14 @@ def write_voice_md(stats: dict, acct: int | None = None) -> Optional[Path]:
     lower_pct = float((stats.get("casing") or {}).get("pct_lowercase_start") or 0)
     m = float(stats.get("misspellings_per_100_words") or 0)
 
-    # floor at 60% of avg: the account's own short tail, not half its voice
-    p_lo, p_hi = max(15, round(avg * 0.6)), min(280, round(avg * 1.8))
+    # floor at 60% of avg: the account's own short tail, not half its voice.
+    # Premium accounts may post long-form — the ceiling is the account's
+    # real capability, not the free-account 280
+    from ..core.safety import max_post_chars
+    _cap = max_post_chars()
+    p_lo, p_hi = max(15, round(avg * 0.6)), min(_cap, round(avg * 1.8))
     if p_hi <= p_lo:
-        p_hi = min(280, p_lo + 40)
+        p_hi = min(_cap, p_lo + 40)
     r_lo, r_hi = max(5, round(avg * 0.2)), min(200, round(avg * 1.0))
     if r_hi <= r_lo:
         r_hi = min(200, r_lo + 30)

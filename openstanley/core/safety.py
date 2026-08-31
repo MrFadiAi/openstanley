@@ -19,6 +19,22 @@ class SafetyCapExceeded(Exception):
     """Raised when a daily cap would be exceeded. Publish loop catches + reschedules."""
 
 
+PREMIUM_MAX_CHARS = 25000  # X Premium single-post limit
+
+
+def max_post_chars(acct: int | None = None) -> int:
+    """The account's REAL single-post ceiling. X Premium accounts post up
+    to 25,000 chars; free accounts 280 (owner 2026-08-31: @Mr_CryptoYT is
+    Premium — the agent kept claiming '277/280 is the physical ceiling'
+    while the owner asked for a long post four times)."""
+    try:
+        if db.get_acct_setting("x_premium", acct=acct):
+            return PREMIUM_MAX_CHARS
+    except Exception:  # noqa: BLE001 — capability lookup never breaks posting
+        pass
+    return 280
+
+
 def _key(acct: int | None) -> str:
     a = db.active_account() if acct is None else acct
     return f"safety_counters:{a}"

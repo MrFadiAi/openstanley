@@ -428,3 +428,22 @@ def test_get_schedule_shows_other_accounts():
         _db.set_active_account(1)
         with _db.connect() as c:
             c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_premium_long_post_capability():
+    """Live 2026-08-31 22:15: the owner asked for a LONG post four times
+    and got '277/280 is the physical ceiling' — the account is X Premium
+    (25k chars). max_post_chars carries the real capability; the chat
+    system prompt states it so the agent never claims a false ceiling."""
+    from openstanley.core import db as _db
+    from openstanley.core.safety import max_post_chars
+    from openstanley.gen import chat as chat_mod
+    _db.set_acct_setting("x_premium", True)
+    try:
+        assert max_post_chars() == 25000
+        assert "Premium" in chat_mod._capability_line()
+        assert "25000" in chat_mod._capability_line()
+    finally:
+        _db.set_acct_setting("x_premium", False)
+    assert max_post_chars() == 280
+    assert "free account" in chat_mod._capability_line()
