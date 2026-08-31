@@ -1391,6 +1391,13 @@ def _handle_voice(cfg: Config, chat_id: int, msg: dict) -> None:
                        timeout=HTTP_TIMEOUT_S)
         if fr.status_code != 200:
             raise RuntimeError(f"download HTTP {fr.status_code}")
+        # medium-whisper on CPU takes real seconds — show typing so the
+        # silence reads as work, not death
+        try:
+            _api(token, "sendChatAction",
+                 {"chat_id": chat_id, "action": "typing"})
+        except Exception:  # noqa: BLE001 — cosmetic
+            pass
         text = vn.transcribe(fr.content)
     except Exception as e:  # noqa: BLE001
         db.log("telegram", f"voice download failed: {_scrub(str(e), token)}",

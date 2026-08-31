@@ -1246,3 +1246,17 @@ def test_tg_owner_turn_arms_publish_gate(monkeypatch):
     finally:
         with db.connect() as c:
             c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_voice_model_accuracy_defaults(monkeypatch):
+    """2026-08-31 (owner: 'the voice to text is so bad'): the pipeline ran
+    whisper TINY with beam 1 — hopeless for Iraqi Arabic. The default is
+    now medium (env-tunable) and transcribe uses beam 5 + the dialect
+    initial_prompt."""
+    import inspect
+    from openstanley.gen import voice_notes as vn
+    assert vn.model_name() == "medium"
+    monkeypatch.setenv("OPENSTANLEY_WHISPER_MODEL", "large-v3")
+    assert vn.model_name() == "large-v3"
+    src = inspect.getsource(vn.transcribe)
+    assert "beam_size=5" in src and "initial_prompt" in src
