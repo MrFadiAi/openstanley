@@ -18,7 +18,6 @@ import {
   Clock,
   Pencil,
   Plus,
-  Reply as ReplyIcon,
   Send,
   Settings2,
   Sparkles,
@@ -46,7 +45,6 @@ import { cn, dateKey, hasArabic } from '@/lib/utils';
 const lastDragEnd = { at: 0 };
 
 type View = 'days' | 'week' | 'month';
-type Filter = 'all' | 'posts' | 'replies';
 
 interface DayCell {
   key: string;
@@ -466,7 +464,6 @@ function DayColumn({
   onPickCustom,
   onDismissCustom,
   onChanged,
-  filter,
 }: {
   cell: DayCell;
   postTimes: string[];
@@ -477,7 +474,6 @@ function DayColumn({
   onPickCustom: (id: number, time: string) => void;
   onDismissCustom: () => void;
   onChanged?: () => void;
-  filter: Filter;
 }) {
   const { t, lang } = useApp();
   const { setNodeRef, isOver } = useDroppable({ id: `day-${cell.key}` });
@@ -503,41 +499,22 @@ function DayColumn({
         </div>
         <div className="text-[12px] italic font-serif text-ink-3">{mo}</div>
       </div>
-      {/* posts belong to the posting windows; replies are engagement at
-          arbitrary times — two different things, two different sections */}
-      {filter !== 'replies' ? (
-        <>
-          {postTimes.map((tm) => (
-            <TimeSlot
-              key={tm}
-              dateKeyStr={cell.key}
-              time={tm}
-              compact={compact}
-              items={items.filter((it) => it.kind !== 'reply' && it.time === tm)}
-              chip={chipByTime.get(tm)}
-              onChanged={onChanged}
-            />
-          ))}
-          {items
-            .filter((it) => it.kind !== 'reply' && !postTimes.includes(it.time))
-            .map((it) => (
-              <SlotPost key={it.id} item={it} onChanged={onChanged} />
-            ))}
-        </>
-      ) : null}
-      {filter !== 'posts' ? (
-        <div className="mt-1 rounded-xl border border-dashed border-line/70 bg-inset/30 p-1.5">
-          <div className="mb-1.5 flex items-center gap-1 px-0.5">
-            <ReplyIcon size={10} className="text-ink-3" />
-            <span className="font-mono text-[10px] uppercase tracking-wide text-ink-3">
-              {t('calendar.sectionReplies')} ({items.filter((it) => it.kind === 'reply').length})
-            </span>
-          </div>
-          {items.filter((it) => it.kind === 'reply').map((it) => (
-            <SlotPost key={it.id} item={it} onChanged={onChanged} />
-          ))}
-        </div>
-      ) : null}
+      {postTimes.map((tm) => (
+        <TimeSlot
+          key={tm}
+          dateKeyStr={cell.key}
+          time={tm}
+          compact={compact}
+          items={items.filter((it) => it.time === tm)}
+          chip={chipByTime.get(tm)}
+          onChanged={onChanged}
+        />
+      ))}
+      {items
+        .filter((it) => !postTimes.includes(it.time))
+        .map((it) => (
+          <SlotPost key={it.id} item={it} onChanged={onChanged} />
+        ))}
       <CustomTimeSlot
         dateKeyStr={cell.key}
         compact={compact}
@@ -636,7 +613,6 @@ function ClearAllButton({
 export function CalendarPage() {
   const { t, lang, navigate } = useApp();
   const [view, setView] = useState<View>('days');
-  const [filter, setFilter] = useState<Filter>('all');
   const [offset, setOffset] = useState(0);
   const [cal, setCal] = useState<CalendarResponse | null>(null);
   const [queue, setQueue] = useState<Draft[]>([]);
@@ -825,13 +801,6 @@ export function CalendarPage() {
                 <TabsTrigger value="month">{t('calendar.month')}</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-              <TabsList>
-                <TabsTrigger value="all">{t('calendar.filterAll')}</TabsTrigger>
-                <TabsTrigger value="posts">{t('calendar.filterPosts')}</TabsTrigger>
-                <TabsTrigger value="replies">{t('calendar.filterReplies')}</TabsTrigger>
-              </TabsList>
-            </Tabs>
             <ClearAllButton
               icon={<Trash2 size={14} />}
               label={t('calendar.clearScheduled')}
@@ -947,7 +916,6 @@ export function CalendarPage() {
                     onPickCustom={(id, time) => place(id, cell.key, time)}
                     onDismissCustom={() => setPendingCustom(null)}
                     onChanged={load}
-                    filter={filter}
                   />
                 ))}
               </div>
