@@ -775,6 +775,18 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     post candidates are saved as real drafts (TG has no save button), each
     announced with a /approve line. Publishing still only happens through
     the approval gate."""
+    # OWNER TURN ARMING (live 2026-08-31 19:33: the owner's OWN 'can u
+    # publish it' from this chat was refused — the TG stream is a separate
+    # engine from chat.chat_reply_stream and never armed the trust gate)
+    from ..gen.tools import arm_owner_publish, disarm_owner_publish
+    _arm = arm_owner_publish()
+    try:
+        yield from _chat_reply_tg_stream_inner(cfg, chat_id, user_message)
+    finally:
+        disarm_owner_publish(_arm)
+
+
+def _chat_reply_tg_stream_inner(cfg: Config, chat_id: int, user_message: str):
     import dataclasses
 
     from ..gen import brain as brain_mod
@@ -785,7 +797,10 @@ def chat_reply_tg_stream(cfg: Config, chat_id: int, user_message: str):
     _remember(chat_id, "user", user_message)
     db.log("telegram", f"chat turn START chat={chat_id}")
     llm_cfg = dataclasses.replace(cfg.llm, temperature=chat_mod._llm_temperature(),
-                                  max_tokens=4000)  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number
+                                  # 1200 starved GLM (the 'agent not responding'
+                                  # day); 4000 still starves thinking-heavy
+                                  # turns — honor the configured budget
+                                  max_tokens=max(cfg.llm.max_tokens, 4000))
     from ..system import watchdog as wd_mod
     full: list[str] = []
     try:

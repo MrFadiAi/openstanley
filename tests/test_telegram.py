@@ -1218,3 +1218,31 @@ def test_no_nudge_when_not_a_draft_request(monkeypatch):
     tg._sessions.clear()
     "".join(tg.chat_reply_tg_stream(CFG, CHAT, "what is my best post today?"))
     assert not fired, "nudge must not fire for informational asks"
+
+
+def test_tg_owner_turn_arms_publish_gate(monkeypatch):
+    """Live 2026-08-31 19:33: the owner's OWN 'can u publish it' from this
+    chat was REFUSED — chat_reply_tg_stream is a separate engine from
+    chat.chat_reply_stream and never armed the trust gate. A publish_draft
+    action inside a TG turn must execute (dryrun client: no real post)."""
+    _enable()
+    did = db.add_draft(text="tg arming probe post zebra", acct=1,
+                       status="approved")
+    monkeypatch.setattr(chat_mod, "llm_chat_stream",
+                        lambda *a, **k: iter(["on it\n"
+                                              f"{FENCE}action\n"
+                                              f'{{"tool": "publish_draft", '
+                                              f'"args": {{"draft_id": {did}}}}}\n'
+                                              f"{FENCE}\n"]))
+    monkeypatch.setattr(chat_mod, "llm_chat",
+                        lambda *a, **k: "published.")
+    _stub_voice(monkeypatch)
+    tg._sessions.clear()
+    try:
+        out = "".join(tg.chat_reply_tg_stream(CFG, CHAT, "publish it now"))
+        assert "published" in out
+        d = db.get_draft(did, acct=1)
+        assert d["status"] == "published" and d["x_id"], d
+    finally:
+        with db.connect() as c:
+            c.execute("DELETE FROM drafts WHERE id=?", (did,))
