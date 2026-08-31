@@ -325,7 +325,11 @@ class Agent:
                                               max_posts=self.cfg.x.scan_count,
                                               acct=acct)
         try:
-            voice_mod.build_voice(self.cfg, force=True, acct=acct)
+            # whisper load is CPU-bound — on the loop it stalls the whole
+            # server past keepalive's 2-minute death threshold (live
+            # 2026-08-31: learn/scan restarts at 04:20 and 06:18)
+            await asyncio.to_thread(voice_mod.build_voice, self.cfg,
+                                    force=True, acct=acct)
             voice_status = "rebuilt"
         except Exception as e:  # noqa: BLE001
             voice_status = f"skipped: {e}"
@@ -513,7 +517,11 @@ class Agent:
             metrics_status = f"failed: {e}"
             db.log("learn", f"metrics refresh failed: {e}", level="warn")
         try:
-            voice_mod.build_voice(self.cfg, force=True, acct=acct)
+            # whisper load is CPU-bound — on the loop it stalls the server
+            # past keepalive's 2-minute death threshold (live 2026-08-31:
+            # restarts at 04:20 and 06:18 during learn/scan)
+            await asyncio.to_thread(voice_mod.build_voice, self.cfg,
+                                    force=True, acct=acct)
             voice_status = "rebuilt"
         except Exception as e:  # noqa: BLE001
             voice_status = f"failed: {e}"
