@@ -14,9 +14,33 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 STOP_FILE = ROOT / "data" / "KEEPALIVE_STOP"
+LOCK_FILE = ROOT / "data" / "KEEPALIVE_LOCK"
 CHECK_INTERVAL_S = 60
 MISSES_BEFORE_RESTART = 2
 HEALTH_URL = "http://127.0.0.1:7878/api/health"
+
+
+def _pid_alive(pid: int) -> bool:
+    """Windows stdlib pid-alive check (OpenProcess + STILL_ACTIVE)."""
+    import ctypes
+    if pid <= 0:
+        return False
+    try:
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        k32 = ctypes.windll.kernel32
+        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if k32.GetExitCodeProcess(h, ctypes.byref(code)):
+                return code.value == STILL_ACTIVE
+            return False
+        finally:
+            k32.CloseHandle(h)
+    except Exception:  # noqa: BLE001 — treat any probe failure as dead
+        return False
 
 
 def _server_up() -> bool:
@@ -75,19 +99,40 @@ def _log(msg: str) -> None:
 
 
 def main() -> None:
+    # SINGLETON (live 2026-08-31: the hermes runtime shim mirrors every
+    # python child from an agent session — two keepalives spawned at once
+    # would ping-pong taskkill each other's fresh servers during an
+    # outage). A healthy instance holding the lock makes this one exit.
+    if LOCK_FILE.exists():
+        try:
+            old_pid = int(LOCK_FILE.read_text().strip())
+        except ValueError:
+            old_pid = 0
+        if old_pid and _pid_alive(old_pid):
+            _log(f"keepalive already running (pid {old_pid}) — exiting")
+            return
+    LOCK_FILE.write_text(str(os.getpid()))
+    # close the simultaneous-spawn race: if another instance wrote the
+    # lock after our check, ITS pid is on disk now and this one exits
+    if LOCK_FILE.read_text().strip() != str(os.getpid()):
+        _log("keepalive lost the lock race — exiting")
+        return
     _log("keepalive started (60s checks, restart after 2 misses)")
     misses = 0
-    while not STOP_FILE.exists():
-        if _server_up():
-            misses = 0
-        else:
-            misses += 1
-            if misses >= MISSES_BEFORE_RESTART:
-                _log(f"server down {misses} checks — restarting")
-                _restart_server()
+    try:
+        while not STOP_FILE.exists():
+            if _server_up():
                 misses = 0
-                time.sleep(45)  # boot grace period
-        time.sleep(CHECK_INTERVAL_S)
+            else:
+                misses += 1
+                if misses >= MISSES_BEFORE_RESTART:
+                    _log(f"server down {misses} checks — restarting")
+                    _restart_server()
+                    misses = 0
+                    time.sleep(45)  # boot grace period
+            time.sleep(CHECK_INTERVAL_S)
+    finally:
+        LOCK_FILE.unlink(missing_ok=True)
     _log("keepalive stopped (stop flag)")
 
 
