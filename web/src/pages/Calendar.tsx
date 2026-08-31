@@ -374,7 +374,12 @@ function TimeSlot({
       )}
     >
       <div className="mb-1.5 flex items-baseline gap-1.5 px-0.5">
-        <span className={cn('font-serif', compact ? 'text-[13px]' : 'text-[15px]')}>{fmtTime(time, lang)}</span>
+        <span
+          title={t('calendar.slotTip')}
+          className={cn('font-serif', compact ? 'text-[13px]' : 'text-[15px]')}
+        >
+          {fmtTime(time, lang)}
+        </span>
         {!occupied ? (
           <span className="text-[11.5px] italic text-ink-3 font-serif">— {t('calendar.openSlot')}</span>
         ) : null}
