@@ -237,8 +237,24 @@ QUOTED TWEET (your post is the comment above it):
         out["text"] = data["thread"][0]
         out["thread"] = [str(x) for x in data["thread"]]
     else:
-        out["text"] = str(data.get("tweet", ""))[:500]
+        # GLM drifts between {"tweet"} / {"text"} / {"post"} despite the
+        # STRICT schema — read them all (live 2026-08-31 18:10: a
+        # wrong-key emit scored 'empty draft' and the owner's quote died)
+        out["text"] = str(data.get("tweet") or data.get("text")
+                          or data.get("post") or "")[:500]
         out["kind"] = out.get("kind", "post")
+        if not out["text"].strip():
+            db.log("drafts", f"empty draft text (JSON keys: "
+                            f"{sorted(map(str, data.keys()))[:8]}) — "
+                            f"re-asking once", level="warn")
+            raw = chat(cfg.llm, system, user, temperature=t, json_mode=True)
+            data = extract_json(raw)
+            if "thread" in data and isinstance(data["thread"], list) \
+                    and data["thread"]:
+                out["text"] = str(data["thread"][0])
+            else:
+                out["text"] = str(data.get("tweet") or data.get("text")
+                                  or data.get("post") or "")[:500]
 
     # voice-match pass: check the draft against the measured style profile;
     # one re-roll with explicit feedback if it lands far off
