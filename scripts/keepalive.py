@@ -28,7 +28,33 @@ def _server_up() -> bool:
         return False
 
 
+def _pids_from_netstat(output: str) -> set[str]:
+    """Listener PIDs for our port from netstat -ano text (pure — tested)."""
+    import re
+    return {m.group(1) for m in re.finditer(
+        r"TCP\s+127\.0\.0\.1:7878\s+\S+\s+LISTENING\s+(\d+)", output)}
+
+
+def _kill_port_holder() -> None:
+    """A HUNG server still owns the port — the replacement then dies with
+    bind error 10048 and the system stays down (live 2026-08-31 04:20:
+    the nightly vacuum + whisper warm blocked the loop ~2.5 min; the
+    health checks timed out; keepalive's restart couldn't bind, and only
+    the hang clearing itself saved the morning). Clear the port first:
+    by the time keepalive has decided to restart, the holder is always
+    our own broken server."""
+    try:
+        out = subprocess.run(["netstat", "-ano"], capture_output=True,
+                             text=True, timeout=15).stdout
+        for pid in _pids_from_netstat(out):
+            subprocess.run(["taskkill", "/F", "/PID", pid],
+                           capture_output=True, timeout=15)
+    except Exception:  # noqa: BLE001 — best effort; restart proceeds anyway
+        pass
+
+
 def _restart_server() -> None:
+    _kill_port_holder()
     venv_python = ROOT / ".venv" / "Scripts" / "python.exe"
     if not venv_python.exists():
         venv_python = Path(sys.executable)
