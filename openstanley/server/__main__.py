@@ -1509,13 +1509,19 @@ def _smart_slots_calendar(horizon_days: int = 14) -> dict:
 def _cal_item(d: dict, state: str) -> dict:
     meta = d.get("meta") or {}
     alg = meta.get("alg") or {}
+    reply_to = None
+    if d.get("kind") == "reply":
+        author = (meta.get("author") or meta.get("reply_to_author")
+                  or meta.get("target_author") or "")
+        reply_to = {"x_id": meta.get("reply_to_x_id"), "author": author}
     return {"id": d["id"], "kind": d.get("kind") or "post", "state": state,
             "text": d["text"], "scheduled_at": d.get("scheduled_at"),
             "published_at": d.get("published_at"),
             "time": (d.get("scheduled_at") or d.get("published_at") or "T")[11:16],
             "image": d.get("image"), "score": alg.get("score"),
             "language": meta.get("language") or "en",
-            "scheduled_reason": meta.get("scheduled_reason")}
+            "scheduled_reason": meta.get("scheduled_reason"),
+            "reply_to": reply_to}
 
 
 def _empty_slots(by_date) -> dict:

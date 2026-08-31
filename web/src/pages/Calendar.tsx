@@ -119,21 +119,33 @@ interface DragPayload {
   time?: string;
 }
 
-// ---------------- post card inside a slot ----------------
+// ---------------- shared detail popover (calendar slot + queue draft) ----------------
 
-function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => void }) {
+interface DetailItem {
+  id: number;
+  kind?: string;
+  state?: string;
+  text: string;
+  scheduled_at?: string | null;
+  scheduled_reason?: string | null;
+  language?: string | null;
+  score?: number | null;
+  image?: string | null;
+  time?: string;
+  reply_to?: { x_id?: string | null; author?: string } | null;
+}
+
+function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: () => void; onClose?: () => void }) {
   const { t, lang } = useApp();
-  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(item.text);
+  const [text, setText] = useState(it.text);
   const [busy, setBusy] = useState(false);
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
 
   const saveEdit = (): void => {
     void (async () => {
       setBusy(true);
       try {
-        await apiPost(`drafts/${item.id}/edit`, { text });
+        await apiPost(`drafts/${it.id}/edit`, { text });
         toast.success(t('calendar.editedToast'));
         setEditing(false);
         onChanged?.();
@@ -149,9 +161,9 @@ function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => v
     void (async () => {
       setBusy(true);
       try {
-        const r = await apiPost<{ ok: boolean; url?: string; x_id?: string }>(`drafts/${item.id}/publish`, {});
+        const r = await apiPost<{ ok: boolean; url?: string }>(`drafts/${it.id}/publish`, {});
         toast.success(t('calendar.publishedToast'));
-        setOpen(false);
+        onClose?.();
         onChanged?.();
         if (r.url) window.open(r.url, '_blank', 'noopener');
       } catch (err) {
@@ -163,13 +175,94 @@ function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => v
   };
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        if (!o) setEditing(false);
-      }}
-    >
+    <PopoverContent className="w-96 max-h-[70vh] overflow-y-auto">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        {it.state ? <Badge variant={it.state === 'published' ? 'green' : 'default'}>{it.state}</Badge> : null}
+        {it.kind ? <Badge>{it.kind}</Badge> : null}
+        {typeof it.score === 'number' ? <Badge>{t('calendar.itemScore', { n: it.score })}</Badge> : null}
+        {it.language ? <Badge>{it.language}</Badge> : null}
+        <span className="ms-auto font-mono text-[10.5px] text-ink-3">#{it.id}</span>
+      </div>
+
+      {it.reply_to?.author ? (
+        <p className="mb-2 rounded-lg border border-line bg-inset px-2 py-1.5 text-[11.5px] text-ink-2">
+          <span className="font-medium">{t('calendar.replyTo')}:</span> @{it.reply_to.author}
+        </p>
+      ) : null}
+
+      {editing ? (
+        <div className="flex flex-col gap-2">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            dir={hasArabic(text) ? 'rtl' : 'ltr'}
+            rows={Math.min(14, Math.max(4, Math.ceil(text.length / 48)))}
+            className="w-full resize-y rounded-lg border border-line bg-field px-2.5 py-2 text-[13.5px] leading-relaxed text-ink"
+          />
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[10.5px] text-ink-3">{text.length}</span>
+            <Button size="sm" disabled={busy || !text.trim()} onClick={saveEdit}>
+              {t('common.save')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setText(it.text); }}>
+              {t('common.cancel')}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div dir={hasArabic(it.text) ? 'rtl' : 'ltr'} className="whitespace-pre-wrap text-[13.5px] leading-relaxed">
+          {it.text}
+        </div>
+      )}
+
+      {it.scheduled_reason && !editing ? (
+        <p className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-line bg-inset px-2 py-1.5 text-[11.5px] leading-relaxed text-ink-2">
+          <Sparkles size={11} className="mt-0.5 shrink-0" />
+          <span>
+            <span className="font-medium">{t('calendar.whySlot')}:</span> {it.scheduled_reason}
+          </span>
+        </p>
+      ) : null}
+
+      {it.scheduled_at ? (
+        <div className="mt-2 font-mono text-[11px] text-muted">
+          {new Date(it.scheduled_at).toLocaleString(lang === 'ar' ? 'ar' : 'en-GB', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex items-center gap-2">
+        {it.state !== 'published' ? (
+          <Button size="sm" disabled={busy} onClick={publishNow}>
+            <Send size={12} className="me-1" />
+            {t('calendar.publishNow')}
+          </Button>
+        ) : null}
+        {!editing ? (
+          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+            <Pencil size={12} className="me-1" />
+            {t('common.edit')}
+          </Button>
+        ) : null}
+      </div>
+    </PopoverContent>
+  );
+}
+
+// ---------------- post card inside a slot ----------------
+
+function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => void }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <div
           ref={setNodeRef}
@@ -192,8 +285,14 @@ function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => v
               )}
             />
             <span className="font-mono text-[10px] uppercase tracking-wide text-ink-3">{item.kind}</span>
+            {item.reply_to?.author ? (
+              <span className="truncate font-mono text-[10px] text-ink-3">↩ @{item.reply_to.author}</span>
+            ) : null}
             {item.image ? <span className="font-mono text-[10px] text-ink-3">· 🖼</span> : null}
-            <span className="ms-auto font-mono text-[10px] text-ink-3">{item.score}</span>
+            <span className="ms-auto flex items-center gap-1.5 font-mono text-[10px] text-ink-3">
+              {item.time}
+              {typeof item.score === 'number' ? <span>{item.score}</span> : null}
+            </span>
           </div>
           <p
             dir={hasArabic(item.text) ? 'rtl' : 'ltr'}
@@ -203,74 +302,7 @@ function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => v
           </p>
         </div>
       </PopoverAnchor>
-      <PopoverContent className="w-96 max-h-[70vh] overflow-y-auto">
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          <Badge variant={item.state === 'published' ? 'green' : 'default'}>{item.state}</Badge>
-          <Badge>{item.kind}</Badge>
-          <Badge>{t('calendar.itemScore', { n: item.score })}</Badge>
-          {item.language ? <Badge>{item.language}</Badge> : null}
-          <span className="ms-auto font-mono text-[10.5px] text-ink-3">#{item.id}</span>
-        </div>
-
-        {editing ? (
-          <div className="flex flex-col gap-2">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              dir={hasArabic(text) ? 'rtl' : 'ltr'}
-              rows={Math.min(14, Math.max(4, Math.ceil(text.length / 48)))}
-              className="w-full resize-y rounded-lg border border-line bg-field px-2.5 py-2 text-[13.5px] leading-relaxed text-ink"
-            />
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10.5px] text-ink-3">{text.length}</span>
-              <Button size="sm" disabled={busy || !text.trim()} onClick={saveEdit}>
-                {t('common.save')}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setText(item.text); }}>
-                {t('common.cancel')}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div dir={hasArabic(item.text) ? 'rtl' : 'ltr'} className="whitespace-pre-wrap text-[13.5px] leading-relaxed">
-            {item.text}
-          </div>
-        )}
-
-        {item.scheduled_reason && !editing ? (
-          <p className="mt-2.5 flex items-start gap-1.5 rounded-lg border border-line bg-inset px-2 py-1.5 text-[11.5px] leading-relaxed text-ink-2">
-            <Sparkles size={11} className="mt-0.5 shrink-0" />
-            <span>
-              <span className="font-medium">{t('calendar.whySlot')}:</span> {item.scheduled_reason}
-            </span>
-          </p>
-        ) : null}
-
-        <div className="mt-2 font-mono text-[11px] text-muted">
-          {new Date(item.scheduled_at).toLocaleString(lang === 'ar' ? 'ar' : 'en-GB', {
-            weekday: 'short',
-            day: '2-digit',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          {item.state !== 'published' ? (
-            <Button size="sm" disabled={busy} onClick={publishNow}>
-              <Send size={12} className="me-1" />
-              {t('calendar.publishNow')}
-            </Button>
-          ) : null}
-          {!editing ? (
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-              <Pencil size={12} className="me-1" />
-              {t('common.edit')}
-            </Button>
-          ) : null}
-        </div>
-      </PopoverContent>
+      {open ? <PostDetail it={item} onChanged={onChanged} onClose={() => setOpen(false)} /> : null}
     </Popover>
   );
 }
@@ -457,29 +489,45 @@ function DayColumn({
 
 // ---------------- queue rail ----------------
 
-function QueueCard({ draft }: { draft: Draft }) {
+function QueueCard({ draft, onChanged }: { draft: Draft; onChanged?: () => void }) {
   const { t } = useApp();
+  const [open, setOpen] = useState(false);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `q-${draft.id}` });
   return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      title={t('calendar.queueDrag')}
-      className={cn(
-        'cursor-grab select-none rounded-xl border border-line bg-surface px-3 py-2 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
-        isDragging && 'opacity-30',
-      )}
-    >
-      <div className="mb-1 flex items-center gap-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-wide text-ink-3">{draft.kind}</span>
-        {draft.image ? <span className="font-mono text-[10px] text-ink-3">· 🖼</span> : null}
-        <span className="ms-auto font-mono text-[10px] text-ink-3">#{draft.id}</span>
-      </div>
-      <p dir={hasArabic(draft.text) ? 'rtl' : 'ltr'} className="line-clamp-3 text-[13px] leading-snug text-base/90">
-        {draft.text}
-      </p>
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <div
+          ref={setNodeRef}
+          {...attributes}
+          {...listeners}
+          onClick={() => {
+            if (Date.now() - lastDragEnd.at > 180) setOpen(true);
+          }}
+          title={t('calendar.queueDrag')}
+          className={cn(
+            'cursor-grab select-none rounded-xl border border-line bg-surface px-3 py-2 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
+            isDragging && 'opacity-30',
+          )}
+        >
+          <div className="mb-1 flex items-center gap-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-wide text-ink-3">{draft.kind}</span>
+            {draft.image ? <span className="font-mono text-[10px] text-ink-3">· 🖼</span> : null}
+            <span className="ms-auto font-mono text-[10px] text-ink-3">#{draft.id}</span>
+          </div>
+          <p dir={hasArabic(draft.text) ? 'rtl' : 'ltr'} className="line-clamp-3 text-[13px] leading-snug text-base/90">
+            {draft.text}
+          </p>
+        </div>
+      </PopoverAnchor>
+      {open ? (
+        <PostDetail
+          it={{ id: draft.id, kind: draft.kind, state: draft.status, text: draft.text,
+                scheduled_at: draft.scheduled_at, language: draft.language, image: draft.image }}
+          onChanged={onChanged}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </Popover>
   );
 }
 
@@ -808,7 +856,7 @@ export function CalendarPage() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {queue.map((d) => (
-                      <QueueCard key={d.id} draft={d} />
+                      <QueueCard key={d.id} draft={d} onChanged={load} />
                     ))}
                   </div>
                 )}
