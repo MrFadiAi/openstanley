@@ -1255,8 +1255,29 @@ def test_voice_model_accuracy_defaults(monkeypatch):
     initial_prompt."""
     import inspect
     from openstanley.gen import voice_notes as vn
-    assert vn.model_name() == "medium"
+    assert vn.model_name() == "large-v3-turbo"
     monkeypatch.setenv("OPENSTANLEY_WHISPER_MODEL", "large-v3")
     assert vn.model_name() == "large-v3"
     src = inspect.getsource(vn.transcribe)
     assert "beam_size=5" in src and "initial_prompt" in src
+
+
+def test_voice_repair_dialect_pass(monkeypatch):
+    """Whisper normalizes Iraqi speech toward MSA. One constrained LLM
+    pass restores the dialect; a hallucinating repair (wrong length) or
+    an LLM failure falls back to the raw transcript."""
+    from openstanley.core.config import Config
+    import openstanley.gen.voice_notes as vmod
+    import openstanley.gen.llm as llm_mod
+    calls = []
+    def fake_llm(cfg, system, user, temperature=None, json_mode=False,
+                 retries=2):
+        calls.append(user)
+        if "GOODCASE" in user:
+            return "شنو صار هسه بالكريبتو"
+        return "word " * 500  # runaway repair
+    monkeypatch.setattr(llm_mod, "chat", fake_llm)
+    good = vmod.repair_dialect("GOODCASE ماذا يحدث الآن في العملات", Config())
+    assert good == "شنو صار هسه بالكريبتو"
+    runaway = vmod.repair_dialect("short raw text " * 3, Config())
+    assert runaway.startswith("short raw text")  # fallback keeps raw

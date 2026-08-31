@@ -33,10 +33,11 @@ INITIAL_PROMPT = (
 
 
 def model_name() -> str:
-    """Which whisper size to load. medium by default — the accuracy jump
-    over tiny for Arabic dialects is massive; still fine on CPU (int8).
-    Set OPENSTANLEY_WHISPER_MODEL=small|large-v3|... to trade."""
-    return os.environ.get("OPENSTANLEY_WHISPER_MODEL", "medium")
+    """Which whisper size to load. large-v3-turbo by default — near
+    large-v3 accuracy at small-model speed (owner twice: 'the voice to
+    text is so bad' → tiny was hopeless for Iraqi Arabic; medium helped;
+    turbo is the ceiling before pure large-v3). Env-tunable."""
+    return os.environ.get("OPENSTANLEY_WHISPER_MODEL", "large-v3-turbo")
 
 
 def _get_model():
@@ -68,3 +69,37 @@ def transcribe(audio_bytes: bytes, lang: str | None = None) -> str:
         return ""
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+REPAIR_SYSTEM = (
+    "You repair RAW whisper transcripts of IRAQI ARABIC dialect "
+    "code-switched with English (crypto/AI topics). Fix ONLY transcription "
+    "artifacts: whisper normalizes Iraqi speech into stiff Modern Standard "
+    "Arabic — restore the dialect words the speaker actually said (شنو، "
+    "هسه، اكو، ماكو، خوش، هيج، سوة، دلة...), rejoin broken word splits, fix "
+    "punctuation, keep English tech terms as spoken. NEVER translate, NEVER "
+    "add or drop content, NEVER answer or continue the message, NEVER "
+    "'improve' the ideas. If a word is uncertain keep the original. "
+    "Output ONLY the repaired transcript, nothing else.")
+
+
+def repair_dialect(text: str, cfg) -> str:
+    """One LLM pass to undo whisper's MSA bias on Iraqi speech. Failure →
+    the raw transcript unchanged (repair is an enhancement, never a
+    dependency)."""
+    if not text.strip():
+        return text
+    from .llm import chat as llm_chat
+    from .llm import LLMError
+    try:
+        out = llm_chat(cfg.llm, system=REPAIR_SYSTEM,
+                       user=f"RAW TRANSCRIPT:\n{text}\n\nRepaired:",
+                       temperature=0.1)
+        out = out.strip().strip('"')
+        # sanity: the repair must stay near the source length — a repair
+        # that doubles or halves the text invented or lost content
+        if out and 0.4 <= len(out) / max(1, len(text)) <= 2.5:
+            return out
+        return text
+    except LLMError:
+        return text

@@ -1399,6 +1399,8 @@ def _handle_voice(cfg: Config, chat_id: int, msg: dict) -> None:
         except Exception:  # noqa: BLE001 — cosmetic
             pass
         text = vn.transcribe(fr.content)
+        # one LLM pass un-normalizes whisper's MSA bias back to Iraqi
+        text = vn.repair_dialect(text, cfg) or text
     except Exception as e:  # noqa: BLE001
         db.log("telegram", f"voice download failed: {_scrub(str(e), token)}",
                level="warn")
