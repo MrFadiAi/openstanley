@@ -365,7 +365,8 @@ def _followup(cfg: Config, reply: str, tool_results: list[dict],
     # original ask was a draft/edit, this turn WRITES THE POST grounded in
     # the tool results — report mode stays for informational asks
     if looks_like_draft_request(orig_request or ""):
-        ddata = dataclasses.replace(cfg.llm, temperature=0.8, max_tokens=4000)
+        ddata = dataclasses.replace(cfg.llm, temperature=0.8,
+                                    max_tokens=max(cfg.llm.max_tokens, 4000))
         duser = ("The user's request:" + chr(10) + orig_request[:600] + chr(10) * 2
                  + "Your earlier reply:" + chr(10) + reply[:400] + chr(10) * 2
                  + "The tools ran with REAL results (your research):" + chr(10)
@@ -388,7 +389,8 @@ def _followup(cfg: Config, reply: str, tool_results: list[dict],
     # SEE/LIST items and the tool returned them, this turn RENDERS THE
     # ITEMS, not a summary of them.)
     if _wants_items_rendered(orig_request or ""):
-        sdata = dataclasses.replace(cfg.llm, temperature=0.4, max_tokens=4000)
+        sdata = dataclasses.replace(cfg.llm, temperature=0.4,
+                                    max_tokens=max(cfg.llm.max_tokens, 4000))
         suser = ("The user asked:" + chr(10) + orig_request[:400] + chr(10) * 2
                  + "The tools ran with REAL results:" + chr(10)
                  + json.dumps(tool_results, ensure_ascii=False, default=str)[:3500]
@@ -430,7 +432,8 @@ def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -
     """One-shot OpenStanley reply (non-streaming path). Synchronous (LLM call)."""
     db.add_chat_message("user", user_message)
     llm_cfg = dataclasses.replace(cfg.llm, temperature=_llm_temperature(),
-                                  max_tokens=4000)  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number
+                                  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number. 4000 was better but STILL starves thinking-heavy turns (live 2026-08-31 17:23: quote turn, zero text): honor the configured budget with a floor
+                                  max_tokens=max(cfg.llm.max_tokens, 4000))
     system = _system(cfg, user_message)
     try:
         reply = llm_chat(llm_cfg, system=system, user=_history_turn(user_message))
@@ -473,7 +476,8 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
     yield {"type": "thinking_steps", "steps": trace["steps"],
            "chunks": trace["chunks"]}
     llm_cfg = dataclasses.replace(cfg.llm, temperature=_llm_temperature(),
-                                  max_tokens=4000)  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number
+                                  # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number. 4000 was better but STILL starves thinking-heavy turns (live 2026-08-31 17:23: quote turn, zero text): honor the configured budget with a floor
+                                  max_tokens=max(cfg.llm.max_tokens, 4000))
     system = _system(cfg, user_message)
     full = []
     try:

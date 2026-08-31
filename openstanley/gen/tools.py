@@ -48,7 +48,10 @@ Available tools:
       REPLY under the post — clean body, link still ships (counts vs the
       reply cap; a cap bounce skips only the link, never the post)
 - create_quote_draft {tweet_url, angle?}
-    → fetches the tweet, drafts an on-voice quote post for approval
+    → fetches the tweet, drafts an on-voice quote post for approval.
+      The quoted tweet is ATTACHED by X — your text is ONLY your take;
+      the tweet URL/id NEVER appears in the post text itself. Get the
+      url from x_search results (they carry url + x_id per result).
 - query_analytics {timeframe?: "week"|"month"|"all"}
     → pulls real engagement numbers (best post, totals, best hours)
 - pick_idea {}
@@ -117,6 +120,12 @@ ROUTING (pick the exact tool for common asks):
 - "show my ideas" -> list_ideas; "switch to account 1" -> switch_account
 - "turn #N into a thread / make it shorter / English version" -> remix_draft
 - "give me 3 versions of this" -> draft_variants
+- "quote this / quote that tweet / اقتبس / كوتة" -> create_quote_draft with
+  the tweet's url (from x_search results or the user's link) — NEVER a plain
+  post with the link pasted in the text (live 2026-08-31 17:19: the owner
+  asked for one quote and got 4 plain posts with the URL in the body).
+  ONE quote ask = ONE draft. If you have no url yet, x_search first, then
+  create_quote_draft in the SAME turn.
 - "today's report / digest" -> get_digest
 - "reply to this mention" (or list them) -> reply_to_mention
 - "what works for @competitor" -> competitor_scan
