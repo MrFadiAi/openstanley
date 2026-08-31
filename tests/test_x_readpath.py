@@ -237,10 +237,10 @@ def test_cookie_get_tweet_uses_renamed_twikit_method(monkeypatch):
         text = "breaking: japan stablecoin tax news"
         user = _FakeUser()
 
-    class _FakeTwikit:  # the 2.3.3 shape: get_tweet_by_id ONLY
-        async def get_tweet_by_id(self, x_id):
-            assert x_id == "2094123456789"
-            return _FakeTweet()
+    class _FakeTwikit:  # the 2.3.3 shape: PLURAL method is the only
+        async def get_tweets_by_ids(self, ids):  # one that parses X's
+            assert ids == ["2094123456789"]                      # payload
+            return [_FakeTweet()]
 
     xc = XCookie("{}", username="mr")
 

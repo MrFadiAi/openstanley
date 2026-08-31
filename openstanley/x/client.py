@@ -385,11 +385,21 @@ class XCookie(XClient):
     async def get_tweet(self, x_id: str) -> dict:
         c = await self._ensure()
         await self._throttle_reads()
-        # twikit 2.x renamed get_tweet → get_tweet_by_id (live 2026-08-31:
-        # the owner's 'quote it' died with "'Client' object has no
-        # attribute 'get_tweet'" — no tweet could ever be fetched)
-        fetch = getattr(c, "get_tweet_by_id", None) or getattr(c, "get_tweet")
-        t = await fetch(x_id)
+        # twikit 2.3.3 minefield (live 2026-08-31, 'quote it' failed twice):
+        # the old get_tweet name is gone ('Client' object has no attribute),
+        # and the renamed get_tweet_by_id crashes inside twikit itself on
+        # X's current payload (KeyError 'itemContent'). The PLURAL
+        # get_tweets_by_ids parses fine (live-verified) — prefer it, keep
+        # the singulars as fallback for version drift.
+        t = None
+        if hasattr(c, "get_tweets_by_ids"):
+            res = await c.get_tweets_by_ids([x_id])
+            t = res[0] if res else None
+        else:
+            fetch = getattr(c, "get_tweet_by_id", None) or getattr(c, "get_tweet")
+            t = await fetch(x_id)
+        if not t:
+            return {"x_id": x_id, "text": "", "author": ""}
         author = getattr(getattr(t, "user", None), "screen_name", "")
         return {"x_id": t.id, "text": t.text, "author": author}
 
