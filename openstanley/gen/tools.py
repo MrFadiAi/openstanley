@@ -482,9 +482,28 @@ def _tool_web_search(cfg, query: str = "", limit: int = 6) -> dict:
     return {"ok": True, "results": res}
 
 
+def _bounded(seconds: float, fn, *a, **kw):
+    """Run fn under a wall-clock cap. A hung/slow X read must fail FAST so
+    the model can fall back to web search instead of burning the 300s chat
+    turn (live 2026-09-01: two trends turns stalled to the handler cap)."""
+    import concurrent.futures as _cf
+    ex = _cf.ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(fn, *a, **kw)
+    try:
+        return fut.result(timeout=seconds)
+    except _cf.TimeoutError:
+        return None
+    finally:
+        ex.shutdown(wait=False)  # never join a possibly-hung worker
+
+
 def _tool_x_search(cfg, query: str = "", limit: int = 10) -> dict:
     from . import websearch
-    res = websearch.x_search(cfg, query, limit=int(limit))
+    res = _bounded(45, websearch.x_search, cfg, query, int(limit))
+    if res is None:
+        return {"ok": False,
+                "error": "x_search timed out (45s) — X reads are flaky "
+                         "right now; use web_search for this turn instead"}
     out = []
     for p in res:
         url = p.get("url") or ""
@@ -505,7 +524,12 @@ def _tool_x_search(cfg, query: str = "", limit: int = 10) -> dict:
 
 def _tool_x_trends(cfg, limit: int = 10) -> dict:
     from . import websearch
-    return {"ok": True, "trends": websearch.x_trends(cfg, limit=int(limit))}
+    res = _bounded(45, websearch.x_trends, cfg, int(limit))
+    if res is None:
+        return {"ok": False,
+                "error": "x_trends timed out (45s) — X reads are flaky "
+                         "right now; use web_search for this turn instead"}
+    return {"ok": True, "trends": res}
 
 
 _TREND_POST_SYSTEM = (
