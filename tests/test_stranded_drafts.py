@@ -91,3 +91,33 @@ def test_tg_approve_explains_cross_account(monkeypatch):
     assert "ACCOUNT 1" in msg_r, msg_r
     with db.connect() as c:
         c.execute("DELETE FROM drafts WHERE id=?", (did,))
+
+
+def test_eleventh_stranded_still_alerts(monkeypatch):
+    """Live 2026-08-31 13:00: #2433 came due and NEVER alerted — the
+    LIMIT 10 window returned the 10 oldest due drafts (all already in the
+    dedupe set), so 'fresh' was empty forever. The window must dwarf the
+    dedupe set or new stragglers are starved out."""
+    _ensure_accounts(1, 2)
+    db.set_active_account(2)
+    db.set_setting("stranded_alerted", [])
+    sent = []
+    import openstanley.integrations.telegram as tg
+    monkeypatch.setattr(tg, "is_enabled", lambda: True)
+    monkeypatch.setattr(tg, "notify_bg", lambda text: sent.append(text))
+    a = Agent.__new__(Agent)
+    # 11 due approved drafts, oldest first — the 10 oldest get alerted on
+    # pass one, the 11th MUST still surface on pass two
+    ids = [_mk_due(1, past_min=600 - i) for i in range(11)]
+    try:
+        a._alert_stranded(2)
+        assert len(sent) == 1  # one batched alert, capped at 10 drafts/pass
+        assert f"#{ids[9]}" in sent[0] and f"#{ids[10]}" not in sent[0]
+        a._alert_stranded(2)
+        assert len(sent) == 2, "the 11th stranded draft must alert on pass two"
+        assert f"#{ids[10]}" in sent[1], (ids, sent[1])
+    finally:
+        with db.connect() as c:
+            c.execute("DELETE FROM drafts WHERE id IN (%s)"
+                      % ",".join("?" * len(ids)), ids)
+        db.set_setting("stranded_alerted", [])

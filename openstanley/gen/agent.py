@@ -464,17 +464,22 @@ class Agent:
         from datetime import datetime as _dt
         try:
             with db.connect() as c:
+                # LIMIT window must dwarf the dedupe set: with 11 due
+                # drafts and LIMIT 10, the 10 oldest (all already alerted)
+                # filled the window forever and the 11th could NEVER enter
+                # (live 2026-08-31: #2433 sat due and silent past 13:00
+                # while #2428 — exactly 10th at 09:00 — had fired fine)
                 rows = c.execute(
                     "SELECT id, account_id, scheduled_at FROM drafts "
                     "WHERE status='approved' AND account_id != ? "
-                    "AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 10",
+                    "AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 50",
                     (acct, _dt.now().isoformat(timespec="seconds"))).fetchall()
             stranded = {int(r["id"]): dict(r) for r in rows}
             if not stranded:
                 db.set_setting("stranded_alerted", [])
                 return
             already = set(db.get_setting("stranded_alerted") or [])
-            fresh = [d for i, d in stranded.items() if i not in already]
+            fresh = [d for i, d in stranded.items() if i not in already][:10]
             if not fresh:
                 return
             db.log("publish", f"{len(fresh)} DUE approved draft(s) stranded on "
@@ -496,8 +501,12 @@ class Agent:
             except Exception as e:  # noqa: BLE001 — alert delivery is best-effort
                 db.log("publish", f"stranded alert delivery failed: {e}",
                        level="warn")
+            # mark ONLY the alerted ones — the old `set(stranded)` marked
+            # every fetched draft, so drafts beyond the 10/pass cap were
+            # silently swallowed into the dedupe set without ever being
+            # told (live 2026-08-31: #2433, due 13:00, zero alerts)
             db.set_setting("stranded_alerted",
-                           sorted(already | set(stranded)))
+                           sorted(already | {d["id"] for d in fresh}))
         except Exception as e:  # noqa: BLE001 — never break the publish loop
             db.log("publish", f"stranded check failed: {e}", level="warn")
 
