@@ -80,7 +80,11 @@ def build_strategy(cfg: Config, force: bool = False) -> dict:
     if existing and not force:
         return existing
     import dataclasses
-    llm_cfg = dataclasses.replace(cfg.llm, temperature=0.6, max_tokens=1800)
+    # 1800 starved GLM's thinking phase — empty reply, RuntimeError, HTTP
+    # 500, and the Strategy page showed nothing after 30-40s of waiting
+    # (live 2026-09-01: the same starvation class fixed across chat/TG)
+    llm_cfg = dataclasses.replace(cfg.llm, temperature=0.6,
+                                  max_tokens=max(cfg.llm.max_tokens, 4000))
     prompt = PROMPT.replace("{data}", _account_data())
     try:
         text = llm_chat(llm_cfg, system="You are OpenStanley, an AI Head of Content.", user=prompt)
