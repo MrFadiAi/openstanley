@@ -1223,6 +1223,8 @@ def approve_draft_tg(cfg: Config, draft_id: int) -> str:
     if reason:
         meta["scheduled_reason"] = reason
     db.update_draft(draft_id, status="approved", scheduled_at=sched, meta_json=meta)
+    from ..gen import brain as _brain
+    _brain.note_outcome(draft_id, True)  # cited rules strengthen
     db.log("telegram", f"draft {draft_id} approved from TG → {sched}")
     return (f"✅ Draft #{draft_id} approved — scheduled "
             f"{sched[:16].replace('T', ' ')}\n({reason})")

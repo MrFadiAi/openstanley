@@ -177,6 +177,8 @@ def _draft_meta(idea: dict, draft: dict, lang: str) -> dict:
     meta = {"idea_title": idea.get("title", ""), "idea_angle": idea.get("angle", ""),
             "format": idea.get("format", "one-liner"), "source": idea.get("source", ""),
             "language": detect(draft["text"])}
+    if draft.get("rules_cited"):
+        meta["rules_cited"] = draft["rules_cited"]
     if draft.get("quote"):
         meta["quote"] = draft["quote"]
     if draft.get("voice_lock"):
@@ -262,13 +264,16 @@ Temperature intent: {temp} — {'play it straight, highest fidelity to voice' if
 QUOTED TWEET (your post is the comment above it):
 @{quote.get('author', '?')}: {quote.get('text', '')[:240]}"""
     user += "\n\nWrite the post now."
-    system = brain_mod.brain_context(task_text=(
-        f"{idea.get('title', '')} {idea.get('angle', '')} "
-        f"{(quote or {}).get('text', '')}")) + "\n\n" + \
+    _task = (f"{idea.get('title', '')} {idea.get('angle', '')} "
+             f"{(quote or {}).get('text', '')}")
+    system = brain_mod.brain_context(task_text=_task) + "\n\n" + \
         DRAFT_SYSTEM.format(voice=voice, algo=ALGO_PROMPT_BLOCK)
+    # stamp the rules that shaped this draft — the outcome-scored loop:
+    # approve/reject feeds back onto exactly these rule-ids
+    _cited = [f"R{r['id']}" for r in brain_mod.rules_for_task(_task)]
     raw = chat(cfg.llm, system, user, temperature=t, json_mode=True)
     data = extract_json(raw)
-    out: dict = {"image": image}
+    out: dict = {"image": image, "rules_cited": _cited}
     if quote:
         out["quote"] = quote
         out["kind"] = "quote"

@@ -69,6 +69,8 @@ def approve_draft(cfg: Config, draft_id: int = 0, when: str = "") -> dict:
                  slots_mod.taken_slots())[0] if base else
                  datetime.now().isoformat(timespec="seconds"))
     db.update_draft(draft_id, status="approved", scheduled_at=sched)
+    from . import brain as _brain
+    _brain.note_outcome(int(draft_id), True)  # rules cited in it strengthen
     db.log("chat", f"draft {draft_id} approved via agent tool -> {sched}")
     return {"ok": True, "draft_id": draft_id, "scheduled_at": sched}
 

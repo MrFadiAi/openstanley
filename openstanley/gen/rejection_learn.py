@@ -46,6 +46,11 @@ def record_rejection(draft_id: int, reason: str = "owner", via: str = "web",
     meta["rejected_via"] = via
     meta["rejected_at"] = datetime.now().isoformat(timespec="seconds")
     db.update_draft(draft_id, acct=acct, meta_json=meta)
+    try:
+        from . import brain as _brain
+        _brain.note_outcome(int(draft_id), False)  # cited rules logged
+    except Exception:  # noqa: BLE001 — never block a rejection
+        pass
 
 
 def _rejected(acct: Optional[int] = None, limit: int = 60) -> list[dict]:

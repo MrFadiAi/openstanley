@@ -456,6 +456,68 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
+def rules_for_task(task_text: str, acct: int | None = None) -> list[dict]:
+    """The rules a prompt for THIS task would carry — the same selection
+    brain_context uses, exposed so callers can stamp the draft's meta
+    with the rule-ids that shaped it (the outcome-scored loop)."""
+    all_rules = [r for r in parse_rules(read("rules", acct))
+                 if r["status"] == "active"
+                 and r["source"] != "directive"
+                 and r["text"].lower().find("baseline") == -1]
+    return (_task_relevant(all_rules, task_text, 12) if task_text.strip()
+            else list(reversed(all_rules))[:12])
+
+
+def note_outcome(draft_id: int, approved: bool, acct: int | None = None) -> None:
+    """THE CLOSED LOOP (owner 2026-09-01: 'fix the weak side'): the brain
+    learns from the owner's actual decisions, not just observations.
+
+    - APPROVED: every rule cited in that draft's meta refreshes its seen
+      date — the strongest reaffirmation signal that exists here.
+    - REJECTED: an experiment-log line records which cited rules were
+      present in a refused draft (reflections mine the pattern; nothing
+      is destroyed on a single rejection).
+    """
+    try:
+        d = db.get_draft(draft_id, acct=acct)
+        if not d:
+            return
+        cited = (d.get("meta") or {}).get("rules_cited") or []
+        if not cited:
+            return
+        if approved:
+            rules = parse_rules(read("rules", acct))
+            touched = False
+            out = ["# Learned Rules\n"]
+            for r in rules:
+                if r["status"] == "active" and f"R{r['id']}" in cited:
+                    r = dict(r, last_seen=datetime.now().date().isoformat())
+                    touched = True
+                out.append(render_rule(r))
+            if touched:
+                _atomic_write(_resolve("rules", acct), "\n".join(out) + "\n")
+                journal_append("outcome", f"owner APPROVED #{draft_id} — "
+                               f"refreshed {len(cited)} cited rule(s): "
+                               f"{', '.join(cited)}", acct=acct)
+        else:
+            p = _resolve("strategies", acct)
+            txt = p.read_text(encoding="utf-8")
+            line = (f"- {datetime.now().date().isoformat()} · rule check — "
+                    f"cited {', '.join(cited)} were in REJECTED draft "
+                    f"#{draft_id} (owner refused it)")
+            marker = "## Experiment log"
+            if marker in txt:
+                txt = txt.replace(marker, marker + "\n" + line, 1)
+            else:
+                txt = txt.rstrip() + f"\n\n{marker}\n{line}\n"
+            _atomic_write(p, txt)
+            journal_append("outcome", f"owner REJECTED #{draft_id} — cited "
+                           f"rules logged for pattern mining", acct=acct)
+    except Exception as e:  # noqa: BLE001 — the loop never breaks approvals
+        db.log("brain", f"note_outcome failed for #{draft_id}: {e}",
+               level="warn")
+
+
 def _task_relevant(rules: list[dict], task_text: str, k: int) -> list[dict]:
     """Rank active rules by relevance to the CURRENT task (the field's
     retrieval-over-injection pattern — Mem0's fused scoring uses BM25 +
@@ -801,15 +863,31 @@ def _forgetting_sweep(acct: int | None, changes: list[str]) -> None:
         seen = _date.fromisoformat(r["last_seen"] or r["date"])
         age = (today - seen).days
         verdict = None
-        # subsumed by a NEWER active rule?
+        # subsumed / contradicted by a NEWER active rule?
         rt = _toks(r["text"])
         for newer in actives:
             if newer["id"] <= r["id"] or newer["source"] == "directive":
                 continue
             nt = _toks(newer["text"])
-            if rt and nt and len(rt & nt) / len(rt | nt) >= SUBSUME_OVERLAP:
+            if not rt or not nt:
+                continue
+            ov = len(rt & nt) / len(rt | nt)
+            if ov >= SUBSUME_OVERLAP:
                 verdict = f"subsumed by R{newer['id']}"
                 break
+            if ov >= 0.55:
+                old_pol = ("dont" if r["text"].lstrip().upper()
+                           .startswith(("DON'T", "DO NOT", "DONT"))
+                           else "do" if r["text"].lstrip().upper()
+                           .startswith("DO") else "")
+                new_pol = ("dont" if newer["text"].lstrip().upper()
+                           .startswith(("DON'T", "DO NOT", "DONT"))
+                           else "do" if newer["text"].lstrip().upper()
+                           .startswith("DO") else "")
+                if old_pol and new_pol and old_pol != new_pol:
+                    verdict = (f"contradicted by newer R{newer['id']} "
+                               f"(opposite polarity)")
+                    break
         # reaffirmed by the working theses?
         if verdict is None and f"R{r['id']}" in strat_txt:
             if age > DECAY_DAYS:

@@ -525,6 +525,8 @@ async def approve_draft(draft_id: int, body: DraftAction | None = None):
                     text=body.text or d["text"],
                     scheduled_at=sched,
                     meta_json=meta)
+    from ..gen import brain as _brain_mod
+    _brain_mod.note_outcome(draft_id, True)  # cited rules strengthen
     return {"ok": True, "scheduled_at": sched, "scheduled_reason": reason}
 
 
