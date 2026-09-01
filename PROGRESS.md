@@ -224,3 +224,4 @@
 2026-09-01 14:40 — QA iteration 71 (verified-clean; 592/592): HARD RULE ✓. Closed-loop brain deployed; clean pass, no errors, no chat.
 2026-09-01 15:30 — QA iteration 72 (verified-clean; 592/592): HARD RULE ✓. Live traffic healthy — the owner's 15:18 'long postcard' ask was correctly read as a long-form Premium post (the capability line doing its job). No errors. The outcome loop awaits its first real approval.
 2026-09-01 16:30 — QA iteration 73 (verified-clean; 592/592): HARD RULE ✓. Live discipline visible: the owner's Arabic ask for an AI×crypto post got a grounded refusal-to-invent ('لازم اشوف شنو صاير فعلا') before drafting — no hallucinated trends. Two transients (X search NotFound retry + reflect timeout), both handled classes.
+2026-09-01 17:30 — QA iteration 74 (verified-clean; 592/592): HARD RULE ✓. Quiet pass — no errors, no chat. Enhancement backlog presented to the owner (backups first, then rule-outcome visibility).
