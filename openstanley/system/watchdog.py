@@ -159,6 +159,22 @@ def allow_chat_draft() -> bool:
         return True
 
 
+def note_user_turn() -> None:
+    """A fresh inbound user message: the OWNER is present and asking.
+    Resets the chat-draft burst window — the guard exists to stop a
+    RUNAWAY agent (the 4-duplicate incident), and a human actively
+    requesting drafts is the opposite of a runaway. Live 2026-09-01
+    19:41: the owner's interactive long-post session got its drafts
+    blocked by saves from earlier in the same hour."""
+    with _lock:
+        st = _state()
+        st["chat_draft_times"] = []
+        if st.get("chat_draft_blocked"):
+            st["chat_draft_blocked"] = False
+            db.log("watchdog", "owner active — chat draft burst reset")
+        _save(st)
+
+
 def note_chat_draft() -> None:
     """A chat-born draft actually saved — feed the burst window."""
     with _lock:

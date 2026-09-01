@@ -159,3 +159,19 @@ def test_watchdog_state_survives_restart():
     st = db.get_setting("watchdog")
     assert st["chat_llm_degraded"] is True
     assert wd.status()["chat_llm"]["degraded"] is True
+
+
+def test_user_turn_resets_burst_guard():
+    """Live 2026-09-01 19:41: the owner's interactive session had drafts
+    blocked by saves from earlier the same hour. A fresh user message
+    proves the owner is present — the runaway guard resets; a true burst
+    (no user turns) still blocks."""
+    from openstanley.system import watchdog as wd
+    for _ in range(6):
+        wd.note_chat_draft()
+    assert wd.allow_chat_draft() is False      # burst trips
+    wd.note_user_turn()                         # owner speaks
+    assert wd.allow_chat_draft() is True        # reset
+    for _ in range(6):
+        wd.note_chat_draft()
+    assert wd.allow_chat_draft() is False       # runaway still caught

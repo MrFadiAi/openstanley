@@ -460,6 +460,8 @@ def chat_reply(cfg: Config, user_message: str, history: Optional[list] = None) -
 
 def _chat_reply_inner(cfg: Config, user_message: str,
                       history: Optional[list] = None) -> dict:
+    from ..system import watchdog as _wd
+    _wd.note_user_turn()  # owner present — burst guard resets
     db.add_chat_message("user", user_message)
     llm_cfg = dataclasses.replace(cfg.llm, temperature=_llm_temperature(),
                                   # 1200 starved GLM: thinking ate the whole budget before any text (stop_reason=max_tokens, zero deltas) — the entire 'agent not responding' day was this number. 4000 was better but STILL starves thinking-heavy turns (live 2026-08-31 17:23: quote turn, zero text): honor the configured budget with a floor
@@ -510,6 +512,8 @@ def chat_reply_stream(cfg: Config, user_message: str) -> Iterator[dict]:
 
 
 def _chat_reply_stream_inner(cfg: Config, user_message: str) -> Iterator[dict]:
+    from ..system import watchdog as _wd
+    _wd.note_user_turn()  # owner present — burst guard resets
     db.add_chat_message("user", user_message)
     trace = _context_trace(cfg)
     yield {"type": "thinking_steps", "steps": trace["steps"],

@@ -795,6 +795,8 @@ def _chat_reply_tg_stream_inner(cfg: Config, chat_id: int, user_message: str):
     from ..gen.llm import LLMError
 
     _remember(chat_id, "user", user_message)
+    from ..system import watchdog as _wd
+    _wd.note_user_turn()  # owner present — burst guard resets
     db.log("telegram", f"chat turn START chat={chat_id}")
     llm_cfg = dataclasses.replace(cfg.llm, temperature=chat_mod._llm_temperature(),
                                   # 1200 starved GLM (the 'agent not responding'
