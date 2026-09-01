@@ -43,6 +43,43 @@ QUEUE_DEEP = 12   # pending drafts at which create stops adding (user value:
                   # production must never outrun approval by 10x again)
 
 
+def draft_idea(cfg: Config, idea_id: int, acct: int | None = None) -> int:
+    """Draft EXACTLY this idea — the owner-direct 'Write' from the Ideas
+    page. The autonomous loop's queue-depth/precision gates stay for
+    loop runs; an explicit click always drafts (live 2026-09-01: 'Write'
+    fired the whole create loop, which skipped on a deep queue — 'queue
+    deep, skipping this round' — and the owner landed in an unchanged
+    inbox)."""
+    with db.connect() as c:
+        row = c.execute("SELECT * FROM ideas WHERE id=? AND account_id=?",
+                        (idea_id, db._acct(acct))).fetchone()
+    if not row:
+        raise LLMError(f"idea {idea_id} not found on this account")
+    idea = dict(row)
+    draft = _draft_one(cfg, idea, "bold")
+    if draft is None:
+        raise LLMError("voice lock rejected the draft — try again or tweak "
+                       "the idea angle")
+    image = draft.get("image")
+    if not image and draft.get("kind", "post") == "post" and not draft.get("thread"):
+        from . import quote_card
+        try:
+            image = quote_card.make_card(draft["text"])
+        except Exception:  # noqa: BLE001 — never lose a draft over art
+            image = None
+    did = db.add_draft(
+        text=draft["text"], idea_id=idea["id"],
+        kind=draft.get("kind", "post"),
+        thread=draft.get("thread"), temperature="bold",
+        image=image,
+        quote_of=(draft.get("quote") or {}).get("x_id") if draft.get("quote") else None,
+        meta=_draft_meta(idea, draft, detect(draft["text"])), acct=acct,
+    )
+    db.mark_idea(idea["id"], "drafted", acct=acct)
+    db.log("create", f"owner-direct draft from idea {idea_id} → #{did}")
+    return did
+
+
 def generate_drafts(cfg: Config, count: int = None,
                      acct: int | None = None) -> list[int]:
     """Create `count` drafts from the freshest ideas of ONE account.

@@ -828,6 +828,19 @@ async def publish_now_ep(draft_id: int):
     return res
 
 
+@app.post("/api/ideas/{idea_id}/write")
+async def write_idea(idea_id: int):
+    """Draft THIS idea now (owner-direct — bypasses the loop's queue-depth
+    gate; the owner asked for it by clicking)."""
+    from ..gen.drafts import draft_idea
+    from ..gen.llm import LLMError
+    try:
+        did = await asyncio.to_thread(draft_idea, cfg, idea_id)
+        return {"ok": True, "draft_id": did}
+    except LLMError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @app.post("/api/ideas/{idea_id}/discard")
 async def discard_idea(idea_id: int):
     db.mark_idea(idea_id, "discarded")

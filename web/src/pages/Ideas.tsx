@@ -92,13 +92,18 @@ export function IdeasPage() {
 
   const writeIt = (id: number): void => {
     setBusyId(id);
-    void triggerLoop('create', t).then((ok) => {
-      setBusyId(null);
-      if (ok) {
-        toast.success(t('ideas.writing'));
+    void (async () => {
+      try {
+        const r = await apiPost<{ ok: boolean; draft_id: number }>(`ideas/${id}/write`, {});
+        toast.success(t('ideas.written', { id: r.draft_id }));
+        load();
         navigate('inbox');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusyId(null);
       }
-    });
+    })();
   };
 
   const discard = (id: number): void => {
