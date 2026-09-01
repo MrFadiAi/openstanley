@@ -213,3 +213,4 @@
 2026-09-01 05:30 — QA iteration 61 (verified-clean; 590/590): HARD RULE ✓. 05:00 session reset fired on schedule (second morning running). No errors, no new chat. Quiet pass.
 2026-09-01 06:30 — QA iteration 62 (verified-clean; 590/590): HARD RULE ✓. No errors, no chat. Quiet overnight steady-state.
 2026-09-01 07:30 — QA iteration 63 (verified-clean; 590/590): HARD RULE ✓. 07:00 cycle healthy — trend-scout drafted #2954 from a live topic (approval-gated). No errors.
+2026-09-01 08:30 — QA iteration 64 (verified-clean; 590/590): HARD RULE ✓. The reflect malformed-JSON retry fired once at 07:57 (the safety net from yesterday doing its job — full raw logged, calmer retry, no second failure). No other errors; briefing due 09:03.
