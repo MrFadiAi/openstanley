@@ -145,14 +145,32 @@ def build_strategy(cfg: Config, force: bool = False) -> dict:
         "sections": _parse_sections(text),
         "generated_at": db.__dict__.get("_now", lambda: "")() or None,
     }
-    _sync_brain_docs(strategy["sections"])
+    _sync_brain_docs(strategy["sections"], one_pager=strategy["text"])
     db.set_acct_setting("strategy", strategy)
     db.log("system", "strategy one-pager generated")
     return strategy
 
 
-def _sync_brain_docs(sections: dict) -> None:
-    """Write the refined pillars/personas back into the brain files."""
+def _sync_brain_docs(sections: dict, one_pager: str = "") -> None:
+    """Write the refined pillars/personas back into the brain files, and
+    the full one-pager into strategies.md ABOVE the learning log (owner
+    2026-09-01: the brain's strategy doc must show the blueprint, not the
+    old sparse format — reflect() still owns everything from '## Working
+    theses' down)."""
+    if one_pager.strip():
+        try:
+            cur = brain_mod.read("strategies")
+            tail = cur[cur.index("## Working theses"):] \
+                if "## Working theses" in cur else (
+                "## Working theses\n- (none yet — the learn loop will "
+                "fill these from real metrics)\n\n## Experiment log\n- (none yet)\n")
+            new = ("# Creator Content Strategy — One-Pager\n\n"
+                   + one_pager.strip() + "\n\n" + tail)
+            if new != cur:
+                p = brain_mod._resolve("strategies")
+                brain_mod._atomic_write(p, new)
+        except Exception as e:  # noqa: BLE001 — sync is best-effort
+            db.log("system", f"one-pager sync skipped: {e}", level="warn")
     if not sections:
         return
     for section, stem in (("Content Pillars", "content-pillars"),

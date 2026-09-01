@@ -148,9 +148,11 @@ and the date it was learned. Retired rules stay listed but struck through.
 <!-- no rules learned yet — reflect() will add them -->
 """
 
-SEED_STRATEGIES = """# Growth Strategies
+SEED_STRATEGIES = """# Creator Content Strategy — One-Pager
 
-What's working, posting theses, and the experiment log with outcomes.
+(The full generated strategy syncs here on every strategy regeneration —
+goal, audience tiers, positioning, weighted pillars, rhythm, lean-into/
+avoid. The learning log below keeps accumulating between regenerations.)
 
 ## Working theses
 - (none yet — the learn loop will fill these from real metrics)
@@ -487,7 +489,10 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
                             shares[2]))
 
     strat = read("strategies", acct)
-    # keep "Working theses" section essence + last experiment lines
+    # the one-pager lives above; the actionable digest is the learning
+    # log — theses + experiments — not the (long) strategy prose
+    _split = strat.split("## Working theses", 1)
+    strat = ("## Working theses" + _split[1]) if len(_split) > 1 else strat
     strat_lines = [ln for ln in strat.splitlines()
                    if ln.strip() and not ln.startswith("#")][:12]
     if any(l.strip() and not l.startswith("- (none") for l in strat_lines):
