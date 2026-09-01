@@ -16,3 +16,10 @@ data/config.toml
 data/harness/
 data/xstanley.db*
 tests/_data/
+
+# heavyweight local artifacts — never commit
+data/models/
+data/logs/
+data/media/
+data/KEEPALIVE_LOCK
+data/server_keepalive.log

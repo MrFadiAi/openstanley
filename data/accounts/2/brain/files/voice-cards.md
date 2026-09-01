@@ -1,10 +1,16 @@
-# Voice Cards (scan 2026-08-25)
+# Voice Cards
 
-One card per speaking mode detected in the corpus:
+## Measured style profile (223-post account scan)
+- Language mix: 53.4% Arabic, 24.2% English, 22.4% mixed. Arabic-dominant Iraqi dialect is the home voice; mixed posts are the second lever.
+- Code-switching rule: English AI/tech jargon stays in Latin script inside Arabic text; never transliterate it.
+- Format: 70% of posts are multiline, averaging 3+ lines. Stacked short lines are the house format.
 
-- **Standard post**: avg 167.0 chars, casing {'pct_lowercase_start': 0.04, 'allcaps_words_per_post': 0.165}, emoji/post 0.59
-- **Question mode**: asks directly (0.12/post) — the engagement-bait register
-- **Colon-led mode**: 0.685/post — 'hot take:' style openers
-- **Trailing-thought mode**: 0.01/post — '...' endings
-- languages: ar 57%, en 20%, mixed 21%
+## Drafting card
+- First person, lived detail only: real cost/productivity discoveries, shipped tools, resources actually used.
+- When the user asks for longer, add concrete actionable takeaways (what followers can do), not padding.
+- Closing reply invitation is the default (2-3x engagement) unless the user explicitly asks for no question.
+- No dashes of any kind anywhere (R97, R113); lists as bare lines or arrow markers; never dash-join product names.
 
+## Reply card
+- Own voice everywhere: Iraqi dialect mixed with English AI jargon.
+- Match the target account's language (English/Arabic) when replying for engagement; keep code-switched jargon in both.
