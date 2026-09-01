@@ -784,7 +784,11 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None,
             applied["retired_rules"].append(rid)
             changes.append(f"retired R{rid}")
 
-    # 4. strategy updates — appended to the experiment log
+    # 4. strategy updates — outcome=working goes to WORKING THESES
+    # (upsert by title), everything else to the experiment log. The old
+    # writer only knew the log: 'Working theses' sat on its placeholder
+    # forever while confirmed theses piled into the log unnoticed
+    # (live 2026-09-01: owner asked why strategy never fills).
     for su in data.get("strategy_updates") or []:
         if not isinstance(su, dict):
             continue
@@ -794,16 +798,28 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None,
         note = str(su.get("note") or "").strip()
         outcome = str(su.get("outcome") or "new").strip()
         try:
-            line = f"- {_now()[:10]} · {title} — {note} [{outcome}]"
             p = _resolve("strategies", acct)
             txt = p.read_text(encoding="utf-8")
-            marker = "## Experiment log"
-            if marker in txt:
-                txt = txt.replace(
-                    marker, marker + "\n" + sanitize(line), 1)
+            if outcome == "working":
+                line = f"- {sanitize(title)} — {sanitize(note)} (confirmed {_now()[:10]})"
+                txt = re.sub(r"^- \(none yet[^\n]*\n", "", txt, flags=re.M)
+                if re.search(rf"^- {re.escape(title)}[ —·]", txt, flags=re.M):
+                    txt = re.sub(rf"^- {re.escape(title)}[^\n]*", line, txt, count=1, flags=re.M)
+                else:
+                    m = re.search(r"^## Working theses\s*$", txt, flags=re.M)
+                    if m:
+                        txt = txt[:m.end()] + "\n" + line + txt[m.end():]
+                    else:
+                        txt = txt.rstrip() + f"\n\n## Working theses\n{line}\n"
             else:
-                txt = txt.rstrip() + f"\n\n{marker}\n{line}\n"
-            txt = txt.replace("- (none yet)\n", "", 1)
+                line = f"- {_now()[:10]} · {title} — {note} [{outcome}]"
+                marker = "## Experiment log"
+                if marker in txt:
+                    txt = txt.replace(
+                        marker, marker + "\n" + sanitize(line), 1)
+                else:
+                    txt = txt.rstrip() + f"\n\n{marker}\n{line}\n"
+                txt = txt.replace("- (none yet)\n", "", 1)
             _atomic_write(p, txt)
             applied["strategy_updates"].append(title[:80])
             changes.append(f"strategy: {title[:80]} [{outcome}]")

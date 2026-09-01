@@ -551,3 +551,37 @@ def test_reflect_retries_once_on_malformed_json(monkeypatch):
     assert calls["n"] == 2, "retry must fire exactly once after bad JSON"
     assert calls["temps"][1] < calls["temps"][0]  # calmer retry
     assert res["ok"]
+
+
+def test_reflect_working_outcome_lands_in_theses(monkeypatch):
+    """Live 2026-09-01: 'Working theses' sat on its placeholder forever —
+    the writer only knew the experiment log. outcome=working now upserts
+    a thesis; other outcomes still go to the log."""
+    from openstanley.core.config import Config
+    from openstanley.gen import brain as bm
+    monkeypatch.setattr(bm, "llm_chat", lambda *a, **k: """{
+      "instructions_delta": "",
+      "new_rules": [],
+      "retire_rule_ids": [],
+      "strategy_updates": [
+        {"title": "question-ender posts", "note": "2-3x engagement vs statements", "outcome": "working"},
+        {"title": "crypto news reposts", "note": "10x below baseline", "outcome": "failing"}
+      ],
+      "journal_entry": "test"}""")
+    res = bm.reflect(Config(), "chat")
+    assert res["ok"]
+    strat = bm.read("strategies")
+    assert "- question-ender posts — 2-3x engagement" in strat
+    assert "(confirmed" in strat
+    assert "(none yet" not in strat.split("## Experiment log")[0]
+    assert "crypto news reposts" in strat.split("## Experiment log")[1]
+    # upsert: a second working update with the same title replaces, not duplicates
+    monkeypatch.setattr(bm, "llm_chat", lambda *a, **k: """{
+      "instructions_delta": "", "new_rules": [], "retire_rule_ids": [],
+      "strategy_updates": [
+        {"title": "question-ender posts", "note": "now 4x", "outcome": "working"}],
+      "journal_entry": "t"}""")
+    bm.reflect(Config(), "chat")
+    strat = bm.read("strategies")
+    assert strat.count("- question-ender posts") == 1
+    assert "now 4x" in strat
