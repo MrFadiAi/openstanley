@@ -316,7 +316,8 @@ def inventory(acct: int | None = None) -> list[dict]:
 # ---------- rules.md parsing ----------
 
 RULE_HEADER_RE = re.compile(
-    r"^##\s+\[R(\d+)\]\s*\((\w+)\s*[·-]\s*([\d\-]+)\s*[·-]\s*(active|retired)\)\s*$"
+    r"^##\s+\[R(\d+)\]\s*\((\w+)\s*[·-]\s*([\d\-]+)\s*[·-]\s*(active|retired)"
+    r"(?:\s*[·-]\s*seen\s*([\d\-]+))?\)\s*$"
 )
 
 
@@ -330,7 +331,8 @@ def parse_rules(text: str) -> list[dict]:
             if current:
                 rules.append(current)
             current = {"id": int(m.group(1)), "source": m.group(2),
-                       "date": m.group(3), "status": m.group(4), "text": ""}
+                       "date": m.group(3), "status": m.group(4),
+                       "last_seen": m.group(5) or "", "text": ""}
         elif current is not None:
             if line.strip():
                 current["text"] = (current["text"] + " " + line.strip()).strip()
@@ -345,8 +347,9 @@ def parse_rules(text: str) -> list[dict]:
 
 
 def render_rule(rule: dict) -> str:
+    seen = f" · seen {rule['last_seen']}" if rule.get("last_seen") else ""
     return (f"## [R{rule['id']}] ({rule['source']} · {rule['date']} · "
-            f"{rule['status']})\n{rule['text']}\n")
+            f"{rule['status']}{seen})\n{rule['text']}\n")
 
 
 def add_rule(text: str, source: str, acct: int | None = None) -> int:
@@ -723,6 +726,97 @@ def _scan_fallback_files(stats: dict, profile: dict) -> list[tuple[str, str]]:
             ("competitor-notes", "\n".join(comp) + "\n")]
 
 
+DECAY_DAYS = 14            # unreaffirmed rules older than this retire
+DECAY_MAX_PER_SWEEP = 15   # a bug can never nuke the brain in one pass
+SUBSUME_OVERLAP = 0.6      # token overlap with a NEWER rule = duplicate
+
+
+def _forgetting_sweep(acct: int | None, changes: list[str]) -> None:
+    """The forgetting governor (owner 2026-09-01: 'it will grow and grow —
+    slop?'). Three verdicts per ACTIVE non-directive rule:
+
+    - SUBSUMED: a newer active rule covers ≥60% of its tokens → retire
+      the old duplicate (redundancy, not staleness)
+    - REAFFIRMED: its R-id is cited in the working theses (the pattern is
+      actively performing) → refresh its `seen` date
+    - STALE: neither, and unseen past DECAY_DAYS → retire to archive
+
+    Retire = archive (never delete, reversible). Directives are immune."""
+    from datetime import date as _date
+    rules = parse_rules(read("rules", acct))
+    if not rules:
+        return
+    today = _date.today()
+    today_iso = today.isoformat()
+    strat_txt = read("strategies", acct)
+
+    def _toks(t: str) -> set[str]:
+        return {w for w in re.findall(r"[A-Za-z؀-ۿ]{4,}", t.lower())}
+
+    actives = [r for r in rules if r["status"] == "active"]
+    retired_out: list[tuple[dict, str]] = []
+    out_lines: list[str] = ["# Learned Rules\n"]
+    n_retired = 0
+    refreshed = False
+    for i, r in enumerate(rules):
+        if r["status"] != "active":
+            out_lines.append(render_rule(r))
+            continue
+        if r["source"] == "directive":
+            out_lines.append(render_rule(r))
+            continue
+        seen = _date.fromisoformat(r["last_seen"] or r["date"])
+        age = (today - seen).days
+        verdict = None
+        # subsumed by a NEWER active rule?
+        rt = _toks(r["text"])
+        for newer in actives:
+            if newer["id"] <= r["id"] or newer["source"] == "directive":
+                continue
+            nt = _toks(newer["text"])
+            if rt and nt and len(rt & nt) / len(rt | nt) >= SUBSUME_OVERLAP:
+                verdict = f"subsumed by R{newer['id']}"
+                break
+        # reaffirmed by the working theses?
+        if verdict is None and f"R{r['id']}" in strat_txt:
+            if age > DECAY_DAYS:
+                r = dict(r, last_seen=today_iso)  # data says it's alive
+                refreshed = True
+                changes.append(f"R{r['id']}: reaffirmed by theses (seen "
+                               f"refreshed)")
+            out_lines.append(render_rule(r))
+            continue
+        if verdict is None and age <= DECAY_DAYS:
+            out_lines.append(render_rule(r))
+            continue
+        if verdict is None:
+            verdict = f"stale — unreaffirmed for {age}d"
+        if n_retired >= DECAY_MAX_PER_SWEEP:
+            out_lines.append(render_rule(r))  # cap reached: keep the rest
+            continue
+        n_retired += 1
+        rr = dict(r, status="retired")
+        retired_out.append((rr, verdict))
+        out_lines.append(render_rule(rr))
+
+    if retired_out or refreshed:
+        _atomic_write(_resolve("rules", acct), "\n".join(out_lines) + "\n")
+        arch_path = _files_dir(acct) / "rules-archive.md"
+        prev = arch_path.read_text(encoding="utf-8") \
+            if arch_path.exists() else "# Retired Rules (audit archive)\n"
+        stamp = _now()[:10]
+        arch_txt = (prev.rstrip() + "\n\n"
+                    + "\n\n".join(f"{render_rule(rr)}<!-- {stamp}: {why} -->"
+                                  for rr, why in retired_out) + "\n")
+        _atomic_write(arch_path, arch_txt)
+        db.log("brain", f"forgetting governor: retired {n_retired} rule(s) "
+                        f"to archive ({', '.join(why for _, why in retired_out[:3])}"
+                        f"{'…' if len(retired_out) > 3 else ''})")
+        changes.extend(f"R{rr['id']}: retired ({why})"
+                       for rr, why in retired_out)
+
+
+
 def reflect(cfg, trigger: str, payload: Optional[dict] = None,
             acct: int | None = None) -> dict:
     """Run one reflection: LLM proposes edits → applied deterministically.
@@ -904,7 +998,16 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None,
     except Exception as e:  # noqa: BLE001 — housekeeping never breaks reflect
         db.log("brain", f"rule archive sweep failed: {e}", level="warn")
 
-    # 5. journal entry (always written — even an empty reflection is a fact)
+    # 4.8 FORGETTING GOVERNOR — memory that earns its stay. Unreaffirmed
+    # rules decay to the archive; subsumed duplicates retire; thesis-
+    # cited rules refresh. Directives NEVER decay (owner law). Archive-
+    # only and capped: a bug can never nuke the brain.
+    try:
+        _forgetting_sweep(acct, changes)
+    except Exception as e:  # noqa: BLE001 — housekeeping never breaks reflect
+        db.log("brain", f"forgetting sweep failed: {e}", level="warn")
+
+# 5. journal entry (always written — even an empty reflection is a fact)
     entry = str(data.get("journal_entry") or "").strip() or \
         f"reflected on {trigger}; no changes warranted"
     if payload.get("note"):
@@ -927,6 +1030,8 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None,
                    f"{len(applied['file_updates'])} files")
     return {"ok": True, "trigger": trigger, "applied": applied,
             "journal_entry": entry}
+
+
 
 
 # ---------- chat hook (every 10th message) ----------

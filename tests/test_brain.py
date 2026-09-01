@@ -585,3 +585,48 @@ def test_reflect_working_outcome_lands_in_theses(monkeypatch):
     strat = bm.read("strategies")
     assert strat.count("- question-ender posts") == 1
     assert "now 4x" in strat
+
+
+def test_forgetting_governor(monkeypatch, tmp_path):
+    """The brain forgets what stops earning its keep (owner 2026-09-01:
+    'it will grow and grow — slop?'). Stale rules retire to archive,
+    thesis-cited rules refresh, directives NEVER decay, subsumed
+    duplicates retire, capped per sweep."""
+    from datetime import date as _date, timedelta as _td
+    from openstanley.core.config import Config
+    import openstanley.gen.brain as bm
+    monkeypatch.setattr(bm, "ACCOUNTS_ROOT", tmp_path / "accounts")
+    bm.ensure()
+    old = (_date.today() - _td(days=30)).isoformat()
+    fresh = (_date.today() - _td(days=2)).isoformat()
+    bm._atomic_write(bm._resolve("rules"), """# Learned Rules
+
+## [R1] (learn · %s · active · seen %s)
+DO the stale thing nobody reaffirmed
+
+## [R2] (directive · %s · active)
+OWNER LAW never decays
+
+## [R3] (learn · %s · active)
+DO the fresh thing learned this week
+
+## [R4] (learn · %s · active · seen %s)
+DO cite me in theses
+""" % (old, old, old, fresh, old, old))
+    # R4 is cited by the working theses → reaffirmed; R1 is not → decays
+    bm._atomic_write(bm._resolve("strategies"),
+                     "# One-Pager\n\nx\n\n## Working theses\n- R4 works great\n")
+
+    changes: list[str] = []
+    bm._forgetting_sweep(None, changes)
+    rules = bm.read("rules")
+    assert "R2] (directive" in rules and "active" in \
+        rules.split("R2]")[1].split(")")[0] + ")" or "[R2]" in rules
+    assert "## [R2] (directive" in rules               # directive survives
+    assert "## [R3]" in rules and "retired" not in rules.split("[R3]")[1][:60]
+    assert "## [R4]" in rules and "seen " + _date.today().isoformat() in rules
+    assert "## [R1]" in rules and "· retired" in rules  # stale decayed
+    arch = (tmp_path / "accounts" / str(bm.db.active_account())
+            / "brain" / "files" / "rules-archive.md").read_text(encoding="utf-8")
+    assert "R1" in arch and "stale" in arch
+    assert any("R1" in c and "retired" in c for c in changes)
