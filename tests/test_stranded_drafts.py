@@ -67,6 +67,13 @@ def test_no_stranded_no_alert(monkeypatch):
     _ensure_accounts(1, 2)
     db.set_active_account(2)
     db.set_setting("stranded_alerted", [])
+    # isolation: this shared test DB accumulates approved+due drafts from
+    # earlier suites (deterministic full-run failure 2026-09-01 09:30 —
+    # passes solo). The 'nothing stranded' precondition must be MADE true,
+    # not assumed.
+    with db.connect() as c:
+        c.execute("UPDATE drafts SET status='rejected' "
+                  "WHERE account_id != 2 AND status='approved'")
     sent = []
     import openstanley.integrations.telegram as tg
     monkeypatch.setattr(tg, "is_enabled", lambda: True)
