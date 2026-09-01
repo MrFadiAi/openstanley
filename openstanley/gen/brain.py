@@ -456,10 +456,39 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
+def _task_relevant(rules: list[dict], task_text: str, k: int) -> list[dict]:
+    """Rank active rules by relevance to the CURRENT task (the field's
+    retrieval-over-injection pattern — Mem0's fused scoring uses BM25 +
+    entity match as two of its three signals, both keyword-shaped, so no
+    vector store is needed). A hardware reply shouldn't carry money-idea
+    rules; the task text decides. Fallback: newest-first order."""
+    def score(r: dict) -> float:
+        rt = {w for w in re.findall(r"[A-Za-z؀-ۿ]{4,}", r["text"].lower())}
+        tt = {w for w in re.findall(r"[A-Za-z؀-ۿ]{4,}",
+                                    (task_text or "").lower())}
+        if not rt or not tt:
+            return 0.0
+        # coverage of the RULE by the task, with a small idf-ish bonus for
+        # rare-word hits (long shared words matter more than common ones)
+        hits = rt & tt
+        return len(hits) / len(rt) + 0.1 * sum(1 for w in hits if len(w) >= 7)
+
+    ranked = sorted(rules, key=score, reverse=True)
+    top = [r for r in ranked[:k] if score(r) > 0]
+    if not top:  # nothing relevant → newest-first fallback (old behavior)
+        return list(reversed(rules))[:k]
+    return top
+
+
+def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None,
+                  task_text: str = "") -> str:
     """Compact digest for prompts: instructions + active rules + top strategies
     + pillar summaries, hard-capped at `budget` chars — from the ACTIVE
-    account's brain only (never another account's memory)."""
+    account's brain only (never another account's memory).
+
+    task_text: when the caller knows WHAT is being written (draft idea,
+    reply target, chat message), rules are selected by relevance to it
+    (retrieval over injection) instead of newest-first."""
     if _context_off.get():
         return ""
     ensure(acct)
@@ -500,17 +529,21 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
         blocks.append(_clip("OWNER DIRECTIVES (absolute — the owner said these "
                             "in their own words):\n" + "\n".join(dlines),
                             shares[1]))
-    # NEWEST-FIRST: rules.md appends, so file order = oldest-first — the
-    # digest used to inject the Aug-21 pre-pivot era into every prompt
-    # while this week's 33 rules got clipped (live audit 2026-09-01).
+    # NEWEST-FIRST was the v1 fix; the field-endorsed upgrade is
+    # RETRIEVAL: when the caller says what's being written, rules are
+    # ranked by relevance to it (Mem0-style keyword/entity scoring — no
+    # vector store). Newest-first remains the no-task fallback.
     # Bookkeeping rules (baseline arithmetic) stay in the file for audit
     # but never reach content prompts.
-    rules = [r for r in reversed(all_rules)
-             if r["source"] != "directive" and _not_bookkeeping(r["text"])]
+    non_directive = [r for r in all_rules
+                     if r["source"] != "directive" and _not_bookkeeping(r["text"])]
+    rules = (_task_relevant(non_directive, task_text, 12) if task_text.strip()
+             else list(reversed(non_directive))[:12])
     if rules:
+        label = ("RULES (most relevant to this task — obey):" if task_text.strip()
+                 else "RULES (learned, newest first — obey):")
         rule_lines = [f"R{r['id']}: {r['text']}" for r in rules]
-        blocks.append(_clip("RULES (learned, newest first — obey):\n"
-                            + "\n".join(rule_lines), shares[2]))
+        blocks.append(_clip(label + "\n" + "\n".join(rule_lines), shares[2]))
 
     strat = read("strategies", acct)
     # the one-pager lives above; the actionable digest is the learning

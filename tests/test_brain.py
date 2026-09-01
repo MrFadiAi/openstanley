@@ -630,3 +630,26 @@ DO cite me in theses
             / "brain" / "files" / "rules-archive.md").read_text(encoding="utf-8")
     assert "R1" in arch and "stale" in arch
     assert any("R1" in c and "retired" in c for c in changes)
+
+
+def test_brain_context_task_relevance(tmp_path, monkeypatch):
+    """Retrieval over injection (field-standard pattern): with task text,
+    rules relevant to THE TASK are selected over newest/oldest; without
+    it, newest-first fallback holds. A hardware reply must not carry
+    money-idea rules."""
+    import openstanley.gen.brain as bm
+    monkeypatch.setattr(bm, "ACCOUNTS_ROOT", tmp_path / "accounts")
+    bm.ensure()
+    bm._atomic_write(bm._resolve("rules"), """# Learned Rules
+
+## [R1] (learn · 2026-09-01 · active)
+DO post money-making ideas with step-by-step monetization numbers
+
+## [R2] (learn · 2026-09-01 · active)
+DO give hardware buying advice with concrete specs and prices
+""")
+    ctx = bm.brain_context(task_text="draft a reply about GPU specs and hardware prices")
+    rules_block = ctx.split("RULES")[1]
+    assert "R2" in rules_block.split("R1")[0]  # hardware rule ranks above money rule
+    ctx2 = bm.brain_context()                   # no task → fallback order
+    assert "newest first" in ctx2

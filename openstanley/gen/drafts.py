@@ -262,7 +262,9 @@ Temperature intent: {temp} — {'play it straight, highest fidelity to voice' if
 QUOTED TWEET (your post is the comment above it):
 @{quote.get('author', '?')}: {quote.get('text', '')[:240]}"""
     user += "\n\nWrite the post now."
-    system = brain_mod.brain_context() + "\n\n" + \
+    system = brain_mod.brain_context(task_text=(
+        f"{idea.get('title', '')} {idea.get('angle', '')} "
+        f"{(quote or {}).get('text', '')}")) + "\n\n" + \
         DRAFT_SYSTEM.format(voice=voice, algo=ALGO_PROMPT_BLOCK)
     raw = chat(cfg.llm, system, user, temperature=t, json_mode=True)
     data = extract_json(raw)

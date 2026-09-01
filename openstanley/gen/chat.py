@@ -273,7 +273,7 @@ def _tune_prompt(tune: dict) -> str:
 
 def _system(cfg: Config, user_message: str) -> str:
     tune = _voice_tune()
-    return (brain_mod.brain_context() + "\n\n"
+    return (brain_mod.brain_context(task_text=user_message) + "\n\n"
             + SYSTEM.replace("{tools}", tools_mod.TOOLS_PROMPT)
             + "\n\n" + reply_language_instruction(user_message)
             + "\n\n" + _tune_prompt(tune)
@@ -285,7 +285,7 @@ def _system_tg(cfg: Config, user_message: str) -> str:
     tuning), SYSTEM_TG instead of SYSTEM — the conversation is a clean
     assistant's; the X voice stays inside quoted post candidates."""
     tune = _voice_tune()
-    return (brain_mod.brain_context() + "\n\n"
+    return (brain_mod.brain_context(task_text=user_message) + "\n\n"
             + (SYSTEM_TG + chr(10) * 2 + AGENT_DISCIPLINE_TG).replace("{tools}", tools_mod.TOOLS_PROMPT)
             + "\n\n" + reply_language_instruction(user_message)
             + "\n\n" + _tune_prompt(tune)
