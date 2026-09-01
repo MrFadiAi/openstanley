@@ -196,7 +196,9 @@ CREATE INDEX IF NOT EXISTS idx_eval_results_run ON eval_results(account_id, run_
 # tables whose rows are scoped by account_id (v0.5.0)
 SCOPED_TABLES = ("posts", "drafts", "ideas", "engagements", "seen_mentions",
                  "metric_snapshots", "identity_snapshots", "voice_profile",
-                 "eval_runs", "eval_results")
+                 "eval_results", "eval_runs")  # children before FK parents
+                 # (live 2026-09-01: deleting eval_runs first orphaned
+                 # eval_results and the FK failed the whole archive)
 
 
 def _now() -> str:
