@@ -12,30 +12,52 @@ from ..core.config import Config
 from . import brain as brain_mod
 from .llm import chat as llm_chat, LLMConfig, LLMError
 
-PROMPT = """You are OpenStanley, an AI Head of Content. Based on the account data below,
-write a one-page X content strategy. Follow EXACTLY this structure (plain text):
+PROMPT = """You are OpenStanley, an AI Head of Content. Based ONLY on the account data
+below (real posts, real numbers, learned rules, what actually performed),
+write a one-page X content strategy in EXACTLY this structure (plain text,
+no markdown headers — the section title alone on its line):
 
 Strategic Goal
-<one paragraph: grow the account 6-12 months by turning their unique proof/lessons
-into a consistent content engine; include a concrete-feeling trajectory, not fluff>
+<one paragraph: grow this account over 6-12 months by turning its actual
+proof/lessons/judgment into a consistent content engine. If the follower
+count is in the data, set a concrete follower target with a date. No fluff.>
 
 Target Audience
-<2-3 short paragraphs naming WHO this account serves and what those people care about>
+Primary: <who this account already serves — inferred from who engages and
+what the top posts talk about>
+Secondary: <adjacent audience the data supports>
+Others: <reach-expanding audience, only if the data supports it>
 
 Positioning Line
-<one line, first person: "Follow me if you want to see..." — specific, no generic thought-leader talk>
+<one line, first person: "I'm the person you follow if you want..." —
+specific to THIS account's actual content, no generic thought-leader talk>
 
 Content Pillars
-<3-5 pillars as "Name: one-sentence description" — derived from what they actually post about>
+<3-5 pillars derived from what this account ACTUALLY posts and what
+performed. EACH pillar in exactly this shape (percentages are the posting
+mix and MUST sum to 100, weighted by real engagement evidence):
 
-Core Message
-<the single belief their content repeats, one paragraph>
+N% Pillar name
+Core Message: <the single belief this pillar repeats>
+What I Share:
+- <concrete content type from the account's real posts>
+- <...>
+Why It Matters: <one line on why THIS audience cares>
 
-Voice & Style
-<3-5 bullet rules distilled from their actual posts>
+Posting Rhythm
+Cadence: <posts per week the account's real history supports>
+Default Windows: <the actual best hours from the data, with timezone>
+Schedule Patterns: <consistency rules derived from real posting history>
 
-Cadence & Formats
-<recommended posting rhythm + formats that fit their voice>
+Notes
+What I Lean Into:
+- <3-5 bullets: structures/hooks/proof types the engagement data rewards>
+What I Avoid:
+- <3-6 bullets GROUNDED IN THE LEARNED RULES — real rejection patterns,
+  voice violations, anything the account's history says fails>
+
+Every claim must trace to the data below. Never invent audience segments,
+numbers, or proof this account doesn't have.
 
 === ACCOUNT DATA ===
 {data}
@@ -53,12 +75,40 @@ def _account_data() -> str:
     vp = db.get_setting("voice_profile")
     if vp:
         parts.append("VOICE: " + str(vp.get("rubric", ""))[:400])
+        mix = (vp.get("stats") or {}).get("language_mix")
+        if mix:
+            parts.append(f"LANGUAGE MIX: {json.dumps(mix)}")
     niche = db.niche_posts(30)
     if niche:
         tops = sorted(niche, key=lambda p: p.get("engagement", 0), reverse=True)[:15]
         parts.append("NICHE TOP PERFORMERS:")
         for p in tops:
             parts.append(f"- [{p['likes']}♥ {p['replies']}💬] {p['text'][:120]}")
+    # real performance evidence: best hours from the style profile
+    sp = db.get_acct_setting("style_profile") or {}
+    bh = ((sp.get("stats") or {}).get("posting_times") or {}).get("best_hours")
+    if bh:
+        parts.append(f"REAL BEST POSTING HOURS: {bh}")
+    # learned what-works (theses) and what-fails (active rules) — the
+    # Avoid list and the pillar weights come from these
+    try:
+        strat = brain_mod.read("strategies")
+        theses = strat.split("## Experiment log")[0]
+        theses = "\n".join(ln for ln in theses.splitlines()
+                           if ln.strip().startswith("-"))
+        if theses:
+            parts.append("WORKING THESES (learned from real performance):\n" + theses)
+    except FileNotFoundError:
+        pass
+    try:
+        rules_txt = brain_mod.read("rules")
+        active = [ln for ln in rules_txt.splitlines()
+                  if ln.strip().startswith("- R") and "retired" not in ln]
+        if active:
+            parts.append("LEARNED RULES (owner-confirmed DO/DON'Ts — obey in "
+                         "'What I Avoid'):\n" + "\n".join(active[:20]))
+    except FileNotFoundError:
+        pass
     # brain reference docs: current pillars + personas feed the refinement
     for stem, label in (("content-pillars", "CURRENT CONTENT PILLARS (brain)"),
                         ("audience-personas", "CURRENT AUDIENCE PERSONAS (brain)")):
@@ -120,7 +170,8 @@ def _sync_brain_docs(sections: dict) -> None:
 def _parse_sections(text: str) -> dict:
     """Split the one-pager into sections by known headers."""
     keys = ["Strategic Goal", "Target Audience", "Positioning Line",
-            "Content Pillars", "Core Message", "Voice & Style", "Cadence & Formats"]
+            "Content Pillars", "Core Message", "Voice & Style",
+            "Cadence & Formats", "Posting Rhythm", "Notes"]
     sections = {}
     current = None
     for line in text.splitlines():
