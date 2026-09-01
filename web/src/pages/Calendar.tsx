@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ExternalLink,
   Pencil,
   Plus,
   Send,
@@ -203,9 +204,16 @@ function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: ()
       </div>
 
       {it.reply_to?.author ? (
-        <p className="mb-2 rounded-lg border border-line bg-inset px-2 py-1.5 text-[11.5px] text-ink-2">
+        <a
+          href={`https://x.com/${it.reply_to.author}/status/${it.reply_to.x_id ?? ''}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          dir="ltr"
+          className="mb-2 flex items-center gap-1 rounded-lg border border-line bg-inset px-2 py-1.5 text-[11.5px] text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+        >
           <span className="font-medium">{t('calendar.replyTo')}:</span> @{it.reply_to.author}
-        </p>
+          <ExternalLink size={10} className="ms-auto shrink-0" />
+        </a>
       ) : null}
 
       {editing ? (
@@ -562,7 +570,11 @@ function QueueCard({ draft, onChanged }: { draft: Draft; onChanged?: () => void 
       {open ? (
         <PostDetail
           it={{ id: draft.id, kind: draft.kind, state: draft.status, text: draft.text,
-                scheduled_at: draft.scheduled_at, language: draft.language, image: draft.image }}
+                scheduled_at: draft.scheduled_at, language: draft.language, image: draft.image,
+                reply_to: draft.meta?.reply_to_x_id
+                  ? { x_id: draft.meta.reply_to_x_id,
+                      author: draft.meta.target_author || draft.meta.author || '' }
+                  : undefined }}
           onChanged={onChanged}
           onClose={() => setOpen(false)}
         />

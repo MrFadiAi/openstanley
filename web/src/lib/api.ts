@@ -50,6 +50,8 @@ export interface DraftMeta {
   voice?: VoiceCheckMeta;
   reply_to_x_id?: string;
   target_author?: string;
+  /** mention-reply drafts carry the engagement author here */
+  author?: string;
   target_score?: TargetScore;
   engagement_id?: number;
   idea_title?: string;
