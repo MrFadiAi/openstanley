@@ -21,6 +21,10 @@ from . import replies as replies_mod
 from . import voice as voice_mod
 
 
+ENGAGE_PENDING_REPLY_MAX = 6   # drafting pauses while the owner's reply
+                               # queue holds this many unreviewed drafts
+
+
 def _tg_draft_cards(ids: list[int]) -> None:
     """v0.4.4 — TG 'needs approval' card for drafts a loop just created.
     Fire-and-forget daemon thread: slow/broken Telegram can never slow or
@@ -172,7 +176,13 @@ class Agent:
         return out
 
     async def engage(self) -> dict:
-        """Hourly: pull mentions, draft replies + SCHEDULED niche replies."""
+        """Hourly: pull mentions, draft replies + SCHEDULED niche replies.
+
+        BACKLOG-AWARE (owner 2026-09-01: 'it suggests me draft replies, a
+        lot per day' — 49 yesterday, 31 by 17:30 today): drafting PAUSES
+        while the owner's pending-reply queue is full. The old loop fired
+        ~3 drafts every hour regardless, burying the owner (17 pending,
+        and the 08-31 mass wipe was this firehose backing up)."""
         acct = db.active_account()
         new = await replies_mod.pull_engagements(self.cfg, self.x, acct=acct)
         # live targets first: the gate can only pass what exists RIGHT NOW —
@@ -181,9 +191,21 @@ class Agent:
             await replies_mod.refresh_niche_targets(self.cfg, self.x, acct)
         except Exception as e:  # noqa: BLE001 — refresh never blocks engage
             db.log("engage", f"live refresh skipped: {e}", level="warn")
-        ids = await asyncio.to_thread(replies_mod.draft_replies, self.cfg, acct=acct)
-        niche_ids = await asyncio.to_thread(replies_mod.draft_niche_replies, self.cfg,
-                                            acct=acct)
+        with db.connect() as c:
+            (pending,) = c.execute(
+                "SELECT COUNT(*) FROM drafts WHERE account_id=? "
+                "AND kind='reply' AND status='draft'", (acct,)).fetchone()
+        if pending >= ENGAGE_PENDING_REPLY_MAX:
+            db.log("engage", f"reply queue full ({pending} pending >= "
+                            f"{ENGAGE_PENDING_REPLY_MAX}) — the owner hasn't "
+                            "drained it; drafting paused this pass")
+            return {"new_mentions": new, "replies_drafted": 0,
+                    "niche_replies_scheduled": 0, "account": acct,
+                    "paused_backlog": pending}
+        ids = await asyncio.to_thread(replies_mod.draft_replies, self.cfg,
+                                      limit=2, acct=acct)
+        niche_ids = await asyncio.to_thread(replies_mod.draft_niche_replies,
+                                            self.cfg, limit=2, acct=acct)
         _tg_draft_cards(ids + niche_ids)
         return {"new_mentions": new, "replies_drafted": len(ids),
                 "niche_replies_scheduled": len(niche_ids), "account": acct}

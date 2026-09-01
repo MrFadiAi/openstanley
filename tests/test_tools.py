@@ -447,3 +447,54 @@ def test_premium_long_post_capability():
         _db.set_acct_setting("x_premium", False)
     assert max_post_chars() == 280
     assert "free account" in chat_mod._capability_line()
+
+
+def test_engage_pauses_on_reply_backlog(monkeypatch):
+    """Owner 2026-09-01: 'it suggests draft replies, a lot per day' — 49
+    yesterday. The engage loop must PAUSE while the owner's pending-reply
+    queue is full instead of firing ~3 more drafts every hour."""
+    import asyncio
+    from openstanley.gen import agent as agent_mod
+    from openstanley.gen import replies as replies_mod
+    from openstanley.core import db as _db
+    a = agent_mod.Agent.__new__(agent_mod.Agent)
+    a.cfg = None
+    a.x = None
+    called = {"draft": 0}
+
+    async def _no_pull(cfg, x, acct=None):
+        return 0
+
+    async def _no_refresh(cfg, x, acct=None):
+        return None
+
+    def _draft(*args, **kw):
+        called["draft"] += 1
+        return []
+
+    monkeypatch.setattr(replies_mod, "pull_engagements", _no_pull)
+    monkeypatch.setattr(replies_mod, "refresh_niche_targets", _no_refresh)
+    monkeypatch.setattr(replies_mod, "draft_replies", _draft)
+    monkeypatch.setattr(replies_mod, "draft_niche_replies", _draft)
+    # isolation: earlier suites leave pending replies in this shared DB —
+    # the backlog count must reflect OUR seeds only
+    with _db.connect() as c:
+        c.execute("UPDATE drafts SET status='rejected' "
+                  "WHERE kind='reply' AND status='draft'")
+    # seed 6 pending replies → drafting must pause
+    ids = [_db.add_draft(text=f"backlog probe reply {i}", kind="reply",
+                         acct=1, status="draft") for i in range(6)]
+    try:
+        res = asyncio.run(a.engage())
+        assert res.get("paused_backlog") == 6, res
+        assert called["draft"] == 0, "no drafting while the queue is full"
+        # drain to 2 → drafting resumes
+        for i in ids[:4]:
+            _db.update_draft(i, status="rejected")
+        res2 = asyncio.run(a.engage())
+        assert "paused_backlog" not in res2
+        assert called["draft"] == 2
+    finally:
+        with _db.connect() as c:
+            c.execute("DELETE FROM drafts WHERE id IN (%s)"
+                      % ",".join("?" * len(ids)), ids)

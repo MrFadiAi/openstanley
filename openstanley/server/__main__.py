@@ -2072,7 +2072,7 @@ def start_scheduler():
     sched.add_job(agent.create,
                   CronTrigger(hour=7, minute=0), id="create")
     sched.add_job(agent.engage,
-                  CronTrigger(minute=30), id="engage")
+                  CronTrigger(hour="*/6", minute=30), id="engage")
     # mention inbox: conversation replies are worth most within the window —
     # every 30 min while autopilot is off (its rotation covers mentions when on)
     if cfg.agent.mentions_cron and not ap_mod.get_state()["enabled"]:
@@ -2135,7 +2135,7 @@ def start_scheduler():
                                       jitter=ap_mod.JITTER_MAX_S),
                       id="autopilot")
     sched.start()
-    db.log("system", "scheduler started (study 03:00, create 07:00, engage :30, "
+    db.log("system", "scheduler started (study 03:00, create 07:00, engage */6h:30, "
                      "mentions */30 (when autopilot off), publish */10, learn Sun 05:00, "
                      f"digest {digest_mod.digest_hour(cfg):02d}:00)")
     return sched
