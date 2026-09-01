@@ -125,6 +125,8 @@ export interface CalendarItem {
   /** v0.4.1 smart slots — scheduler reason, when the slot was auto-picked */
   scheduled_reason?: string | null;
   reply_to?: { x_id?: string | null; author?: string } | null;
+  x_id?: string | null;
+  is_thread?: boolean;
 }
 
 /** v0.4.1 smart slots — one scored candidate slot on the Calendar */

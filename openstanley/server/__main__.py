@@ -1516,7 +1516,8 @@ def _cal_item(d: dict, state: str) -> dict:
         reply_to = {"x_id": meta.get("reply_to_x_id"), "author": author}
     return {"id": d["id"], "kind": d.get("kind") or "post", "state": state,
             "text": d["text"], "scheduled_at": d.get("scheduled_at"),
-            "published_at": d.get("published_at"),
+            "published_at": d.get("published_at"), "x_id": d.get("x_id"),
+            "is_thread": bool(d.get("thread")),
             "time": (d.get("scheduled_at") or d.get("published_at") or "T")[11:16],
             "image": d.get("image"), "score": alg.get("score"),
             "language": meta.get("language") or "en",

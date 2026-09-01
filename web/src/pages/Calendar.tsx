@@ -133,6 +133,7 @@ interface DetailItem {
   score?: number | null;
   image?: string | null;
   time?: string;
+  x_id?: string | null;
   reply_to?: { x_id?: string | null; author?: string } | null;
 }
 
@@ -202,6 +203,20 @@ function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: ()
         {it.language ? <Badge>{it.language}</Badge> : null}
         <span className="ms-auto font-mono text-[10.5px] text-ink-3">#{it.id}</span>
       </div>
+
+      {it.state === 'published' && it.x_id ? (
+        <a
+          href={`https://x.com/_/status/${it.x_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          dir="ltr"
+          className="mb-2 flex items-center gap-1 rounded-lg border border-green/40 bg-green-tint px-2 py-1.5 text-[11.5px] text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+        >
+          <Send size={10} className="shrink-0 text-green" />
+          <span className="font-medium">{t('calendar.viewPost')}</span>
+          <ExternalLink size={10} className="ms-auto shrink-0" />
+        </a>
+      ) : null}
 
       {it.reply_to?.author ? (
         <a
@@ -298,6 +313,16 @@ function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: ()
 
 // ---------------- post card inside a slot ----------------
 
+/** kind accent: post=blue · thread=purple · quote=teal · reply=orange ·
+ *  published ALWAYS green (the shipped state wins over the kind) */
+function kindAccent(item: CalendarItem): string {
+  if (item.state === 'published') return 'border-s-green';
+  if (item.kind === 'reply') return 'border-s-orange';
+  if (item.kind === 'quote') return 'border-s-teal';
+  if (item.is_thread) return 'border-s-accent';
+  return 'border-s-blue';
+}
+
 function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => void }) {
   const { t } = useApp();
   const [open, setOpen] = useState(false);
@@ -316,7 +341,8 @@ function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => v
           title={t('calendar.dragHint')}
           className={cn(
             'cursor-grab select-none rounded-xl border border-line bg-surface px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
-            item.kind === 'reply' && 'border-s-2 border-s-orange',
+            'border-s-2',
+            kindAccent(item),
             isDragging && 'opacity-30',
           )}
         >
@@ -571,6 +597,7 @@ function QueueCard({ draft, onChanged }: { draft: Draft; onChanged?: () => void 
         <PostDetail
           it={{ id: draft.id, kind: draft.kind, state: draft.status, text: draft.text,
                 scheduled_at: draft.scheduled_at, language: draft.language, image: draft.image,
+                x_id: draft.x_id,
                 reply_to: draft.meta?.reply_to_x_id
                   ? { x_id: draft.meta.reply_to_x_id,
                       author: draft.meta.target_author || draft.meta.author || '' }
@@ -788,6 +815,15 @@ export function CalendarPage() {
               {t('calendar.title')}
             </h1>
             <p className="mt-2 font-serif text-[14px] italic text-ink-3">{t('calendar.subtitle')}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {([['legendPost', 'bg-blue'], ['legendThread', 'bg-accent'], ['legendQuote', 'bg-teal'],
+                 ['legendReply', 'bg-orange'], ['legendPublished', 'bg-green']] as const).map(([k, c]) => (
+                <span key={k} className="inline-flex items-center gap-1 text-[11px] text-ink-3">
+                  <span className={cn('size-2 rounded-full', c)} />
+                  {t(`calendar.${k}`)}
+                </span>
+              ))}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {tzLabel() ? (
