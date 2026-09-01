@@ -466,10 +466,25 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
     blocks: list[str] = []
 
     instr = read("instructions", acct)
-    # skip the manual's title; keep persona/workflow/priorities essence
-    instr_body = "\n".join(ln for ln in instr.splitlines()
+    # skip the manual's title; keep persona/workflow/priorities essence.
+    # Learned adjustments: NEWEST few only (oldest-first injected week-old
+    # baselines while today's learning got clipped), and self-directed
+    # bookkeeping lines stay out of content prompts entirely (live audit
+    # 2026-09-01: 'recompute x-times-baseline claims vs 0.0022' is the
+    # agent's internal arithmetic, not wisdom for writing a post).
+    def _not_bookkeeping(line: str) -> bool:
+        low = line.lower()
+        return not ("baseline" in low and re.search(r"0\.0\d", line))
+    instr_core = "\n".join(ln for ln in instr.splitlines()
                            if not ln.startswith("# "))
-    blocks.append(_clip(instr_body, shares[0]))
+    if "## Learned adjustments" in instr_core:
+        head, adj = instr_core.split("## Learned adjustments", 1)
+        adj_lines = [ln for ln in adj.splitlines()
+                     if ln.strip().startswith("-") and _not_bookkeeping(ln)]
+        instr_core = (head.rstrip()
+                      + "\n\n## Recent adjustments (newest first)\n"
+                      + "\n".join(adj_lines[:5]))
+    blocks.append(_clip(instr_core, shares[0]))
 
     all_rules = [r for r in parse_rules(read("rules", acct)) if r["status"] == "active"]
     # OWNER DIRECTIVES lead the prompt: rules the owner personally dictated
@@ -482,11 +497,17 @@ def brain_context(budget: int = BUDGET_CHARS, acct: int | None = None) -> str:
         blocks.append(_clip("OWNER DIRECTIVES (absolute — the owner said these "
                             "in their own words):\n" + "\n".join(dlines),
                             shares[1]))
-    rules = [r for r in all_rules if r["source"] != "directive"]
+    # NEWEST-FIRST: rules.md appends, so file order = oldest-first — the
+    # digest used to inject the Aug-21 pre-pivot era into every prompt
+    # while this week's 33 rules got clipped (live audit 2026-09-01).
+    # Bookkeeping rules (baseline arithmetic) stay in the file for audit
+    # but never reach content prompts.
+    rules = [r for r in reversed(all_rules)
+             if r["source"] != "directive" and _not_bookkeeping(r["text"])]
     if rules:
         rule_lines = [f"R{r['id']}: {r['text']}" for r in rules]
-        blocks.append(_clip("RULES (learned — obey):\n" + "\n".join(rule_lines),
-                            shares[2]))
+        blocks.append(_clip("RULES (learned, newest first — obey):\n"
+                            + "\n".join(rule_lines), shares[2]))
 
     strat = read("strategies", acct)
     # the one-pager lives above; the actionable digest is the learning
@@ -858,6 +879,30 @@ def reflect(cfg, trigger: str, payload: Optional[dict] = None,
                     _atomic_write(_resolve(f"files/{stem}", acct), sanitize(content))
                     applied["file_updates"].append(stem)
                     changes.append(f"file {stem}: refreshed from scan stats")
+
+    # 4.7 archive sweep: retired rules are audit history, not working
+    # memory — when they pile up, move them out so rules.md stays the
+    # ACTIVE set (live audit 2026-09-01: 112 retired blocks = 62% of the
+    # file, dead weight for humans AND for every prompt read)
+    try:
+        all_blocks = parse_rules(read("rules", acct))
+        retired = [r for r in all_blocks if r["status"] == "retired"]
+        if len(retired) > 40:
+            active_txt = ("# Learned Rules\n\n"
+                          + "\n\n".join(render_rule(r) for r in all_blocks
+                                        if r["status"] == "active") + "\n")
+            arch_path = _files_dir(acct) / "rules-archive.md"
+            prev = arch_path.read_text(encoding="utf-8") \
+                if arch_path.exists() else "# Retired Rules (audit archive)\n"
+            arch_txt = (prev.rstrip() + "\n\n"
+                        + "\n\n".join(render_rule(r) for r in retired) + "\n")
+            _atomic_write(_resolve("rules", acct), active_txt)
+            _atomic_write(arch_path, arch_txt)
+            db.log("brain", f"archived {len(retired)} retired rules to "
+                            f"files/rules-archive.md")
+            changes.append(f"archived {len(retired)} retired rules")
+    except Exception as e:  # noqa: BLE001 — housekeeping never breaks reflect
+        db.log("brain", f"rule archive sweep failed: {e}", level="warn")
 
     # 5. journal entry (always written — even an empty reflection is a fact)
     entry = str(data.get("journal_entry") or "").strip() or \
