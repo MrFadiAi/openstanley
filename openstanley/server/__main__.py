@@ -1559,7 +1559,12 @@ def _empty_slots(by_date) -> dict:
 @app.get("/api/insights")
 async def insights_ep():
     from ..gen.lang import detect as lang_detect
-    posts = db.own_posts(limit=300)
+    posts = [p for p in db.own_posts(limit=300)
+             if not (p.get("text") or "").startswith("RT @")]
+    # retweets are someone else's writing: they carried 0 captured
+    # engagement (so they never skewed rankings) but they DID pollute
+    # post-counts-per-day, the language mix, and per-slot counts —
+    # insights now measure the owner's own content only
     if not posts:
         return {"engagement_over_time": [], "best_hours": [], "hours_heatmap": [],
                 "format_performance": [], "language_mix": [], "summary": {}}
