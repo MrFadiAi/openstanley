@@ -2104,7 +2104,18 @@ def start_scheduler():
         except Exception as e:  # noqa: BLE001
             db.log("briefing", f"morning briefing failed: {e}", level="warn")
     sched.add_job(_briefing_job, CronTrigger(hour=9, minute=3),
-                  id="morning_briefing")
+                  id="briefing")
+
+    async def _weekly_job():
+        # Friday evening wrap: what shipped, what it earned, what the
+        # brain learned/forgot, what awaits the owner (owner ask 2026-09-02)
+        from ..gen import weekly as weekly_mod
+        try:
+            weekly_mod.push_weekly(cfg)
+        except Exception as e:  # noqa: BLE001
+            db.log("weekly", f"weekly report failed: {e}", level="warn")
+    sched.add_job(_weekly_job, CronTrigger(day_of_week="fri", hour=18,
+                                           minute=47), id="weekly")
     # perf A/B loop: check shipped posts at +2h/+24h vs baseline
     async def _perf_job():
         from ..gen import perf_track
