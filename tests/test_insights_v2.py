@@ -30,6 +30,19 @@ def _seed_posts(rows, text=''):
                       (1, x_id, 1, created, text, imp, likes, eng))
 
 
+def _seed_posts_full(rows, text=''):
+    """Seeds likes/reposts/replies explicitly (the plain _seed_posts only
+    sets the rate column — useless for absolute-engagement tests)."""
+    with db.connect() as c:
+        c.execute("DELETE FROM posts")
+        for x_id, created, imp, likes, reposts, replies in rows:
+            c.execute("INSERT INTO posts (account_id, x_id, is_own, created_at, "
+                      "text, impressions, likes, reposts, replies, engagement) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                      (1, x_id, 1, created, text, imp, likes, reposts,
+                       replies, 0))
+
+
 def test_heatmap_year_of_days_and_totals():
     today = date.today()
     _seed_posts([
@@ -82,15 +95,23 @@ def test_type_performance_joins_draft_image():
     assert tp["ratio"] == 3.0
 
 
-def test_best_content_orders_by_engagement_rate():
-    _seed_posts([
-        ("b1", "2026-08-19 10:00:00", 10000, 5, 10),   # 0.1%
-        ("b2", "2026-08-18 10:00:00", 500, 5, 20),     # 4% — the winner
-        ("b3", "2026-08-17 10:00:00", 2000, 2, 3),     # 0.15%
+def test_best_content_orders_by_absolute_engagement():
+    """Live 2026-09-02 ('still no real data'): the wall ranked by
+    engagement-RATE, and posts.engagement stores a rate — so the division
+    was rate/impressions and a 1-like reply led the 'best posts' wall.
+    Ranking is now absolute engagement (likes + 3*reposts + 8*replies)."""
+    _seed_posts_full([
+        ("b1", "2026-08-19 10:00:00", 10000, 5, 0, 10),   # 5+80 = 85
+        ("b2", "2026-08-18 10:00:00", 500, 5, 0, 20),     # 5+160 = 165 — winner
+        ("b3", "2026-08-17 10:00:00", 2000, 2, 0, 3),     # 2+24 = 26
     ])
     best = ins.best_content()
     assert best[0]["x_id"] == "b2"
-    assert [b["x_id"] for b in best] == ["b2", "b3", "b1"]
+    assert best[0]["engagement"] == 165
+    assert best[0]["engagement_rate"] == round(165 / 500, 4)
+    # b1 (85) outranks b3 (26) on absolute engagement — impressions only
+    # break ties
+    assert [b["x_id"] for b in best] == ["b2", "b1", "b3"]
 
 
 def test_overview_endpoint_shape():

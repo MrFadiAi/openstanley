@@ -45,6 +45,17 @@ def _own_posts(acct: Optional[int] = None) -> list[sqlite3.Row]:
             (db._acct(acct),)).fetchall()
 
 
+
+
+def _eng(p) -> float:
+    """ABSOLUTE engagement for a post row (posts.engagement stores a RATE
+    — insights divided percentages by impressions and every ranking went
+    garbage: the 'best post' wall led with a 1-like reply, live 2026-09-02
+    'still no real data')."""
+    return ((p["likes"] or 0) + 3 * (p["reposts"] or 0)
+            + 8 * (p["replies"] or 0))
+
+
 def account_summary(acct: Optional[int] = None) -> dict:
     me = db.get_me() or {}
     account = db.get_account(db.active_account()) or {}
@@ -147,7 +158,7 @@ def type_performance(acct: Optional[int] = None) -> dict:
     def _bucket(rows):
         n = len(rows)
         imp = sum(p["impressions"] or 0 for p in rows)
-        eng = sum(p["engagement"] or 0 for p in rows)
+        eng = sum(_eng(p) for p in rows)
         return {"count": n,
                 "avg_impressions": round(imp / n) if n else 0,
                 "engagement_rate": round(eng / imp, 4) if imp else 0.0}
@@ -173,15 +184,16 @@ def best_content(acct: Optional[int] = None, limit: int = 12) -> list[dict]:
     posts = []
     for p in _own_posts(acct):
         imp = p["impressions"] or 0
-        eng = p["engagement"] or 0
+        eng = _eng(p)
         posts.append({
             "x_id": p["x_id"], "text": p["text"] or "",
             "created_at": str(p["created_at"] or "")[:10],
             "likes": p["likes"] or 0, "impressions": imp,
+            "engagement": eng,
             "engagement_rate": round(eng / imp, 4) if imp else 0.0,
             "image": p["draft_image"],
         })
-    posts.sort(key=lambda p: (-p["engagement_rate"], -p["impressions"]))
+    posts.sort(key=lambda p: (-p["engagement"], -p["impressions"]))
     return posts[:limit]
 
 
