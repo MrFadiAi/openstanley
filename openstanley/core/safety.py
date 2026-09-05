@@ -12,7 +12,18 @@ from datetime import date
 
 from . import db
 
-TODAY = date.today().isoformat()
+TODAY = date.today().isoformat()  # DEPRECATED: frozen at import — do not
+# use for reset checks. A server running since 2026-09-02 kept comparing
+# stored counters against '2026-09-02' for days: the daily post cap never
+# reset and every scheduled post bounced on 'daily cap reached' while
+# nothing shipped (live 2026-09-05: #3020 pushed Sep 4→5→6, #3028/#3021
+# the same). Reset checks compute the date at CALL time.
+
+
+def _today() -> str:
+    """The date RIGHT NOW — module-level TODAY freezes at process start
+    and a long-running server stops rolling its daily caps."""
+    return date.today().isoformat()
 
 
 class SafetyCapExceeded(Exception):
@@ -41,13 +52,14 @@ def _key(acct: int | None) -> str:
 
 
 def _counters(acct: int | None = None) -> dict:
+    today = _today()
     c = db.get_setting(_key(acct))
     if c is None and acct is None:  # pre-v0.5 single-install counters carry over
         legacy = db.get_setting("safety_counters")
-        c = legacy if isinstance(legacy, dict) and legacy.get("date") == TODAY else None
+        c = legacy if isinstance(legacy, dict) and legacy.get("date") == today else None
     c = c or {}
-    if c.get("date") != TODAY:
-        c = {"date": TODAY, "posts": 0, "replies": 0}
+    if c.get("date") != today:
+        c = {"date": today, "posts": 0, "replies": 0}
     return c
 
 

@@ -230,3 +230,23 @@ def test_link_reply_exempt_from_reply_cap():
     assert u["replies"] == 100, "counted in usage but never gated"
     safety._save({"date": date.today().isoformat(), "posts": 0,
                   "replies": 0}, 1)
+
+
+def test_daily_cap_rolls_across_midnight(monkeypatch):
+    """Live 2026-09-05: the server ran since Sep 2 with a module-level
+    TODAY frozen at import — counters never reset, and every scheduled
+    post bounced on 'daily cap reached' for three days while nothing
+    shipped. Reset checks must compute the date at CALL time."""
+    from openstanley.core import safety as sf
+    from openstanley.core import db as _db
+    # simulate a counter left over from 'yesterday' (a long-running server)
+    _db.set_setting("safety_counters:1",
+                    {"date": "2000-01-01", "posts": 4, "replies": 10})
+    c = sf._counters(1)
+    assert c == {"date": sf._today(), "posts": 0, "replies": 0}
+    # same-day counter is preserved
+    _db.set_setting("safety_counters:1",
+                    {"date": sf._today(), "posts": 2, "replies": 0})
+    assert sf._counters(1)["posts"] == 2
+    _db.set_setting("safety_counters:1", {"date": sf._today(),
+                                          "posts": 0, "replies": 0})
