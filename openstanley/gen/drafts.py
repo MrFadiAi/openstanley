@@ -248,12 +248,38 @@ def generate_quote_draft(cfg: Config, tweet: dict, angle: str = "") -> int:
                         quote_of=tweet["x_id"], meta=meta)
 
 
+def _recent_winners_block(language: str | None = None) -> str:
+    """2-3 of the owner's RECENT top posts (last 30 days), as live style
+    anchors. The voice profile's examples skew toward all-time winners —
+    which on this account means pre-pivot viral era; drafts imitated
+    2025 voice instead of current voice (owner 2026-09-06: 'improve the
+    auto drafting writing')."""
+    from datetime import datetime as _dt, timedelta as _td
+    cutoff = (_dt.now() - _td(days=30)).strftime("%Y-%m-%d")
+    with db.connect() as c:
+        rows = c.execute(
+            "SELECT text, likes, replies FROM posts WHERE account_id=? "
+            "AND is_own=1 AND created_at >= ? AND text IS NOT NULL "
+            "AND text NOT LIKE 'RT @%' "
+            "ORDER BY (likes + 3 * replies) DESC LIMIT 3",
+            (db.active_account(), cutoff)).fetchall()
+    if not rows:
+        return ""
+    lines = ["", "RECENT WINNERS — what the account's CURRENT voice "
+              "actually sounds like (match this register, not 2025 "
+              "archives):"]
+    for r in rows:
+        t = " ".join((r["text"] or "").split())[:130]
+        lines.append(f'> "{t}" ({r["likes"]}♥)')
+    return "\n".join(lines)
+
+
 def _draft_one(cfg: Config, idea: dict, temp: str, language: str | None = None,
                quote: dict | None = None, image: str | None = None,
                variety: str = "", demand_difference: str = "") -> dict | None:
     # z.ai rejects temperature > 1 — experimental tops out AT the cap
     t = {"safe": 0.7, "bold": 0.95, "experimental": 1.0}[temp]
-    voice = voice_prompt_block(language)
+    voice = voice_prompt_block(language) + _recent_winners_block(language)
     user = f"""IDEA: {idea['title']}
 ANGLE: {idea['angle']}
 FORMAT: {idea.get('format', 'one-liner')}

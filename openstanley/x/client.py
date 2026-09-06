@@ -85,9 +85,14 @@ def _read_retry(wait_429_s: float = 60.0, wait_404_s: float = 15.0):
                     raise
                 wait = wait_429_s if "429" in str(e) or "TooManyRequests" in type(e).__name__ else wait_404_s
                 db.log("x", f"transient read failure on {fn.__name__} "
-                            f"({type(e).__name__}) — one retry in {wait:.0f}s",
+                            f"({type(e).__name__}) — rebuilding client, "
+                            f"one retry in {wait:.0f}s",
                        level="warn")
                 await asyncio.sleep(wait)
+                # a FRESH session fixes the code-34 404 (the same client
+                # 404s again on the second attempt — live 2026-09-05/06:
+                # watch searches died twice with retry-same-client)
+                self._client = None
                 return await fn(self, *args, **kwargs)
         return wrapper
     return deco

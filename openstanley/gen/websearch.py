@@ -141,10 +141,12 @@ def web_search(query: str, limit: int = MAX_RESULTS) -> list[dict]:
     except Exception:  # noqa: BLE001 — search must never take the chat down
         return []
 
-def _own_client():
+def _own_client(force_new: bool = False):
     """A FRESH XCookie bound to THIS caller's loop. Reusing the server's
     agent client from the TG poller thread broke with 'attached to a
-    different loop' (user report 2026-08-24: x_trends returned ok=False)."""
+    different loop' (user report 2026-08-24: x_trends returned ok=False).
+    force_new: a second, distinct instance — a fresh session resolves the
+    code-34 404 class where the same session 404s again."""
     from ..x.client import XCookie
     cookies = _stored_cookies()
     if not cookies:
@@ -169,12 +171,22 @@ def _stored_cookies() -> Optional[str]:
 
 def x_search(cfg: Config, query: str, limit: int = 10) -> list[dict]:
     """Search X through a fresh cookie client, no API key, loop-safe from
-    any thread (TG poller, chat workers, cron)."""
+    any thread (TG poller, chat workers, cron). Two attempts with a
+    REBUILT client between — the code-34 404 class recovers on a fresh
+    session, not on the same one (live 2026-09-05/06: watch searches
+    failed even with the same-client retry)."""
     import asyncio
 
     async def _run():
-        x = _own_client()
-        return await x.search(query, limit=limit)
+        last = None
+        for attempt in (1, 2):
+            x = _own_client() if attempt == 1 else _own_client(force_new=True)
+            try:
+                return await x.search(query, limit=limit)
+            except Exception as e:  # noqa: BLE001
+                last = e
+                await asyncio.sleep(3)
+        raise last
 
     return asyncio.run(_run())
 
@@ -205,7 +217,11 @@ def x_trends(cfg: Config, limit: int = 10) -> list[str]:
 def web_read(url: str, max_chars: int = 6000) -> dict:
     """Fetch a URL and return readable text — the agent's way IN to any page
     (articles, docs, dashboards), like a browser's reader mode. No JS, no
-    auth; honest error when the page refuses."""
+    auth; honest error when the page refuses.
+
+    Fallback chain (owner 2026-09-06: 'improve getting content from
+    link'): TinyFish reader → raw fetch+strip → r.jina.ai (renders JS —
+    the reader paths return empty on JS-only pages)."""
     import re as _re
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
@@ -215,9 +231,9 @@ def web_read(url: str, max_chars: int = 6000) -> dict:
     try:
         r = httpx.get(url, headers=UA, timeout=20, follow_redirects=True)
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"fetch failed: {type(e).__name__}"}
+        return _jina_fallback(url, max_chars, f"fetch failed: {type(e).__name__}")
     if r.status_code != 200:
-        return {"ok": False, "error": f"HTTP {r.status_code}"}
+        return _jina_fallback(url, max_chars, f"HTTP {r.status_code}")
     html = r.text
     # strip the noise: scripts, styles, tags, entities — reader-mode style
     html = _re.sub(r"<(script|style|nav|footer|header)[^>]*>.*?</\1>", " ",
@@ -230,7 +246,24 @@ def web_read(url: str, max_chars: int = 6000) -> dict:
                     _re.IGNORECASE | _re.DOTALL)
     if m:
         title = _html.unescape(m.group(1)).strip()[:120]
-    if not text:
-        return {"ok": False, "error": "no readable text (JS-only page?)"}
+    if len(text) < 200:  # shell page — the content is JS-rendered
+        return _jina_fallback(url, max_chars,
+                              "page shell too thin (JS-rendered)")
     return {"ok": True, "title": title, "url": str(r.url), "length": len(text),
             "text": text[:max_chars]}
+
+
+def _jina_fallback(url: str, max_chars: int, why: str) -> dict:
+    """r.jina.ai renders the page (incl. JS) and returns reader text.
+    Free without a key (rate-limited) — last resort, never first."""
+    try:
+        r = httpx.get(f"https://r.jina.ai/{url}", timeout=45,
+                      headers={"User-Agent": UA.get("User-Agent", "openstanley")})
+        if r.status_code == 200 and len(r.text.strip()) > 150:
+            text = r.text.strip()
+            return {"ok": True, "title": text.splitlines()[0][:120],
+                    "url": url, "length": len(text),
+                    "text": text[:max_chars], "via": "jina-render"}
+    except Exception:  # noqa: BLE001 — fall through to the honest error
+        pass
+    return {"ok": False, "error": f"{why} (jina fallback also failed)"}

@@ -238,3 +238,42 @@ def test_web_read_falls_back_when_fetch_fails(monkeypatch):
     # falls back to the plain reader (real page fetch here — example.com is
     # stable) — must NOT carry via=tinyfish
     assert r["ok"] and r.get("via") != "tinyfish"
+
+
+def test_web_read_jina_fallback_on_shell(monkeypatch):
+    """JS-only pages: the raw fetch returns a thin shell (<200 chars) —
+    the jina renderer is the last resort (owner 2026-09-06)."""
+    import openstanley.gen.websearch as ws
+
+    class _Shell:
+        status_code = 200
+        url = "https://x.dev/js-page"
+        text = "<html><body><div id=root></div></body></html>"
+
+    class _Jina:
+        status_code = 200
+        text = "Title Line\n\n" + ("real rendered content " * 40)
+
+    def fake_get(url, **kw):
+        return _Shell() if "r.jina.ai" not in url else _Jina()
+
+    monkeypatch.setattr(ws.httpx, "get", fake_get)
+    monkeypatch.setattr(ws, "_tinyfish_fetch", lambda *a: None)
+    out = ws.web_read("https://x.dev/js-page")
+    assert out["ok"] and out.get("via") == "jina-render"
+
+
+def test_web_read_direct_when_substantial(monkeypatch):
+    import openstanley.gen.websearch as ws
+
+    class _Real:
+        status_code = 200
+        url = "https://x.dev/article"
+        text = ("<html><title>Real Article</title><body>" +
+                ("substantial article text here " * 60) +
+                "</body></html>")
+
+    monkeypatch.setattr(ws.httpx, "get", lambda url, **kw: _Real())
+    monkeypatch.setattr(ws, "_tinyfish_fetch", lambda *a: None)
+    out = ws.web_read("https://x.dev/article")
+    assert out["ok"] and "via" not in out and "substantial" in out["text"]
