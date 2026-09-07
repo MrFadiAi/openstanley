@@ -77,6 +77,8 @@ Generate {count} NEW post ideas mixing: 40% niche-react (respond to what's landi
             fmt=str(idea.get("format", "one-liner")),
             source=str(idea.get("source", ""))[:300],
             score=float(idea.get("score", 5) or 5),
+            source_x_id=str(idea.get("source_x_id") or ""),
+            source_handle=str(idea.get("source_handle") or ""),
         )
         added.append(iid)
     db.log("study", f"generated {len(added)} ideas (bank now {db.idea_count()})")
@@ -181,7 +183,9 @@ def _post_idea(p: dict, source: str, rank: int = 0) -> dict | None:
                  f"— our take: {style} on this topic for our audience.")
         score = round(max(5.6, 9.0 - rank * 0.8), 1)
     return {"title": title, "angle": angle[:600], "fmt": fmt,
-            "source": source, "score": score, "tokens": tokens}
+            "source": source, "score": score, "tokens": tokens,
+            "source_x_id": p.get("x_id") or "",
+            "source_handle": handle}
 
 
 def _outlier_ideas(acct: int | None = None) -> list[dict]:
@@ -297,7 +301,9 @@ async def replenish(cfg: Config, min_bank: int = DEFAULT_MIN_BANK,
 
     for idea in added:
         db.add_idea(idea["title"], idea["angle"], idea["fmt"], idea["source"],
-                    idea["score"], acct=acct)
+                    idea["score"], acct=acct,
+                    source_x_id=idea.get("source_x_id") or "",
+                    source_handle=idea.get("source_handle") or "")
     if added:
         db.set_acct_setting("ideas_last_replenish", {
             "at": datetime.now().isoformat(timespec="seconds"),

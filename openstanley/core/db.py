@@ -226,6 +226,11 @@ def _migrate(c: sqlite3.Connection) -> None:
     cols = {r["name"] for r in c.execute("PRAGMA table_info(drafts)").fetchall()}
     if "image" not in cols:
         c.execute("ALTER TABLE drafts ADD COLUMN image TEXT")
+    icols = {r["name"] for r in c.execute("PRAGMA table_info(ideas)").fetchall()}
+    if "source_x_id" not in icols:
+        c.execute("ALTER TABLE ideas ADD COLUMN source_x_id TEXT")
+    if "source_handle" not in icols:
+        c.execute("ALTER TABLE ideas ADD COLUMN source_handle TEXT")
     if "quote_of" not in cols:
         c.execute("ALTER TABLE drafts ADD COLUMN quote_of TEXT")  # quoted tweet x_id
     pcols = {r["name"] for r in c.execute("PRAGMA table_info(posts)").fetchall()}
@@ -735,12 +740,15 @@ def load_voice(acct: Optional[int] = None) -> Optional[dict]:
 # ---------- ideas ----------
 
 def add_idea(title: str, angle: str, fmt: str, source: str, score: float = 0.0,
-             acct: Optional[int] = None) -> int:
+             acct: Optional[int] = None, source_x_id: str = "",
+             source_handle: str = "") -> int:
     with _lock, connect() as c:
         cur = c.execute(
-            "INSERT INTO ideas (account_id, title, angle, format, source, score, created_at) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (_acct(acct), title, angle, fmt, source, score, _now()),
+            "INSERT INTO ideas (account_id, title, angle, format, source, "
+            "score, created_at, source_x_id, source_handle) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (_acct(acct), title, angle, fmt, source, score, _now(),
+             source_x_id, source_handle),
         )
         return cur.lastrowid
 

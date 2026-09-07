@@ -313,3 +313,25 @@ def test_idea_source_persisted_for_analytics():
     assert last["sources"] == res["sources"] == \
         ["scan", "brain", "study", "evergreen"]
     assert last["at"] and last["added"] == res["added"]
+
+
+def test_idea_source_lineage_reaches_draft_prompt(tmp_path, monkeypatch):
+    """Owner 2026-09-06: autonomous drafts 'forget links' — the idea bank
+    carried a 6-word title, and the source tweet's link never existed in
+    the draft prompt. Ideas now carry source_x_id/handle; the draft
+    prompt embeds the full source tweet + its x.com link."""
+    from openstanley.core import db as _db
+    from openstanley.gen import drafts as dr
+    _db.upsert_post({"x_id": "src-lin-1", "author_handle": "toolmaker",
+                     "is_own": 0, "created_at": "2026-09-01T10:00:00",
+                     "text": "launched our open source agent framework "
+                             "with benchmarks", "likes": 400})
+    idea = {"id": 1, "title": "framework launch", "angle": "our take",
+            "format": "one-liner", "source": "scan",
+            "source_x_id": "src-lin-1", "source_handle": "toolmaker"}
+    block = dr._source_material_block(idea)
+    assert "x.com/toolmaker/status/src-lin-1" in block
+    assert "agent framework" in block
+    assert dr._source_material_block({"source_x_id": ""}) == ""
+    with _db.connect() as c:
+        c.execute("DELETE FROM posts WHERE x_id='src-lin-1'")

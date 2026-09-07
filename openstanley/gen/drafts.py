@@ -26,7 +26,14 @@ GROWTH HEURISTICS (X algorithm 2025-26 — replies are worth 27-75x likes):
 
 Rules:
 - Sound EXACTLY like the examples. Copy the casing, punctuation, rhythm, emoji habits.
-- Hard limit 280 chars per tweet (unless thread).
+- Hard limit 280 chars per tweet (unless thread). SUBSTANCE FLOOR: a single
+  post under 120 characters is a throwaway — deliver a concrete claim,
+  number, or payoff, not a fragment (owner 2026-09-06: 'the tweet is too
+  short').
+- LINKS: when the idea references a specific tool, repo, article, launch,
+  or announcement and a source link is provided below, INCLUDE the link —
+  this account's voice posts raw links and followers expect the pointer
+  (owner 2026-09-06: 'it sometimes forgets to include links').
 - No hashtags unless the voice uses them. No "🧵" emoji unless voice does.
 - If format is "thread": first tweet is the hook (no context, standalone scroll-stopper),
   then 3-7 tweets, each < 280 chars, numbered by the reader naturally.
@@ -248,6 +255,25 @@ def generate_quote_draft(cfg: Config, tweet: dict, angle: str = "") -> int:
                         quote_of=tweet["x_id"], meta=meta)
 
 
+
+
+def _source_material_block(idea: dict) -> str:
+    """The idea's ORIGIN tweet, in full, with its link — the autonomous
+    drafts saw only a 6-word title + angle summary, losing the actual
+    content they were supposed to riff on (owner 2026-09-06: drafts
+    'sometimes forget to include links' — they never had them)."""
+    xid = idea.get("source_x_id") or ""
+    handle = idea.get("source_handle") or ""
+    if not xid:
+        return ""
+    with db.connect() as c:
+        row = c.execute("SELECT text FROM posts WHERE x_id=? LIMIT 1",
+                        (xid,)).fetchone()
+    text = " ".join(((row["text"] if row else "") or "").split())[:400]
+    link = f"https://x.com/{handle or 'i'}/status/{xid}" if handle         else f"https://x.com/i/status/{xid}"
+    return f"[SOURCE x.com/{handle or '?'}]: {text} — link: {link}"
+
+
 def _recent_winners_block(language: str | None = None) -> str:
     """2-3 of the owner's RECENT top posts (last 30 days), as live style
     anchors. The voice profile's examples skew toward all-time winners —
@@ -290,8 +316,9 @@ Temperature intent: {temp} — {'play it straight, highest fidelity to voice' if
 QUOTED TWEET (your post is the comment above it):
 @{quote.get('author', '?')}: {quote.get('text', '')[:240]}"""
     user += "\n\nWrite the post now."
+    _src = _source_material_block(idea)
     _task = (f"{idea.get('title', '')} {idea.get('angle', '')} "
-             f"{(quote or {}).get('text', '')}")
+             f"{(quote or {}).get('text', '')} {_src}")
     system = brain_mod.brain_context(task_text=_task) + "\n\n" + \
         DRAFT_SYSTEM.format(voice=voice, algo=ALGO_PROMPT_BLOCK)
     # stamp the rules that shaped this draft — the outcome-scored loop:
