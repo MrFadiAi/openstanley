@@ -1281,3 +1281,34 @@ def test_voice_repair_dialect_pass(monkeypatch):
     assert good == "شنو صار هسه بالكريبتو"
     runaway = vmod.repair_dialect("short raw text " * 3, Config())
     assert runaway.startswith("short raw text")  # fallback keeps raw
+
+
+def test_scaffolding_never_becomes_a_draft():
+    """Live 2026-09-08 09:00: a PUBLISHED post read '**Quote Post 1**,
+    attach via X quote (اللينك ما يدخل بالنص): https://...' — the plan's
+    bold headers leaked through candidate extraction, scored voice 70,
+    and shipped. Planning text is filtered at extraction AND refused at
+    save; real posts pass untouched."""
+    from openstanley.gen import chat as cmod
+    # the exact leak shape
+    assert cmod._looks_like_scaffolding(
+        "**Quote Post 1**, attach via X quote (اللينك ما يدخل بالنص): "
+        "https://x.com/ClaudeDevs/status/2095233745167282602")
+    assert cmod._looks_like_scaffolding("**2 QUOTES FOR THE WEEK** — picks")
+    assert cmod._looks_like_scaffolding("الرابط ما يدخل بالنص ابدا")
+    # real posts pass
+    assert not cmod._looks_like_scaffolding(
+        "شفت تويت اليوم يسأل السؤال الصح: شنو تبني بالـ agents هسه؟ "
+        "الجواب مو الموديل، الـ execution")
+    assert not cmod._looks_like_scaffolding(
+        "canceled 3 subscriptions and built my own stack. $84/month saved "
+        "and it runs faster https://github.com/me/tool")
+    # extraction filters it
+    reply = ("> **Quote Post 1**, attach via X quote: https://x.com/a/1\n\n"
+             "> العراق صار فرجة بالـ AItools والدولة تتحرك ببطء")
+    cands = cmod._extract_candidates(reply, CFG)
+    assert len(cands) == 1 and "فرجة" in cands[0]["text"]
+    # save refuses it even if something bypasses extraction
+    from openstanley.core.config import Config as _C
+    assert cmod.draft_from_chat(
+        _C(), "**Quote Post 1**, attach via X quote: https://x.com/a/1") == -1

@@ -305,13 +305,40 @@ def _history_turn(user_message: str) -> str:
     return f"(conversation so far)\n{hist_text}\n\n(user) {user_message}"
 
 
+_SCAFFOLD_RE = re.compile(
+    r"(?i)(^\*\*)|(attach via)|(quote post \d)|(draft \d)|(placeholder)"
+    r"|(اللينك ما)|(الرابط ما)|(لا تضيف الرابط)|(ملاحظة:)"
+    r"|(TWEET:)|(THREAD:)|(النسخة النهائية)|(هيكل المنشور)")
+
+
+def _looks_like_scaffolding(text: str) -> bool:
+    """The agent's PLANNING lines are not posts. Live 2026-09-08 09:00: a
+    published post read '**Quote Post 1**, attach via X quote (اللينك ما
+    يدخل بالنص): https://...' — the candidate extractor swallowed the
+    plan's bold headers and parenthetical instructions as content, voice
+    70, shipped to 43k followers. Planning text NEVER becomes a draft."""
+    if _SCAFFOLD_RE.search(text):
+        return True
+    # a line that's essentially one URL plus a short instruction wrapper
+    urlish = len(re.findall(r"https?://\S+", text))
+    if urlish and len(re.sub(r"https?://\S+", "", text).strip()) < 60:
+        return True
+    return False
+
+
 def _extract_candidates(reply: str, cfg: Config) -> list[dict]:
     """Markdown quote blocks = post candidates. Each gets an algorithm score
-    and a voice-lock check (the Write page shows the voice chip on it)."""
+    and a voice-lock check (the Write page shows the voice chip on it).
+    Scaffolding (the agent's own planning lines) is filtered — plans are
+    not posts."""
     candidates = []
     for block in re.findall(r"^\s*>[ \t]?(.+)$", reply, re.MULTILINE):
         text = block.strip()
         if len(text) < 15:
+            continue
+        if _looks_like_scaffolding(text):
+            db.log("chat", "scaffolding candidate filtered: "
+                           f"{text[:70]}")
             continue
         alg = score_draft(text)
         cand = {"text": text, "alg": alg,
@@ -610,6 +637,13 @@ def draft_from_chat(cfg: Config, text: str, image: str | None = None) -> int:
     if not watchdog.allow_chat_draft():
         db.log("chat", "chat draft save BLOCKED by watchdog burst guard",
                level="warn")
+        return -1
+    # SCAFFOLDING GATE (live 2026-09-08: a published post was the agent's
+    # own plan line — '**Quote Post 1**, attach via X quote (اللينك ما
+    # يدخل بالنص): https://...'). Even an approved candidate that is
+    # actually planning text never becomes a draft.
+    if _looks_like_scaffolding(text):
+        db.log("chat", f"scaffolding draft REFUSED at save: {text[:70]}")
         return -1
     alg = score_draft(text)
     meta = {"source": "chat", "via": "openstanley-chat",
