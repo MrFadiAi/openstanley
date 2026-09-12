@@ -409,7 +409,11 @@ class Agent:
                 # against the reply cap; a cap bounce just skips the link,
                 # the post itself is already out.
                 link = (nxt.get("meta") or {}).get("link_reply")
-                if link and x_id and nxt.get("kind") == "post":
+                # posts AND quotes carry link-replies (live 2026-09-12: two
+                # approved quotes with link_reply shipped bare — the guard
+                # read kind=='post' only, silently dropping the owner's
+                # 'link in the first comment' instruction)
+                if link and x_id and nxt.get("kind") in ("post", "quote"):
                     try:
                         await self.x.post_tweet(str(link), reply_to=str(x_id),
                                                 count_reply_cap=False)
