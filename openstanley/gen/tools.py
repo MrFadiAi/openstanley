@@ -112,6 +112,14 @@ ROUTING (pick the exact tool for common asks):
   list (id, time, full text) — a COUNT or summary of X is not showing it.
   Never say "pulled 40 items" without listing what the owner asked to see.
 - "where is the X draft" -> list_drafts {query: "X"}
+  QUESTION RULE (live 2026-09-13 00:36: 'does 3163 include the quoting?'
+  got a NEW DUPLICATE draft instead of an answer): when the owner ASKS
+  about an existing draft — does it have the quote? is it a reply? is it
+  scheduled? — ANSWER BY INSPECTION: list_drafts shows kind, quote_of,
+  replying_to, image for every draft. Read it, answer the question
+  directly (yes/no), and if the answer is no, say so and offer to attach
+  it. NEVER create a new draft to answer a question about an existing
+  one.
 - "approve #N" / "approve #N at 9pm" -> approve_draft
   ID DISCIPLINE (live 2026-09-01 23:42: the owner named 4 draft IDs and got
   three inconsistent stories citing OTHER ids, then no action): when the
@@ -352,6 +360,26 @@ def _tool_list_drafts(cfg, status: str = "draft", limit: int = 5,
     said the owner's draft was posted/deleted/never-saved). Previews carry
     280 chars: enough to read a post without a second per-draft fetch."""
     limit = max(1, min(int(limit), 10))
+
+    def _shape(d: dict, st: str) -> dict:
+        """The draft's full identity — kind, quote target, reply target,
+        image. The owner asks 'does #N include the quote?' and 'is it a
+        reply?' — the old shape exposed only text+time, the agent had NO
+        way to answer from its tools and created a duplicate instead
+        (live 2026-09-13 00:36: asked about #3163's quote, minted #3164)."""
+        qof = d.get("quote_of")
+        meta = d.get("meta") or {}
+        reply_author = (meta.get("author") or meta.get("reply_to_author")
+                        or meta.get("target_author") or "")
+        return {"id": d["id"], "status": st, "kind": d.get("kind", "post"),
+                "quote_of": (f"https://x.com/i/status/{qof}" if qof
+                             else None),
+                "replying_to": (f"@{reply_author}" if reply_author and
+                                d.get("kind") == "reply" else None),
+                "image": bool(d.get("image")),
+                "scheduled_at": d.get("scheduled_at"),
+                "text": " ".join((d.get("text") or "").split())[:280]}
+
     if query:
         q = query.lower().strip()
         hits = []
@@ -361,9 +389,7 @@ def _tool_list_drafts(cfg, status: str = "draft", limit: int = 5,
                 if q in t.lower() or q in (d.get("meta") or {}).get(
                         "source", "").lower() or q in str(
                         (d.get("meta") or {}).get("repo", "")).lower():
-                    hits.append({"id": d["id"], "status": st,
-                                 "scheduled_at": d.get("scheduled_at"),
-                                 "text": " ".join(t.split())[:280]})
+                    hits.append(_shape(d, st))
             if len(hits) >= limit:
                 break
         return {"ok": True, "query": query, "count": len(hits), "drafts": hits}
@@ -373,10 +399,7 @@ def _tool_list_drafts(cfg, status: str = "draft", limit: int = 5,
                          f"got {status!r}"}
     rows = db.drafts_by_status(status, limit)
     return {"ok": True, "status": status, "count": len(rows),
-            "drafts": [{"id": d["id"],
-                        "text": " ".join((d.get("text") or "").split())[:280],
-                        "scheduled_at": d.get("scheduled_at")}
-                       for d in rows]}
+            "drafts": [_shape(d, status) for d in rows]}
 
 
 def _tool_get_schedule(cfg, date: str = "") -> dict:
