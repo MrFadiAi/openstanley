@@ -1529,6 +1529,10 @@ def _cal_item(d: dict, state: str) -> dict:
         author = (meta.get("author") or meta.get("reply_to_author")
                   or meta.get("target_author") or "")
         reply_to = {"x_id": meta.get("reply_to_x_id"), "author": author}
+    quote_to = None
+    if d.get("kind") == "quote" and d.get("quote_of"):
+        qa = ((meta.get("quote") or {}).get("author") or "")
+        quote_to = {"x_id": d.get("quote_of"), "author": qa}
     return {"id": d["id"], "kind": d.get("kind") or "post", "state": state,
             "text": d["text"], "scheduled_at": d.get("scheduled_at"),
             "published_at": d.get("published_at"), "x_id": d.get("x_id"),
@@ -1537,7 +1541,7 @@ def _cal_item(d: dict, state: str) -> dict:
             "image": d.get("image"), "score": alg.get("score"),
             "language": meta.get("language") or "en",
             "scheduled_reason": meta.get("scheduled_reason"),
-            "reply_to": reply_to}
+            "reply_to": reply_to, "quote_to": quote_to}
 
 
 def _empty_slots(by_date) -> dict:

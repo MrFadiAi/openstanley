@@ -135,6 +135,7 @@ interface DetailItem {
   time?: string;
   x_id?: string | null;
   reply_to?: { x_id?: string | null; author?: string } | null;
+  quote_to?: { x_id?: string | null; author?: string } | null;
 }
 
 function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: () => void; onClose?: () => void }) {
@@ -214,6 +215,20 @@ function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: ()
         >
           <Send size={10} className="shrink-0 text-green" />
           <span className="font-medium">{t('calendar.viewPost')}</span>
+          <ExternalLink size={10} className="ms-auto shrink-0" />
+        </a>
+      ) : null}
+
+      {it.quote_to?.x_id ? (
+        <a
+          href={`https://x.com/${it.quote_to.author || 'i'}/status/${it.quote_to.x_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          dir="ltr"
+          className="mb-2 flex items-center gap-1 rounded-lg border border-line bg-inset px-2 py-1.5 text-[11.5px] text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+        >
+          <span className="font-medium">{t('calendar.quoting')}:</span>{" "}
+          {it.quote_to.author ? `@${it.quote_to.author}` : 'view tweet'}
           <ExternalLink size={10} className="ms-auto shrink-0" />
         </a>
       ) : null}
@@ -356,6 +371,9 @@ function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => v
             <span className="font-mono text-[10px] uppercase tracking-wide text-ink-3">{item.kind}</span>
             {item.reply_to?.author ? (
               <span className="truncate font-mono text-[10px] text-ink-3">↩ @{item.reply_to.author}</span>
+            ) : null}
+            {item.quote_to?.x_id ? (
+              <span className="truncate font-mono text-[10px] text-ink-3">❝ {item.quote_to.author || 'quote'}</span>
             ) : null}
             {item.image ? <span className="font-mono text-[10px] text-ink-3">· 🖼</span> : null}
             <span className="ms-auto flex items-center gap-1.5 font-mono text-[10px] text-ink-3">
