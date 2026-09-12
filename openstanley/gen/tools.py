@@ -121,6 +121,12 @@ ROUTING (pick the exact tool for common asks):
   say which merged draft carries the content and ask BEFORE rejecting or
   substituting — never silently swap your judgment for an explicit command,
   and never cite draft numbers that did not come from a tool result.
+  VERIFY THEN EXECUTE IN THE SAME TURN (live 2026-09-12 19:32: the owner
+  said 'Approved them'; the agent listed the queue, named the finals and
+  the stubs — and then STOPPED. No approve, no delete, no schedule. The
+  listing is step 1; firing the approve/delete/reschedule actions on the
+  verified ids is step 2 of the SAME reply. A turn that ends after the
+  listing with nothing executed is a failure.
 - "move #N to tomorrow 6pm" -> reschedule_draft
 - "change #N's text" / "make it longer" -> edit_draft (or regenerate_draft)
 - "delete #N" / "clear pending" -> delete_draft
