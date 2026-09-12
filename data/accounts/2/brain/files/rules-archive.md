@@ -447,3 +447,181 @@ DON'T post content-free hooks: meta about own posting/audience, bare question ba
 ## [R177] (rejection · 2026-09-01 · retired)
 DO add a first-person lived detail to every engage-niche reply; tool-praise takes without own experience get rejected.
 
+## [R157] (rejection · 2026-08-31 · retired)
+DON'T draft crypto price takes, ETF flows or meme coins; crypto is allowed only as AI-agents or payments-utility framing
+
+
+## [R178] (rejection · 2026-09-01 · retired)
+DON'T center engage-niche replies on the target's product/beta even when own detail is attached; the subject must be your own lived workflow
+
+
+## [R179] (metrics · 2026-09-01 · retired)
+DO use 0.0022 as the follower-normalized engagement baseline (60 posts, 43,713 followers); supersedes 0.00137 and older ~0.0013 refs
+
+
+## [R182] (metrics · 2026-09-01 · retired)
+DO use 0.00138 as the follower-normalized engagement baseline (60 posts, 43,709 followers); supersedes R179's 0.0022
+
+
+## [R183] (rejection · 2026-09-01 · retired)
+DON'T dress replies in metaphors, academic jargon or hype lines; plain first-person detail wins (metaphor & 'moravec's paradox' rejected)
+
+
+## [R184] (rejection · 2026-09-01 · retired)
+DON'T build content on spectator anecdotes or others' work; center own lived workflow (robot waiter sighting, @poteto guide rejected)
+
+
+## [R185] (rejection · 2026-09-01 · retired)
+DON'T open replies with jargon name-drops or corrections (moravec's paradox); affirm the target first, then add value (sharpens R137)
+
+
+## [R186] (rejection · 2026-09-01 · retired)
+DON'T center drafts on external spectacle or others' just-released guides (robot waiter, pstack); own lived workflow is the substance
+
+
+## [R187] (rejection · 2026-09-01 · retired)
+DON'T let engage-niche replies lean on metaphors or vague claims; the added value must name a tool, a number, or a specific workflow detail
+
+
+## [R188] (rejection · 2026-09-01 · retired)
+DON'T open replies with jargon labels (moravec's paradox) or pivot anecdotes into grandiose takes; affirm naturally then add lived detail
+
+
+## [R189] (rejection · 2026-09-01 · retired)
+DON'T share others' guides or threads unless you've personally used the tool; resource recs need lived first-person experience (R19)
+
+
+## [R190] (rejection · 2026-09-01 · retired)
+DON'T post generic opinion rants (privacy-as-a-feature take) with no concrete personal discovery behind them; R1 demands lived stories
+
+
+## [R191] (rejection · 2026-09-01 · retired)
+DON'T invent war stories in replies (fine tuning runs, trading losses, spend sheets); only use the user's verified lived stack
+
+
+## [R192] (rejection · 2026-09-01 · retired)
+DON'T write crypto trading mechanic replies (slippage, pools, spreads) even as agent framing; the AI-agents loophole failed
+
+
+## [R193] (rejection · 2026-09-01 · retired)
+DON'T invent new lived specifics in replies (courses shipped, trading agents, fine-tunes); reuse verified account facts or pure rapport.
+
+
+## [R194] (rejection · 2026-09-01 · retired)
+DON'T use agent framing to smuggle crypto trading mechanics (slippage, pools, spreads); only payments-utility crypto passes review.
+
+
+## [R195] (rejection · 2026-09-01 · retired)
+DON'T invent war stories in replies (rigs, courses, fine-tunes, trading agents); only claim experiences from the user's real history
+
+
+## [R196] (rejection · 2026-09-01 · retired)
+DON'T anchor posts on big-company 'fun fact' trivia (Google monorepo); lead with the user's own application, not their numbers
+
+
+## [R199] (rejection · 2026-09-01 · retired)
+DON'T post bare links or verbatim press-release copy; every repost needs the user's own first-person take in Arabic/Iraqi voice
+
+
+## [R200] (rejection · 2026-09-01 · retired)
+DON'T relay announcements as bare links or verbatim copies; wrap every news repost in a first person take in the account's voice
+
+
+## [R201] (rejection · 2026-09-01 · retired)
+DO quote post news with a few lines of own Arabic take (like the AshCrypto stablecoin quote); never bare relay
+
+
+## [R202] (rejection · 2026-09-01 · retired)
+DON'T follow an approved landmark announcement with detail posts (funding, partners, timelines, sites); one post is enough
+
+
+## [R203] (rejection · 2026-09-01 · retired)
+DON'T present drafts that cut off mid-sentence; verify every draft is complete copy before showing the owner
+
+
+## [R204] (rejection · 2026-09-01 · retired)
+DON'T split one announcement into fact fragments (partner lists, funding tranches); one headline post with own take covers it.
+
+
+## [R205] (rejection · 2026-09-01 · retired)
+DON'T sell local AI on privacy ('not about money'); keep the concrete cost/productivity frame; privacy-framed FLUX draft was rejected.
+
+
+## [R206] (rejection · 2026-09-01 · retired)
+DON'T pitch stablecoin transfers as personal finance wins (fees, speed, quitting banks); crypto only with AI agents or quoted macro takes
+
+
+## [R208] (rejection · 2026-09-01 · retired)
+DON'T reuse the R10 cost-saving frame on crypto topics; the 'I stopped traditional transfers' hook was refused despite the proven format
+
+
+## [R209] (rejection · 2026-09-02 · retired)
+DON'T turn trend-scout finds into posts commenting on other users' behavior or posting style; recast as own-voice AI value or drop
+
+
+## [R210] (rejection · 2026-09-02 · retired)
+DON'T show truncated stub drafts in chat; present only one complete final copy of a post
+
+
+## [R213] (rejection · 2026-09-02 · retired)
+DON'T recast AI announcements as margin/subscription economics takes; rejected framing of news owner approved as stat + capability lines.
+
+
+## [R214] (rejection · 2026-09-02 · retired)
+DON'T write confession-style reflections about hoarding tools/models unused; keep R21 reflections affirming daily execution.
+
+
+## [R215] (rejection · 2026-09-02 · retired)
+DON'T editorialize launches with 'lives vs dies'/margin talk; quote the source, lead with the number, then concrete capability lines.
+
+
+## [R218] (metrics · 2026-09-03 · retired)
+DO use 0.00108 as the follower-normalized engagement baseline (20 posts, 43,676 followers); supersedes R182's 0.00138
+
+
+## [R220] (metrics · 2026-09-03 · retired)
+DO use 0.00135 as the follower-normalized engagement baseline (60 posts, 43,673 followers); supersedes R218's 0.00108
+
+
+## [R223] (rejection · 2026-09-04 · retired)
+DON'T repost safety/preparedness ratings of unreleased models; R7/R212 cover shipped products, not safety hype (all 3 Astra drafts rejected)
+
+
+## [R224] (rejection · 2026-09-04 · retired)
+DON'T repost safety/preparedness ratings (e.g., Astra 'critical' cyber) as landmark posts; R7 needs usable product launches only
+
+
+## [R230] (metrics · 2026-09-05 · retired)
+DO use 0.00141 as the follower-normalized engagement baseline (60 posts, 43,679 followers); supersedes R220's 0.00135
+
+
+## [R231] (rejection · 2026-09-05 · retired)
+DON'T draft motivational one-liners in English or generic advice; R21 reflective posts work only in Iraqi Arabic with lived progression.
+
+
+## [R232] (rejection · 2026-09-05 · retired)
+DON'T post about trending/algorithm mechanics (make your own trend, stop chasing the algorithm); owner rejects it as filler.
+
+
+## [R234] (metrics · 2026-09-05 · retired)
+DO use 0.00139 as the follower-normalized engagement baseline (60 posts, 43,681 followers); supersedes R230's 0.00141
+
+
+## [R235] (metrics · 2026-09-06 · retired)
+DO use 0.00138 as the follower-normalized engagement baseline (60 posts, 43,686 followers); supersedes R234's 0.00139
+
+
+## [R237] (rejection · 2026-09-06 · retired)
+DON'T pivot trivial glitches (404 page) into abstract 'we make trends' motivationals; reflective posts need own concrete progression
+
+
+## [R238] (rejection · 2026-09-06 · retired)
+DON'T build posts on others' frameworks even with a first-person wrapper (Ng Skills Map); no generic hustle spin off tool failures.
+
+
+## [R240] (rejection · 2026-09-06 · retired)
+DON'T center posts on third-party maps/demos or clone viral experiment framings; own-voice recasts (Ng map, Tencent Hy4) were rejected
+
+## [R53] (learn · 2026-08-28 · retired)
+DO treat robotics/hardware launch reposts as ordinary R7 landmark announcements; the 'massive outperform' evidence was 0♥0💬 noise
+<!-- 2026-09-12: stale — unreaffirmed for 15d -->

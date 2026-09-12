@@ -1694,3 +1694,1190 @@ consolidated 3 duplicate learned rules (kept 10 distinct)
 ## 2026-09-01 18:30 · rejection
 consolidated 1 duplicate learned rules (kept 10 distinct)
 - retired R191
+
+## 2026-09-01 21:20 · reflect:metrics
+metrics refresh — real performance data — Metrics refresh shows a stable account: baseline holds at ~0.00136 and the livestream money-idea post remains the top performer and is still gaining likes. Nothing contradicts current rules, so this scan is confirmation only — no rule changes proposed.
+- instructions: Latest metrics refresh (60 posts, 43,710 followers) re-confirms the follower-normalized ba
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Money-making ideas in Iraqi dialect (R132) [working]
+
+## 2026-09-01 21:23 · reflect:learn
+This scan was pure confirmation with no new signal: tiny-account crypto chatter inflated the over-performed list exactly as R133 predicts, while gaming leaks, a mega-account teaser, and an AI-persona motivational line under-performed per R134/R135/R151. The rule stack pre-classified every entry correctly, so per R119 no new rules were added and the feed's 0.039 baseline was discarded in favor of R182's 0.00138.
+- instructions: Feed scan (labeled baseline 0.039, ignored per R96/R182) produced zero novel datapoints: a
+- strategy: Feed scan noise filter (R133/R135/R151/R22 stack) [working]
+
+## 2026-09-01 22:53 · reflect:chat
+Review cycle triggered with no chat material present. No evidence surfaced, so no memory, rules, or reference docs were changed; conservative hold applied.
+
+## 2026-09-01 22:53 · reflect:rejection
+The owner refused every variant of the Stargate/$500B announcement, including a bare link and press-release copy, while approving first-person Arabic takes the same day. The account relays usable product launches, not industry money news, and nothing publishes without its own voice; this sharpens R7's boundary rather than contradicting it.
+- instructions: Owner refused all four Stargate/$500B AI-infrastructure drafts: big industry investment ne
+- added R198: DON'T repost AI investment/infrastructure news (Stargate $500B); R7 covers usable product
+- added R199: DON'T post bare links or verbatim press-release copy; every repost needs the user's own fi
+- strategy: Landmark repost lane (R7) [mixed]
+- strategy: Crypto as payments-utility framing [working]
+
+## 2026-09-01 22:54 · reflect:rejection
+Owner rejected every verbatim Stargate relay while approving a quote post with Arabic commentary and five first person value replies. News without the user's own angle is a review killer even for landmark announcements. Always wrap reposts in a lived take before showing a draft.
+- instructions: Owner refused all three Stargate drafts because they were verbatim relays of OpenAI's anno
+- added R200: DON'T relay announcements as bare links or verbatim copies; wrap every news repost in a fi
+- added R201: DO quote post news with a few lines of own Arabic take (like the AshCrypto stablecoin quot
+- strategy: Landmark announcement reposts (R7) [mixed]
+
+## 2026-09-01 22:54 · rejection
+consolidated 4 duplicate learned rules (kept 10 distinct)
+- retired R194
+- retired R183
+- retired R196
+- retired R199
+
+## 2026-09-01 22:54 · outcome
+owner REJECTED #3006 — cited rules logged for pattern mining
+
+## 2026-09-01 22:55 · rejection
+consolidated 2 duplicate learned rules (kept 14 distinct)
+- retired R200
+- retired R201
+
+## 2026-09-01 22:55 · reflect:rejection
+Rejection pattern sits inside one news event: the Stargate launch post was approved while every investment-detail follow-up ($500B, partners, Texas sites) was refused — landmark news is a single own-voice post, not a series. This sharpens R198 and R200, and the truncated FLUX draft shows incomplete copy never reaches the owner.
+- instructions: The owner treats landmark industry news as ONE post: they approved the Stargate launch hea
+- added R202: DON'T follow an approved landmark announcement with detail posts (funding, partners, timel
+- added R203: DON'T present drafts that cut off mid-sentence; verify every draft is complete copy before
+- strategy: Landmark announcement single-post handling (Stargate) [new]
+
+## 2026-09-01 22:56 · reflect:rejection
+Owner rejections confirm the split: approve the landmark headline, refuse the money/partner detail fragments, so R198 now rests on owner behavior too. The FLUX rejection hints privacy advocacy is a weaker frame than concrete savings, but it is one datapoint so R1/R180 stay intact. 230 expired drafts show that volume without owner pull is waste; curate harder.
+- instructions: Owner rejected the Stargate partner-list and $500B funding detail drafts right after appro
+- added R204: DON'T split one announcement into fact fragments (partner lists, funding tranches); one he
+- added R205: DON'T sell local AI on privacy ('not about money'); keep the concrete cost/productivity fr
+- strategy: Stargate landmark coverage [mixed]
+- strategy: Local AI first-person story (FLUX) [mixed]
+
+## 2026-09-01 22:56 · rejection
+consolidated 1 duplicate learned rules (kept 11 distinct)
+- retired R202
+
+## 2026-09-01 22:57 · rejection
+consolidated 1 duplicate learned rules (kept 13 distinct)
+- retired R202
+
+## 2026-09-01 23:39 · reflect:rejection
+The owner splits crypto content: AI-agents framing and quoted macro takes pass, first-person remittance advice fails 3/3. R10's cost-saving format does not transfer from AI tools to payment rails, and R157's payments-utility allowance needs reading more narrowly. Also caught another truncated draft, so pre-show copy verification is still slipping.
+- instructions: The owner rejected all three original stablecoin remittance drafts while approving crypto
+- added R206: DON'T pitch stablecoin transfers as personal finance wins (fees, speed, quitting banks); c
+- strategy: Crypto payments-utility angle [mixed]
+
+## 2026-09-01 23:40 · rejection
+consolidated 2 duplicate learned rules (kept 12 distinct)
+- retired R206
+- retired R204
+
+## 2026-09-01 23:40 · reflect:rejection
+Rejection event: all 4 refused drafts were first-person crypto-payments advocacy, while the identical stablecoin thesis passed as an @AshCrypto quote and an agents-transactions original. The dividing line is voice, not topic — we amplify crypto-payments takes, we don't preach them in our own voice, so I narrowed the crypto allowance accordingly.
+- instructions: Owner refused 4 own-voice crypto-payments drafts (World Bank 6% fee stat, stablecoin-on-Ba
+- added R207: DON'T draft crypto price takes, ETF flows, meme coins, or own-voice payments posts; crypto
+- added R208: DON'T reuse the R10 cost-saving frame on crypto topics; the 'I stopped traditional transfe
+- retired R157
+- strategy: Crypto payments-utility allowance (ex-R157) [mixed]
+
+## 2026-09-01 23:41 · rejection
+consolidated 2 duplicate learned rules (kept 11 distinct)
+- retired R203
+- retired R208
+
+## 2026-09-02 00:31 · reflect:metrics
+metrics refresh — real performance data — This refresh validates calibration rather than surfacing anything new: the baseline held at ~0.0014 and the livestream money-idea post extended its lead to 0.00753. Concrete money-making ideas in Iraqi dialect remain the account's strongest original format, so no rule changes were warranted.
+- instructions: Baseline re-verified at 0.00137 follower-normalized (60 posts, 43,716 followers), matching
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+- strategy: Follower-normalized baseline calibration [working]
+
+## 2026-09-02 01:20 · reflect:rejection
+All three rejections were either unfinished or not in the account's own first-person voice, while every approval was a complete value post. The Stargate refusal confirms R198 from owner behavior and the stub-versus-full bank-transfer pair validates the finished-copy gate. Added a guardrail against trend-scout commentary on other users' habits.
+- instructions: Owner rejections this cycle were all drafts that failed the finished first-person value ba
+- added R209: DON'T turn trend-scout finds into posts commenting on other users' behavior or posting sty
+- added R210: DON'T show truncated stub drafts in chat; present only one complete final copy of a post
+- strategy: AI infrastructure money-news reposts (R198) [working]
+- strategy: Finished-copy gate (R42/R103) [working]
+- strategy: Trend-scout quote-commentary posts [failing]
+- strategy: First-person financial-decision posts (R10/R132) [working]
+
+## 2026-09-02 01:21 · rejection
+consolidated 1 duplicate learned rules (kept 12 distinct)
+- retired R210
+
+## 2026-09-02 01:32 · reflect:chat
+Chat trigger fired with no material yet; nothing was learned, so no memory edits are proposed. Conservative stance: revisit only once actual conversation evidence exists.
+
+## 2026-09-02 01:45 · outcome
+owner REJECTED #3024 — cited rules logged for pattern mining
+
+## 2026-09-02 02:06 · reflect:metrics
+metrics refresh — real performance data — The baseline held at ~0.00137 on the same 60-post sample, so the measurement framework is stable and no rule changes are warranted. The livestream money-idea post strengthened to 0.00753 (~5.5x), confirming that concrete money-making ideas promised in Iraqi dialect remain the account's best-performing original format and should stay a priority.
+- instructions: Metrics refresh re-measured the same 60-post sample: follower-normalized baseline is 0.001
+- strategy: Follower-normalized engagement baseline (R182) [working]
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+
+## 2026-09-02 02:08 · reflect:learn
+Most of this scan repeated known failure patterns (crypto ETP irony, AI persona motivationals, tiny-account ratio inflation), so I logged confirmations under existing rules instead of duplicates. The one new find is an Arabic whole-post work problem help desk offer at 27♥ 16💬, 2x baseline, worth drafting as our own first-person version pending user approval. It reinforces that conversation-bait beats broadcast hype, which bought likes (22♥) but zero replies.
+- instructions: Repeat scan hits (Solana ETP irony post, 'i'm an AI' motivational, 1-2♥ ratio inflation) a
+- added R211: DO post full help desk offers in Iraqi Arabic: ask followers for work problems, promise AI
+- strategy: AI work help desk posts [new]
+- strategy: Hype reaction posts [failing]
+- strategy: Feed noise filter (R133) [working]
+
+## 2026-09-02 02:38 · outcome
+owner APPROVED #3026 — refreshed 12 cited rule(s): R6, R20, R54, R126, R103, R4, R94, R1, R111, R117, R19, R26
+
+## 2026-09-02 03:54 · outcome
+owner REJECTED #3030 — cited rules logged for pattern mining
+
+## 2026-09-02 03:56 · reflect:rejection
+All three rejections shared one shape: longer, more abstract framing. The same Gemini news passed only as a tight quote (stat hook + capability arrows), and the reflection that passed affirmed daily execution instead of confessing waste. Short, concrete, capability-first copy is what the owner actually publishes; the 241 expired drafts are queue hygiene, not signal.
+- instructions: Owner approves landmark news only as quote posts: a punchy stat hook plus concrete capabil
+- added R212: DO post landmark announcements as quote of the source with a stat hook plus arrow capabili
+- added R213: DON'T recast AI announcements as margin/subscription economics takes; rejected framing of
+- added R214: DON'T write confession-style reflections about hoarding tools/models unused; keep R21 refl
+- strategy: Landmark announcement quote format [working]
+- strategy: R21 reflective posts [mixed]
+
+## 2026-09-02 03:56 · reflect:rejection
+The owner rejected every abstraction-heavy variant and approved the fact-led rewrite of the same Google story, so concreteness (numbers, capability lines, own progression) is the real approval filter, not topic choice. R209 got a second confirmation: recasts must remove the third-person 'someone built X' lead entirely. Going forward I should draft the number or spec first and let framing follow it.
+- instructions: This rejection batch shares one root cause: abstraction. The owner refused editorialized l
+- added R215: DON'T editorialize launches with 'lives vs dies'/margin talk; quote the source, lead with
+- added R216: DON'T post self-inventory audits (counting my models/tool accounts); reflective posts need
+- strategy: Fact-led launch quotes [working]
+- strategy: R21 reflective boundary [mixed]
+- strategy: Affirm-first engage replies [working]
+
+## 2026-09-02 03:57 · rejection
+consolidated 3 duplicate learned rules (kept 14 distinct)
+- retired R213
+- retired R215
+- retired R214
+
+## 2026-09-02 03:58 · rejection
+consolidated 1 duplicate learned rules (kept 14 distinct)
+- retired R213
+
+## 2026-09-02 04:00 · outcome
+owner APPROVED #3028 — refreshed 12 cited rule(s): R2, R48, R3, R124, R22, R7, R151, R133, R9, R111, R47, R28
+
+## 2026-09-02 04:18 · reflect:metrics
+metrics refresh — real performance data — The Iraqi-dialect money-idea post is again the top performer (0.0075, roughly 6x the window average), confirming R132 holds rather than warranting a new rule. The baseline dipped to 0.00122 on only 20 posts, so I am treating it as drift to watch, not a revision to R182, per my own small-sample rule.
+- instructions: Latest 20 post scan puts follower-normalized engagement at 0.00122 vs R182's 0.00138; sinc
+- strategy: Money-making ideas in Iraqi dialect (R132 format) [working]
+- strategy: Engagement baseline tracking [mixed]
+
+## 2026-09-02 06:32 · reflect:metrics
+metrics refresh — real performance data — This refresh is pure confirmation: baseline steady at ~0.0014 and the Iraqi-dialect money-idea format still leads at ~5.5x baseline. I logged it as confirmation per R119 instead of minting duplicate rules, and left R182's number alone since the 0.00138 to 0.00136 drift is noise on an unchanged 60-post sample.
+- instructions: Latest metrics refresh (60 posts, 43,714 followers) reconfirmed the follower-normalized ba
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+- strategy: Follower-normalized engagement baseline (R182) [working]
+
+## 2026-09-02 06:35 · reflect:learn
+Re-normalized against the 0.00138 baseline, the feed's labels mostly flipped: the 'over-performers' were 1-3 heart replies (R133 noise) and the 'under-performers' were repeats of known bad patterns (R3 hype, R12 crypto irony, R151 AI persona). The one robust signal, the help desk offer at 26 hearts 16 replies, reconfirms R211. So the correct output here was confirmations and restraint, not new rules.
+- instructions: Feed scans keep stating inflated baselines (this one: 0.015); always re-normalize against
+- strategy: Iraqi-Arabic help desk offers (R211) [working]
+- strategy: Pure hype/excitement posts (R3) [working]
+- strategy: Crypto irony/ETP news (R12) [working]
+- strategy: 'I'm an AI' persona motivational lines (R151) [working]
+- strategy: Crypto personal-anecdote format (airdrop sale take) [new]
+- strategy: Director agent interactive invite (GLM 5.3) [new]
+
+## 2026-09-02 10:19 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh confirms rather than changes anything: baseline holds at ~0.0014 and the Iraqi-dialect money-idea post is still the account's top format. Since this repeats datapoints already cited in R132/R182, I logged it as confirmation only and proposed no new rules or retirements.
+- instructions: Metrics refresh over the same 60-post corpus (43,712 followers) re-confirms the follower-n
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132 format) [working]
+- strategy: Follower-normalized baseline (R182) [working]
+
+## 2026-09-02 10:23 · reflect:learn
+This scan was almost pure confirmation, not news: help desk offers work (26♥ 16💬), hype without value still pulls likes but zero replies, and crypto keeps measuring dead or below threshold. Tiny over-performers (1-3♥) were correctly ignored under R133, and memory baselines held against yet another inflated feed baseline.
+- instructions: This scan's stated 0.015 baseline is feed-stated and rejected per R96; keep using 0.00138
+- strategy: Arabic AI help desk offer (R211 format) [working]
+- strategy: Feed baseline reconciliation [new]
+
+## 2026-09-02 14:08 · reflect:metrics
+metrics refresh — real performance data — This refresh is pure confirmation: the baseline held at ~0.00137 on 60 posts and the Iraqi-dialect money-making idea post is again the top performer, now 0.0075 (~5.5x baseline). Per R119 I logged it as confirmation rather than proposing duplicate rules; the one nuance worth tracking is that top posts keep accruing engagement over time (0.00686 to 0.0075 with no new posts).
+- instructions: Repeat metric scans at unchanged sample size (60 posts) are confirmations, not new evidenc
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+- strategy: Follower-normalized engagement baseline (R182) [working]
+
+## 2026-09-02 17:57 · reflect:metrics
+metrics refresh — real performance data — This refresh is confirmation, not new signal: the baseline holds at ~0.0014 across two 60-post scans and the livestream money-idea post remains #1 at 0.0075 (~5.5x baseline). Per R119 I proposed no new rules; R132 and R182 stand as written, and the next baseline re-check is due around 120 own posts.
+- instructions: Second 60-post scan re-measured follower-normalized engagement at 0.00137 vs 0.00138 prior
+- strategy: Follower-normalized baseline (~0.0014) [working]
+- strategy: Iraqi-dialect money-making idea format (R132) [working]
+
+## 2026-09-02 18:01 · reflect:learn
+The account's core loop keeps proving out: the Iraqi-dialect help desk offer was the only strong winner this scan (26♥ 16💬). Bare link posts were the weakest real signal, so every shared link needs first-person framing. The crypto airdrop story flirted with baseline but stays unmined at 3♥ 2💬, so existing crypto rules hold.
+- instructions: Latest feed scan reports baseline 0.015, a different scale from R182's follower-normalized
+- added R217: DON'T post bare links or one-word captions ('مثال' + URL); wrap every link in first-person
+- strategy: Help desk offer format (R211) [working]
+- strategy: First-person crypto trade anecdote [mixed]
+
+## 2026-09-02 21:48 · reflect:metrics
+metrics refresh — real performance data — The 60-post refresh confirms the engagement baseline is stable (~0.00135) and that the money-making livestream idea post tightened its hold as top performer at 0.0075 (~5.6x baseline). Per R119 I logged both as confirmations rather than proposing rule churn; R132 remains the flagship original format to build on.
+- instructions: Metrics refresh (60 posts, 43,705 followers) re-measured the follower-normalized baseline
+- strategy: Follower-normalized engagement baseline (R182) [working]
+- strategy: Money-making idea posts in Iraqi dialect (R132) [working]
+
+## 2026-09-02 21:51 · reflect:learn
+This scan validated the rulebook instead of extending it: every under-performer matched an existing rule and the only real over-performer re-confirmed the R211 help desk format at ~22x true baseline. Rejected the feed's 0.015 baseline and ignored a crypto airdrop story that only looked good on tiny numbers.
+- instructions: Latest feed scan added no new rules: all five under-performers map to existing rules (R217
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Mining over-performed feed entries [mixed]
+- strategy: Crypto format revival attempts (R49/R181/R207) [failing]
+
+## 2026-09-03 01:37 · reflect:metrics
+metrics refresh — real performance data — The baseline re-scrape confirms follower-normalized engagement is stable around 0.0013-0.0014, so no baseline rule churn is warranted. The livestream money-idea post strengthened to 0.00751 (~5.6x baseline), reinforcing Iraqi-dialect money-making posts with a promised explanation as the account's strongest original format.
+- instructions: Metrics refresh (60 posts, 43,676 followers) re-measured the follower-normalized baseline
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+- strategy: Follower-normalized baseline (R182) [working]
+
+## 2026-09-03 01:40 · reflect:learn
+This scan was pure confirmation: hype reactions, bare links, ironic crypto news, and 'I'm an AI' motivationals all under-performed again while the Iraqi help desk offer led on absolute hearts and replies. The main traps were the inflated 0.015 feed baseline and tiny-account ratio spikes (1 heart 1 reply scoring 0.048 to 0.082), both correctly discounted per R96, R182, and R133. Nothing new was mined; existing rules held, so no rule changes.
+- instructions: This scan restated the baseline as 0.015; ignore it and keep normalizing vs 0.00138 (R96,
+- strategy: Iraqi Arabic help desk offer (R211) [working]
+- strategy: Pure hype/awe reaction posts [mixed]
+
+## 2026-09-03 04:17 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh resets the follower-normalized baseline to 0.00108 (20 posts, 43,676 followers), down from 0.00138, so recent content is running softer than the last scan; I superseded R182 and flagged the small sample for re-verification. The livestream money-making post re-confirmed as the top format at 0.00751, reinforcing R132 as the strongest own-voice play.
+- instructions: Metrics refresh (20 own posts, 43,676 followers) resets the follower-normalized engagement
+- added R218: DO use 0.00108 as the follower-normalized engagement baseline (20 posts, 43,676 followers)
+- retired R182
+- strategy: Money-making ideas in Iraqi dialect (livestream idea format) [working]
+- strategy: Engagement baseline tracking [mixed]
+
+## 2026-09-03 04:18 · reflect:rejection
+The owner's rejections share one shape: posts whose hook is someone else's tweet with my own anecdote bolted on, while their approvals are all standalone first-person discoveries. Trend-scout finds must be melted down for the idea only, never quoted as the frame.
+- instructions: The owner rejected both trend-scout drafts whose hook was quoting another account's tweet
+- added R219: DON'T build trend-scout posts around quoting another account's take; recast as standalone
+- strategy: trend-scout quote-and-comment format [failing]
+
+## 2026-09-03 04:19 · rejection
+consolidated 1 duplicate learned rules (kept 14 distinct)
+- retired R209
+
+## 2026-09-03 05:26 · reflect:metrics
+metrics refresh — real performance data — Tripled the measurement sample to 60 posts and the follower-normalized baseline converged at 0.00135, retiring the 20-post 0.00108 figure and aligning with the older ~0.0013 estimate. The livestream money-idea post re-measured as top performer (0.00751), reinforcing R132 without introducing new evidence. Stable baselines matter because they keep over/under-performance calls honest as the post archive grows.
+- instructions: Follower-normalized baseline refreshed to 0.00135 (60 posts, 43,673 followers), supersedin
+- added R220: DO use 0.00135 as the follower-normalized engagement baseline (60 posts, 43,673 followers)
+- retired R218
+- strategy: Follower-normalized baseline tracking [new]
+- strategy: Iraqi-dialect money-making idea posts (livestream idea) [working]
+
+## 2026-09-03 05:31 · reflect:learn
+This scan produced zero new patterns and five confirmations: the only above-noise signal was a second win for the Iraqi-Arabic help desk offer (24 hearts, 16 replies, about 23x baseline). The over-performed list was again dominated by 1-3 heart tiny-account ratios that R133 correctly filters, and every under-performer matched an already-cited datapoint (R3, R12, R151, R217). Held the R119 confirmation-only discipline and added no new rules.
+- instructions: Latest scan confirmed existing rules rather than surfacing new patterns: the only over-per
+- strategy: Help desk offer format (R211) [working]
+- strategy: Pure hype reaction posts [failing]
+
+## 2026-09-03 09:15 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh validates the current measurement stack: the 0.00135 baseline is stable at 60 posts and the R132 livestream money-idea post remains the all-time top at 0.00751. Confidence in both the baseline and the money-idea format rises; per R119 this is confirmation only, so no new rules or retirements were proposed.
+- instructions: Metrics refresh (60 posts, 43,675 followers, 3,114 likes, 199 reposts, 238 replies) lands
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132 format) [working]
+
+## 2026-09-03 09:20 · reflect:learn
+This scan returned almost entirely confirmations: known failure patterns (hype reactions, bare links, ironic crypto news, AI persona motivational lines) repeated at eng 0.001-0.003, and 1-2 heart entries inflated ratios exactly as R133 predicts. The only strong positive was a second big win for the R211 help desk offer (24 hearts 16 replies), cementing it as the account's most reliable repeatable format. The playbook is validated, not expanded: reuse proven formats instead of mining noise.
+- instructions: This scan produced almost no new rules: every failure repeated a known datapoint (R3 hype,
+- strategy: Help desk offers (R211) [working]
+- strategy: Crypto content exclusion (R12/R49/R207) [failing]
+- strategy: Tiny-account ratio filter (R133/R22) [working]
+
+## 2026-09-03 13:05 · reflect:metrics
+metrics refresh — real performance data — This refresh is confirmation, not new signal: the baseline held at ~0.00136 after the sample doubled to 60 posts, and the R132 money-idea format remains the top performer at 0.00751 (~5.5x baseline). No rule churn is warranted — keep normalizing against ~0.00135/0.00136 and keep prioritizing R132-style Iraqi-dialect money-idea posts.
+- instructions: Latest metrics refresh (60 posts, 43,671 followers) re-verified the follower-normalized ba
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+
+## 2026-09-03 15:02 · reflect:rejection
+The owner approved exactly one finished Iraqi-Arabic draft and refused its duplicates, an English variant, and a trend-scout post quoting @DeRonin_. The approval pattern enforces dedupe (R103), own-voice recasting (R219), and Arabic-language originals; privacy works only when framed as usability.
+- instructions: Owner rejected near-duplicate variants of one idea (an English twin and a second Arabic ch
+- added R221: DON'T draft original posts fully in English; original takes go in Iraqi Arabic with Englis
+- strategy: Privacy-as-usability angle [new]
+
+## 2026-09-03 15:02 · reflect:rejection
+Owner rejected every privacy-tool usability variant (Arabic and English) plus a trend-scout post quoting someone else's link, while approving data-cost, hardware-spec, and consistency posts. Privacy resonates with this audience only through the cost/value of data, and third-party quotes can't carry a post. This blocks another wasted cycle of privacy pitches and confirms R219 a second time.
+- instructions: Privacy-tool usability pitches were rejected in three variants (two Arabic, one English, a
+- added R222: DON'T pitch privacy tools or 'usability IS security' takes; frame privacy topics as data c
+- strategy: Privacy-as-data-value framing [new]
+- strategy: Trend-scout built on others' links [failing]
+
+## 2026-09-03 15:06 · rejection
+consolidated 1 duplicate learned rules (kept 15 distinct)
+- retired R205
+
+## 2026-09-03 15:07 · reflect:chat
+No chat material arrived this cycle, so there is no new evidence to evaluate and no memory edits are justified. All standing rules remain unchanged; I'll re-run this review when actual conversation content is provided.
+
+## 2026-09-03 16:53 · reflect:metrics
+metrics refresh — real performance data — This metrics refresh triple-confirms the ~0.0014 baseline (now 0.00136 at 60 posts) and shows the Iraqi-dialect money-making idea post strengthening to 0.00751, roughly 5.5x baseline. Both are repeats of datapoints already covered by R220 and R132, so per R119 I recorded them as confirmations rather than proposing new rules, and normalization can now be treated as stable.
+- instructions: The follower-normalized baseline is now triple-confirmed at ~0.0014 (0.00129, 0.00135, 0.0
+- strategy: Baseline normalization (~0.0014 follower-normalized) [working]
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+
+## 2026-09-03 16:57 · reflect:learn
+This scan was mostly repeats of already-cited datapoints, so the discipline is confirmation over new rules. Every under-performer was a known anti-pattern (bare link, hype with no question, crypto news, 'I'm an AI' persona line), and the only strong signal was the help desk offer at 24♥ 16💬. The feed baseline (0.015) is ~11x our normalized 0.00135, so its labels must be re-normalized before any decision.
+- instructions: Repeat feed scan re-surfaced datapoints my rules already cite (Morgan Stanley ETP irony po
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Crypto revival watch [failing]
+- strategy: Tiny-reply 'over-performers' bucket [mixed]
+
+## 2026-09-03 20:41 · reflect:metrics
+metrics refresh — real performance data — This refresh validated my priors rather than changing them: baseline 0.00135 held exactly and the R132 money-idea format got stronger (0.00751, ~5.6x baseline). Confirmation matters because it means R20/R220-anchored scheduling and R132-style drafting remain correct, and per R119 I logged this as confirmation instead of minting duplicate rules.
+- instructions: The 60-post/43,673-follower refresh confirmed the 0.00135 follower-normalized baseline exa
+- strategy: Follower-normalized baseline tracking [working]
+- strategy: Iraqi-dialect money-making idea posts (R132 format) [working]
+
+## 2026-09-03 20:44 · reflect:learn
+This scan contained zero rule-worthy novelty: every datapoint either duplicated an existing rule or fell under the R133 noise floor, and the inflated feed baseline (0.015 vs true 0.00135) would have distorted judgment if trusted. Holding the line on small-sample discipline and not mining formats from 1-3♥ posts is exactly why this round produced confirmations instead of overfits.
+- instructions: Learn scan was pure confirmation with no new signal: R211 help desk offer re-hit 24♥ 16💬,
+- strategy: Help desk offer format (R211) [working]
+- strategy: Off-topic / crypto / low-substance block [working]
+
+## 2026-09-04 00:20 · reflect:rejection
+The Astra rejection cluster shows the owner accepts no English reposts or safety-rating hype about unreleased models; only shipped products with first-person Iraqi Arabic framing clear the bar. A malformed fragment also slipped into review, so the finished-copy gate must run before showing drafts, not just before queueing.
+- instructions: Owner rejected all three Astra 'Critical cybersecurity' variants (English hype take, broke
+- added R223: DON'T repost safety/preparedness ratings of unreleased models; R7/R212 cover shipped produ
+- strategy: R7 landmark announcement scope [mixed]
+
+## 2026-09-04 00:21 · reflect:rejection
+First clean rejection cluster: the owner turned down every variant of the Astra safety-rating repost. It narrows R7 to usable product launches and redefines the R212 hook as a capability stat, never another account's like count; the drafts also bypassed existing gates (R221 English, R103 dedupe, R42 finished copy), so those checks must run before any repost draft is shown.
+- instructions: Owner refused all 4 variants of the OpenAI Astra 'critical cybersecurity' preparedness rep
+- added R224: DON'T repost safety/preparedness ratings (e.g., Astra 'critical' cyber) as landmark posts;
+- added R225: DON'T hook reposts on another post's like-count (13k+ likes); R212 stats mean product capa
+- strategy: Landmark announcement reposts (R7/R212) [mixed]
+
+## 2026-09-04 00:23 · rejection
+consolidated 1 duplicate learned rules (kept 17 distinct)
+- retired R224
+
+## 2026-09-04 00:24 · rejection
+consolidated 1 duplicate learned rules (kept 15 distinct)
+- retired R223
+
+## 2026-09-04 00:28 · reflect:metrics
+metrics refresh — real performance data — The baseline held exactly on re-measurement, so existing hour and format decisions keep their footing. The money-making livestream idea remains the top performer at ~5.6x baseline, re-confirming Iraqi-dialect money ideas as the strongest format — but it is still one datapoint, and I should wait for a second distinct confirmation before treating it as a repeatable pattern.
+- instructions: Re-measured 60-post sample returns 0.00135 again, so the R220 baseline stands unchanged; n
+- strategy: Follower-normalized engagement baseline (R220) [working]
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+- strategy: Reply-invitation closers (R2) [working]
+
+## 2026-09-04 00:28 · outcome
+owner REJECTED #3066 — cited rules logged for pattern mining
+
+## 2026-09-04 00:31 · reflect:learn
+This scan validated the existing rulebook rather than changing it: help desk offers keep winning on absolute engagement while hype, bare links, ironic crypto news, and AI persona lines keep failing as predicted. The headline over performers were tiny sample noise (1 to 3 hearts) and the 0.015 baseline contradicts R220, so nothing new was adopted.
+- instructions: Treat this scan as confirmation, not new signal: the R211 help desk offer again produced t
+- strategy: R211 Iraqi help desk offers [working]
+- strategy: Crypto formats after the pivot [failing]
+
+## 2026-09-04 00:49 · outcome
+owner APPROVED #3067 — refreshed 12 cited rule(s): R212, R6, R221, R225, R2, R48, R7, R151, R3, R1, R9, R10
+
+## 2026-09-04 04:16 · reflect:metrics
+metrics refresh — real performance data — This refresh changed nothing material: same 60 posts, same 0.00135 baseline, same top post, so restraint beats rule churn. The livestream money-making post keeps gaining (0.00686 to 0.00751), reinforcing that promised-explanation Iraqi-dialect value posts are the account's ceiling; the next real decision point is when the post count roughly doubles.
+- instructions: Metrics refresh re-confirmed the 0.00135 baseline on the same 60-post sample (~43.7k follo
+- strategy: Follower-normalized engagement baseline (R220) [working]
+- strategy: Money-making ideas in Iraqi dialect (R132) [working]
+
+## 2026-09-04 04:17 · reflect:metrics
+metrics refresh — real performance data — The livestream money-idea post remains the top performer at 0.00751, confirming R132's format is durable rather than a one-off. The last 20 posts average 0.00108, below the 0.00135 baseline, but the sample is too small to recalibrate; re-verify once a 40+ post window is available.
+- instructions: Latest 20-post refresh confirms the money-making idea format (R132) as the account's top p
+- strategy: Money-making idea posts in Iraqi dialect (R132) [working]
+- strategy: Follower-normalized baseline calibration (R220) [mixed]
+
+## 2026-09-04 04:19 · reflect:rejection
+The owner drew a line inside the R212 quote format: quote what a product does for users, never how dangerous it is rated. Same source (@OpenAI), same shape, opposite outcomes. The account's value proposition is utility, so danger ratings join money news outside landmark reposts.
+- instructions: Owner accepts @OpenAI quotes only for usable capability announcements: the Astra 8-hour ag
+- added R226: DON'T quote AI safety/risk rating announcements (Preparedness 'Critical'); R212 quotes are
+- strategy: R212 landmark-quote format [mixed]
+
+## 2026-09-04 04:25 · reflect:learn
+This scan mostly validates existing rules rather than teaching new ones: help desk offers are the only top performer with real absolutes, while hype, bare links, crypto-ETP irony and 'I'm an AI' persona lines all underperformed again. Every other high-ratio entry (1-3♥) is tiny-account noise per R133. The lone crypto anecdote does not meet the bar to reopen crypto, so the posture stays unchanged.
+- instructions: Latest feed scan is confirmation, not course change: the R211 help desk offer again tops w
+- added R227: DON'T mine the crypto airdrop anecdote (3♥2💬, 0.036) as revival; own-voice crypto stays ba
+- strategy: R211 help desk offers [working]
+- strategy: Pure hype/excitement posts [failing]
+- strategy: Personal crypto anecdotes [new]
+
+## 2026-09-04 08:06 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh confirms the account is holding course: baseline ~0.00136 and the Iraqi-dialect money-idea post remains the top performer at 0.00751 (~5.5x baseline). Nothing here supports new rules, retirements, or reference-doc rewrites this cycle.
+- instructions: Latest metrics refresh re-confirmed the follower-normalized baseline at ~0.00136 (60 posts
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+- strategy: Follower-normalized baseline tracking (R220) [working]
+
+## 2026-09-04 08:09 · reflect:learn
+This scan yielded no new formats: the high-ratio entries were tiny 1-3♥ posts that R133 already disqualifies, and the rest reconfirm R211 (strongly) plus R3/R12/R217/R151 as under-performers. The discipline mattered here, since 0.03-0.08 ratios on 1-2♥ replies would otherwise have manufactured fake insights.
+- instructions: Treat this feed scan as confirmation only: every over-performed entry except the help desk
+- strategy: Help desk offer format (R211) [working]
+- strategy: Pure hype / no-value reaction posts [failing]
+
+## 2026-09-04 11:55 · reflect:metrics
+metrics refresh — real performance data — The baseline held at ~0.0014 and the R132 livestream money post stayed on top at 0.00751 while still gaining likes, confirming both without any new datapoints worth a rule (R119). Highest leverage move remains drafting more concrete money-making or cost-saving ideas in Iraqi dialect with a promised explanation.
+- instructions: Metrics refresh on the same 60 post sample (43,675 followers) puts the follower normalized
+- strategy: Money-making ideas in Iraqi dialect (livestream idea post) [working]
+- strategy: Follower normalized engagement baseline (R220) [working]
+
+## 2026-09-04 11:58 · reflect:learn
+This scan broke no new ground, which is itself signal: every over-performer except the help desk post was tiny-count noise covered by R133, and every under-performer matched an existing ban (R3 hype, R217 bare links, R12 ironic crypto news, R151 AI-persona motivation). The R211 help desk format reconfirmed with 24 hearts 16 replies, roughly 23x the real baseline, so it stays the strongest original-format play.
+- instructions: Latest feed scan was pure confirmation of existing rules: the help desk offer (R211) was a
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+
+## 2026-09-04 15:42 · reflect:metrics
+metrics refresh — real performance data — This refresh carries no new signal: same 60 posts, baseline steady at ~0.00135-0.00137, and the top post is the already-cited R132 livestream idea that merely gained engagement over time. Per R119 I logged confirmations instead of new rules; the one nuance worth remembering is that winner posts accrue engagement post-measurement, so early rates underestimate them.
+- instructions: Metrics refresh on the same 60-post sample (43,674 followers) re-measured the follower-nor
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Money-making ideas in Iraqi dialect (R132) [working]
+
+## 2026-09-04 15:46 · reflect:learn
+This scan was confirmation-only: the sole above-threshold performer (the Iraqi-Arabic help desk offer, 24 hearts 16 replies) reconfirms R211, while every other over-performer is sub-threshold noise (R133/R22) or an already-cited repeat (the airdrop post reappeared with identical 3/2 metrics, so it stays a repeat, not a new confirmation per R35/R227). Under-performers are exact repeats of known failure patterns (bare links R217, ironic crypto news R12, AI-persona motivational R151, hype reaction R3), and the stated 0.015 baseline remains a feed number not to be adopted (R96/R220).
+- instructions: Treat feed scans where every over-performer is either sub-threshold (R133), 0-heart/0-repl
+- strategy: Help desk offer format (R211) [working]
+
+## 2026-09-04 19:32 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh confirms the baseline is stable at ~0.00137 (60 posts, 43,672 followers) and the R132 money-idea format remains the top original post at 0.00751. Per R119 this is confirmation, not new signal, so I made no rule changes; the next meaningful re-verification should wait until the post count roughly doubles.
+- instructions: Latest metrics refresh (60 own posts, 43,672 followers) puts the follower-normalized basel
+- strategy: Follower-normalized engagement baseline (R220) [working]
+- strategy: Money-making idea posts in Iraqi dialect (R132) [working]
+
+## 2026-09-04 19:35 · reflect:learn
+This scan is a repeat of datapoints already cited in existing rules, so it is confirmation, not new evidence; the bans and the help desk format both hold. The feed's 0.015 baseline was again rejected in favor of R220's 0.00135.
+- instructions: Latest feed scan reproduced the exact datapoints already encoded in R12, R151, R217, R211
+- strategy: Help desk offer format (R211) [working]
+- strategy: Off-topic and meta format bans [failing]
+
+## 2026-09-04 23:21 · reflect:metrics
+metrics refresh — real performance data — The baseline is stable: 0.00138 on the same 60 posts is within noise of R220's 0.00135, so no rule churn is warranted. The Iraqi-dialect money-making teaser remains the account's top format at 0.00751 (~5.4x), and replies (248) outnumbering reposts (202) continues to validate the reply-invitation strategy.
+- instructions: Metrics refresh (60 posts, 43,676 followers) re-measured the follower-normalized baseline
+- strategy: Follower-normalized engagement baseline (R220) [working]
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+
+## 2026-09-04 23:23 · reflect:learn
+This scan validated the noise filters more than it taught anything new: one real signal (help-desk offer, 24♥ 16💬) surrounded by tiny-account ratio inflation and known failure patterns (hype reaction, ironic crypto news, AI-persona motivation, bare link). What matters is discounting sub-3♥/3💬 ratios and feed-stated baselines before ever judging a format as working.
+- instructions: Latest feed scan was almost pure confirmation, not new evidence: the only over-performer a
+- strategy: Iraqi help-desk offer format (R211) [working]
+- strategy: Feed-stated engagement baselines [failing]
+
+## 2026-09-05 03:08 · reflect:metrics
+metrics refresh — real performance data — A repeat scan with near-identical numbers is itself signal: the baseline is stable around 0.0014 and the livestream money-idea format keeps compounding engagement. Declining to re-issue a rule for a 0.00004 baseline drift avoids memory churn while validating the current operating assumptions.
+- instructions: Repeat metrics scan confirms stability rather than change: same 60 posts re-measured at 0.
+- strategy: Follower-normalized engagement baseline (R220) [working]
+- strategy: Money-making idea posts in Iraqi dialect (R132) [working]
+
+## 2026-09-05 03:11 · reflect:learn
+This scan validated the rulebook instead of extending it: every datapoint maps to an existing rule, and the tiny-count over-performers (1-2 hearts) are exactly the ratio noise R133 filters out. The clearest failure signature is hearts without replies; conversation, not applause, is the metric, and the help desk offer remains the one proven conversation driver.
+- instructions: Latest feed scan mostly re-cited datapoints already behind R3, R12, R151, R211, R217 and R
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Own-voice crypto revival watch [failing]
+- strategy: Hype and AI-persona posts [failing]
+
+## 2026-09-05 04:18 · reflect:metrics
+metrics refresh — real performance data — Engagement is holding near the 0.0013 baseline: the fresh 20-post window reads 0.00117 vs R220's 0.00135, a dip too small to act on with fewer than 30 posts. The livestream money-idea post re-measured at 0.00751 and is still the account's top performer, reinforcing first-person money-making ideas in Iraqi Arabic with a promised explanation as the strongest own-voice format. This refresh is confirmation rather than new signal, so no rule changes were made.
+- instructions: Latest refresh (20 posts, 43,676 followers) measured avg engagement 0.00117 vs R220's 0.00
+- strategy: Follower-normalized baseline tracking [mixed]
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+
+## 2026-09-05 04:19 · reflect:rejection
+Both rejections were trend-scout drafts orbiting individual users, one also revealing agent authorship, while product-centered and own-voice value posts got approved. I'll route news through R212 quotes or standalone own-voice recasts, keep other people's posting styles out of my drafts, and never surface the agent behind the account.
+- instructions: Owner rejected both trend-scout drafts that orbited individual users (@dkundel's builds, @
+- added R228: DON'T center posts on individual users' activity or style (@dkundel builds, @Tim_Denning b
+- strategy: Trend-scout around individual users [failing]
+- strategy: R212 landmark quote format [working]
+
+## 2026-09-05 04:23 · outcome
+owner REJECTED #3027 — cited rules logged for pattern mining
+
+## 2026-09-05 04:23 · outcome
+owner REJECTED #3031 — cited rules logged for pattern mining
+
+## 2026-09-05 06:56 · reflect:metrics
+metrics refresh — real performance data — The refresh confirms the 0.0013-0.0014 follower-normalized baseline is stable at 60 posts, so R220 holds unchanged and the next recalibration should wait until the sample roughly doubles. The livestream money-making post is still the top performer at 0.00751, meaning concrete money ideas in Iraqi dialect with a promised explanation remain our highest-leverage original format. Likes (3208) outweigh reposts (202) and replies (249) heavily, which is consistent with R2's reply-invitation focus being an upside lever rather than the default outcome.
+- instructions: Latest metrics refresh (60 posts, 43,676 followers) reads 0.0014 follower-normalized, whic
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+- strategy: Follower-normalized baseline calibration [working]
+
+## 2026-09-05 06:59 · reflect:learn
+This scan was almost entirely repeat datapoints already encoded in rules (crypto ETP irony, 'I'm an AI' motivational, bare links, 'مثال' caption, airdrop anecdote), so no new formats were mined. The one strong signal was the help desk offer at 24♥ 16💬 reconfirming R211. The feed's 0.016 baseline again conflicts with R220's 0.00135, so I normalized before judging anything.
+- instructions: Repeat-heavy feed scan with a stated baseline of 0.016 (vs R220's 0.00135): nearly every e
+- added R229: DON'T count like-only posts as wins: 0 replies means weak engagement even with 22♥ (hype p
+- strategy: Help desk offers in Iraqi Arabic (R211 format) [working]
+- strategy: Own-voice crypto revival watch [failing]
+
+## 2026-09-05 10:45 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh confirms rather than changes anything: baseline holds at ~0.0014 and the R132 livestream money-idea post remains the top performer at 0.00751. Per R119 I logged this as confirmation and proposed no new rules, keeping memory clean of duplicate datapoints.
+- instructions: Metrics refresh with 60 own posts and 43,677 followers re-measured avg engagement at 0.001
+- strategy: Money-making ideas in Iraqi dialect (livestream idea) [working]
+- strategy: Follower-normalized engagement baseline tracking [working]
+
+## 2026-09-05 10:49 · reflect:learn
+This scan was a near-repeat: every entry already lives in a rule (help desk=R211, airdrop=R227, ETP irony=R12, hype 22-heart-0-reply=R229, bare 'مثال' link=R217, AI-persona motivational=R151). The bilingual agent-demo CTA (1 heart, 1 reply, 0.048) stays on the watch list until it clears the 3-heart/3-reply bar. Conservative call: confirm, don't expand.
+- instructions: Repeat feed scans where every datapoint already maps to an existing rule should be logged
+- strategy: Iraqi-dialect help desk offers (R211) [working]
+- strategy: Small-count over-performer filter (R133/R227) [working]
+
+## 2026-09-05 14:36 · reflect:metrics
+metrics refresh — real performance data — Baseline refreshed to 0.00141 across 60 posts (43,679 followers), superseding 0.00135. The Iraqi-dialect livestream money-idea post remains the top performer at 0.00751 (~5.3x), confirming promised-explanation money ideas as the highest-leverage format. Logged as confirmation under R119, so no new format rule was added.
+- instructions: Metrics refresh (60 own posts, 43,679 followers) moved the follower-normalized baseline fr
+- added R230: DO use 0.00141 as the follower-normalized engagement baseline (60 posts, 43,679 followers)
+- retired R220
+- strategy: Money-idea teaser with promised explanation (livestream post) [working]
+- strategy: Account baseline and health tracking [working]
+
+## 2026-09-05 14:39 · reflect:learn
+This scan was fully rule-consistent: every flagged entry matched an existing rule, so no new rules were warranted and none were retired. The only real signal is another strong confirmation of the Iraqi-Arabic help-desk format (24♥ 16💬). The discipline of refusing to mine 1-2♥ 'over-performers' held up again.
+- instructions: Latest feed scan (feed-stated baseline 0.016 — ignored per R96/R230) contained no new mine
+- strategy: Iraqi-Arabic help desk offer (R211) [working]
+
+## 2026-09-05 18:13 · reflect:chat
+Review cycle triggered with no chat material, so no memory edits were warranted; proposing changes without evidence would corrupt the rule base. All existing rules and baselines (R230 baseline 0.00141, R20/R50 hours) stand unchanged.
+
+## 2026-09-05 18:22 · reflect:metrics
+metrics refresh — real performance data — This refresh produced zero surprises: the 0.00141 baseline held exactly on the same 60-post sample and the top post is still the R132 money-idea teaser. That stability means no recalibration of rules or baseline is needed, and future format bets can safely build on R132-style promised-explanation money posts.
+- instructions: Metrics refresh on 60 posts (43,683 followers) re-confirmed the follower-normalized baseli
+- strategy: Money-making idea posts in Iraqi dialect with promised explanation (R132) [working]
+
+## 2026-09-05 18:23 · reflect:rejection
+The owner refused every English trend-themed motivational draft while accepting Arabic posts with real specs, costs, and lived progression. Genres this account rewards are not portable to English generic filler; approval tracks the Iraqi Arabic voice plus concrete detail, and talk about trends/algorithm reads as empty.
+- instructions: Owner rejected three English, trend/algorithm-themed motivational one-liners while approvi
+- added R231: DON'T draft motivational one-liners in English or generic advice; R21 reflective posts wor
+- added R232: DON'T post about trending/algorithm mechanics (make your own trend, stop chasing the algor
+- strategy: R21 reflective/consistency genre [mixed]
+- strategy: Trend/algorithm meta content [failing]
+
+## 2026-09-05 18:25 · reflect:learn
+This scan was pure confirmation, not discovery: the R211 help desk format held strong while every dead pattern (hype, bare links, crypto news, AI-persona motivation) reappeared with zero replies. It matters because restraint keeps the rulebase clean; mining already-cited datapoints would double-count weak evidence and bloat the rules.
+- instructions: Latest feed scan added no new datapoints: every over/under-performer is already cited in e
+- strategy: Iraqi-Arabic help desk offers (R211) [working]
+- strategy: Suppressed formats (hype reactions, bare links, crypto ETP news, AI-persona moti [failing]
+
+## 2026-09-05 19:07 · reflect:rejection
+This rejection batch reveals the owner's filter: generic hustle advice and posts centered on other accounts get refused even in authentic Iraqi dialect, while lived AI takes, contrarian specs advice, and product quotes get approved. Notably the same trends post was rejected from one tool and approved from another, a dedupe slip R103 should catch. The approval of the algorithm-mechanics post falsified R232, so I retired it.
+- instructions: Owner rejects generic hustle/business ideas even when they match the R132 money format; ke
+- added R233: DON'T draft generic business/hustle ideas; money posts must be AI-leveraged and grounded i
+- retired R232
+- strategy: R132 money-making idea posts [mixed]
+- strategy: Trend-scout quotes of other accounts (R219/R228) [failing]
+- strategy: Trend/algorithm-mechanics posts (ex-R232) [mixed]
+
+## 2026-09-05 22:30 · reflect:metrics
+metrics refresh — real performance data — Baseline refreshed to 0.00139 and is essentially unchanged from 0.00141, meaning recent sampling is stable and existing conclusions don't need re-verification. The money-idea format (R132) remains the strongest original-content performer at 0.0076, reinforcing Iraqi-dialect, promise-then-explain framing as the account's proven top format.
+- instructions: Metrics refresh (60 posts, 43,681 followers) resets the follower-normalized baseline to 0.
+- added R234: DO use 0.00139 as the follower-normalized engagement baseline (60 posts, 43,681 followers)
+- retired R230
+- strategy: Iraqi-dialect money-making ideas with promised explanation (R132 format) [working]
+
+## 2026-09-05 22:33 · reflect:learn
+Nearly every entry in this scan repeated an already-cited datapoint, so the correct move was confirmation, not new rules. The fresh signal that matters: the Iraqi-Arabic help desk offer pulled 24 hearts and 16 replies (~22x baseline), cementing R211 as the top original format, while tiny 1-2 heart over-performers stay un-minable noise under R133.
+- instructions: This scan was almost entirely a re-surface of already-cited datapoints (airdrop anecdote,
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Crypto news even with ironic angle [failing]
+- strategy: Interactive agent-offer posts (talk to my director agent) [new]
+
+## 2026-09-06 02:20 · reflect:metrics
+metrics refresh — real performance data — Metrics refresh shows a stable account: baseline 0.00138 (was 0.00139) on 60 posts and 43,686 followers, with the Iraqi-dialect money-idea livestream post still on top at 0.0076. No new formats to mine here, so I only refreshed the canonical baseline and left the rule set otherwise untouched.
+- instructions: Latest refresh (60 posts, 43,686 followers) re-measures the baseline at 0.00138 and re-con
+- added R235: DO use 0.00138 as the follower-normalized engagement baseline (60 posts, 43,686 followers)
+- retired R234
+- strategy: Iraqi-dialect money-making idea posts [working]
+- strategy: Reply-invitation engagement (R2) [working]
+- R8: reaffirmed by theses (seen refreshed)
+- R12: reaffirmed by theses (seen refreshed)
+- R14: reaffirmed by theses (seen refreshed)
+- R15: reaffirmed by theses (seen refreshed)
+- R16: reaffirmed by theses (seen refreshed)
+
+## 2026-09-06 02:23 · reflect:learn
+This scan validated the rulebook rather than extending it: all five underperformers (bare links, hype reaction, ironic crypto news, AI-persona motivational) and every overperformer above noise thresholds were already codified in existing rules. Tiny 0-3 heart feed ratios continue to be noise per R133/R47, and the help desk format is now double-confirmed.
+- instructions: Repeat feed scan under 'learn' produced no new formats: every over/under entry maps to rul
+- strategy: Iraqi Arabic help desk offer (R211 format) [working]
+
+## 2026-09-06 02:32 · reflect:rejection
+Rejections cluster on drafts orbiting someone else's artifact (Ng's map, Tencent's demo) or abstract motivationals spun off trivial glitches; approvals were own-workflow stories, a contrarian data-cost take, a lived reflective post, and one R212 landmark quote. Original content must originate from the user's own execution, and external launches should route through the quote format instead.
+- instructions: Owner rejects trend-scout drafts that orbit a named external artifact or demo (AndrewNg Sk
+- added R236: DON'T build posts around others' named artifacts/demos (Ng map, Tencent test) even with fi
+- added R237: DON'T pivot trivial glitches (404 page) into abstract 'we make trends' motivationals; refl
+- strategy: trend-scout first-person recast [failing]
+- strategy: meta-observation motivational pivot [failing]
+
+## 2026-09-06 02:32 · reflect:rejection
+This rejection batch exposed the differentiation gate: the owner refused derivative framing (Ng's framework, trends-page hustle spin) but approved concrete own-workflow posts from the same batch. I also caught identical Claude workflow copy in both rejected and approved lists, which flags a dedupe failure on my side (R103), not a content verdict.
+- instructions: Owner rejections cluster on derivative framing: posts built on someone else's framework ev
+- added R238: DON'T build posts on others' frameworks even with a first-person wrapper (Ng Skills Map);
+- strategy: Trend-scout format [failing]
+- strategy: First-person time-saving workflow posts [working]
+- strategy: R21 reflective execution posts [working]
+
+## 2026-09-06 02:32 · reflect:rejection
+The owner rejects borrowed-spotlight drafts even after own-voice recasting, and refuses platform-meta quips in any format, while approving the exact same content when it documents their own workflow (PDF→Claude questions). Trend-scouting only survives when the discovery is genuinely first-person; otherwise the draft should be dropped, not reworded.
+- instructions: This rejection batch clusters on borrowed-spotlight content: trend-scout drafts built on t
+- added R239: DON'T draft meta takes about X itself (trends page jokes, 'we make the trend'); both varia
+- added R240: DON'T center posts on third-party maps/demos or clone viral experiment framings; own-voice
+
+## 2026-09-06 02:33 · reflect:rejection
+Owner refused 6 drafts: two were cross-channel duplicates, and the rest leaned on third-party artifacts, an internal tool state, or generic advice framing. What survives approval is the user's own lived, concrete discovery; recasting someone else's map or demo is not enough. Dedupe must be global across channels before any draft is shown.
+- instructions: Rejections (6 drafts) show dedupe must run globally across channels before presentation: t
+- added R241: DON'T show the same post in two channels or as copies; dedupe globally: one post, one fini
+- added R242: DON'T build posts on third-party artifacts (influencer skills maps, viral demos) even reca
+- strategy: Trend-scout on named frameworks/demos [failing]
+- strategy: Contrarian hardware buying advice (R180) [mixed]
+
+## 2026-09-06 02:34 · rejection
+consolidated 4 duplicate learned rules (kept 21 distinct)
+- retired R238
+- retired R240
+- retired R231
+- retired R237
+
+## 2026-09-06 04:17 · reflect:metrics
+metrics refresh — real performance data — Baseline recalibrated to 0.00117 from a fresh 20-post scan; recent content runs slightly below the old 60-post average, so expectations should tighten. The Iraqi-dialect money-idea post remains the clear top format at ~6.5x baseline, confirming R132 on re-measurement.
+- instructions: Metrics refresh on 20 own posts sets the follower-normalized engagement baseline at 0.0011
+- added R243: DO use 0.00117 as the follower-normalized engagement baseline (20 posts, 43,687 followers)
+- retired R235
+- strategy: Money-making ideas in Iraqi dialect (R132 thesis) [working]
+- strategy: Engagement baseline recalibration [mixed]
+- archived 44 retired rules
+
+## 2026-09-06 04:17 · outcome
+owner REJECTED #3037 — cited rules logged for pattern mining
+
+## 2026-09-06 05:01 · reflect:metrics
+metrics refresh — real performance data — The scheduled baseline re-check landed: 0.00117 to 0.00139 at 60 posts, so past scores judged against the old number are ~16% less exceptional than they looked. The livestream money-idea format remains the best performer and is still accruing engagement, standing as a solid confirmation of R132.
+- instructions: Baseline re-verification (due near 40 posts per R243) is done at 60: use 0.00139 follower-
+- added R244: DO use 0.00139 as the follower-normalized engagement baseline (60 posts, 43,684 followers)
+- retired R243
+- strategy: Money-making idea posts (Iraqi dialect + promised explanation) [working]
+- strategy: Follower-normalized baseline calibration [working]
+
+## 2026-09-06 05:03 · reflect:learn
+This scan was nearly all repeats of already-cited datapoints (Morgan Stanley ETP, airdrop, AI-persona lines, bare links), so it confirms the existing rule set rather than extending it. The help desk offer (R211) re-confirmed strongly at 24 hearts and 16 replies, while the feed's stated 0.015 baseline was rejected in favor of 0.00139 per R96/R244. Tiny over-performers (1-2 hearts or 0-1 replies) were left unmined per R133.
+- instructions: This feed scan returned almost exclusively datapoints already cited in existing rules (Mor
+- strategy: Arabic help desk offers (R211 format) [working]
+- strategy: Own-voice crypto revival watch [failing]
+
+## 2026-09-06 06:18 · reflect:metrics
+metrics refresh — real performance data — The 60-post metrics refresh confirms the 0.00139 baseline and re-ranks the Iraqi-dialect livestream money idea at 0.0076 (~5.5x), the account's top original post. Aggregates show likes dominate (3204) while replies (237) are the scarcest signal, so reply-driving CTAs (R2, R229) remain the highest-leverage lever. Nothing contradicts current rules; treat this as confirmation only and re-verify near 120 posts.
+- instructions: Metrics refresh at 60 posts / 43,685 followers confirms the 0.00139 follower-normalized ba
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+- strategy: Follower-normalized baseline tracking (R244) [working]
+
+## 2026-09-06 06:21 · reflect:learn
+This scan was confirmation-only: all five under-performers map to existing rules (bare links R217, hype with 0 replies R3/R229, ironic ETP news R12, AI-persona motivation R151), and the other over-performers were tiny-sample ratio noise (R22/R133) or the already-banned crypto airdrop (R227). The lone clean signal is the help desk offer at 24♥ 16💬, re-confirming R211 as a core recurring play. The feed's 0.015 baseline was ignored per R96/R244.
+- instructions: Confirmation-only scans are healthy: when every datapoint already maps to an existing rule
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+
+## 2026-09-06 10:06 · reflect:metrics
+metrics refresh — real performance data — Baseline held at ~0.0014 (0.00136) with followers flat, so no strategy shift is warranted yet. The Iraqi-dialect money-idea post with a promised explanation is again the top post (0.0076, ~5.6x baseline), strengthening R132/R233 as the strongest original format. Next meaningful check is at ~120 posts per R40.
+- instructions: Refreshed the follower-normalized engagement baseline to 0.00136 (60 posts, 43,687 followe
+- added R245: DO use 0.00136 as follower-normalized engagement baseline (60 posts, 43,687 followers); su
+- retired R244
+- strategy: Baseline engagement normalization [working]
+- strategy: Iraqi-dialect money-idea format (R132/R233) [working]
+
+## 2026-09-06 10:10 · reflect:learn
+This scan produced zero new patterns: every datapoint (crypto airdrop, Morgan Stanley ETP, hype reaction, bare links, 'i'm an AI' motivational) is already covered by R227, R12, R3/R229, R217 and R151. The strongest signal is again the Iraqi-Arabic help desk offer (24♥ 16💬), confirming R211 as the reliable own-voice engagement driver. Declined the feed's 0.016 baseline per R96/R245 and ignored sub-3♥/3💬 ratio spikes per R133.
+- instructions: Repeat feed scan: every entry maps to an existing rule (R211 help desk, R217 bare links, R
+- strategy: Arabic AI help desk offer (R211 format) [working]
+
+## 2026-09-06 13:55 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh changed nothing material: the baseline holds at 0.00136 and the Iraqi-dialect money-making livestream post is still the account's best at roughly 5.6x baseline. This strengthens confidence in R132 and R245 without earning any new rule, per the confirmation-only policy for repeat datapoints. Next meaningful checkpoint is the 120-post re-verification.
+- instructions: The 60-post metrics refresh confirms the follower-normalized baseline at 0.00136 (43,689 f
+- strategy: Iraqi-dialect money-making idea posts (livestream promise) [working]
+- strategy: Follower-normalized engagement baseline [working]
+
+## 2026-09-06 13:57 · reflect:learn
+This scan produced zero novel datapoints: every over and under performer is already covered by an existing rule, which is itself evidence the rulebook has converged on this account's real patterns. The strongest performer remains the Iraqi Arabic help desk offer (24 hearts, 16 replies), reinforcing that direct value-offer posts in the account's own voice are the core engine. The rule system is working as designed: scans now confirm rather than extend.
+- instructions: Repeat feed scans increasingly return datapoints already encoded in rules: this scan's ent
+- strategy: Help desk offer format (R211) [working]
+- strategy: Feed over/under scan reliability [mixed]
+
+## 2026-09-06 17:43 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh validates calibration stability: baseline held at ~0.0014 with no follower or sample-size shift, so thresholds built on it (10x-below off-topic buckets, 3x+ winners) remain trustworthy. The livestream money post keeps compounding engagement, hardening R132 as the blueprint format; the aggregate also shows replies (241) outpacing reposts (188), consistent with the reply-invitation strategy (R2/R21).
+- instructions: 60-post refresh (43,687 followers) re-measured the follower-normalized baseline at 0.00137
+- strategy: Follower-normalized baseline calibration [working]
+- strategy: Money-making ideas in Iraqi dialect (R132 livestream format) [working]
+
+## 2026-09-06 17:48 · reflect:learn
+This scan validated the existing rulebook rather than extending it: Iraqi Arabic help/offer posts pull real replies (24♥16💬) while hype, bare links, AI-persona lines and crypto news all sit at ≤0.003. Every other 'over-performer' was either under 3♥/3💬 or already-banned crypto, and the feed's shifting baseline (now 0.016) again can't be trusted, so nothing new is minable this round.
+- instructions: Latest scan (feed baseline 0.016, rejected per R96/R245; scale keeps drifting 0.174→0.016)
+- added R246: DON'T treat the 'talk to director agent' bilingual offer (0♥1💬) as a proven format; wait f
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Crypto airdrop anecdote revival [failing]
+- strategy: Interactive agent access offers ('talk to director agent GLM 5.3, عربي أو Englis [new]
+
+## 2026-09-06 21:33 · reflect:metrics
+metrics refresh — real performance data — This metrics refresh confirms rather than changes anything: baseline held at ~0.0014 (0.00138 vs 0.00136) on the same 60 posts, and the Iraqi-dialect money-idea post remains top at 0.0076 (~5.5x baseline). Per R119 these are repeat datapoints, so no new rules; the real decision point is the ~120-post re-verification.
+- instructions: Baseline re-measured at 0.00138 follower-normalized on the same 60 posts (43,685 followers
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+- strategy: Follower-normalized engagement baseline (R245) [working]
+
+## 2026-09-06 21:35 · reflect:learn
+This scan was almost pure confirmation: the only format with real traction is the R211 help desk offer (24♥ 16💬), while hype reactions, bare links, ironic crypto news, and 'I'm an AI' persona lines all under-performed exactly as existing rules predict. The feed baseline drifted again (0.016 vs our 0.00136), so I continue ignoring scan-stated baselines.
+- instructions: Feed-stated baselines keep drifting (0.174, 0.194, now 0.016); always re-normalize vs R245
+- strategy: Help desk offer format (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+
+## 2026-09-07 01:21 · reflect:metrics
+metrics refresh — real performance data — Baseline refreshed to 0.00138 on the same 60-post sample (followers 43,688); the drift from 0.00136 is noise-level, so no format or hour conclusions were drawn. The livestream money post is still #1 at 0.0076 (~5.5x baseline), reconfirming R132. Real re-verification waits until the post sample roughly doubles per R40.
+- instructions: Metrics refresh on the same 60-post sample moved the follower-normalized baseline from 0.0
+- added R247: DO use 0.00138 as follower-normalized engagement baseline (60 posts, 43,688 followers); su
+- retired R245
+- strategy: Concrete money-making ideas in Iraqi dialect (livestream idea) [working]
+- R17: reaffirmed by theses (seen refreshed)
+
+## 2026-09-07 01:23 · reflect:learn
+This scan was a pure repeat: every datapoint already maps to a live rule, from the confirmed help desk winner to the known hype, bare-link, crypto-irony and AI-persona failures. Nothing new was mineable because the remaining over-performers were tiny-account noise under the R133 floor, and the 0.016 feed baseline was rejected per R96/R247. Memory is holding; no churn needed.
+- instructions: Treat repeat feed scans as confirmation-only: this scan re-validated every existing rule (
+- strategy: Help desk offer (R211) [working]
+- strategy: Bilingual director-agent offer (R246) [mixed]
+
+## 2026-09-07 04:17 · reflect:metrics
+metrics refresh — real performance data — The baseline is holding: the 20-post refresh measured 0.0012 versus the established 0.00138, so no rule change is needed and R247 stands pending the larger re-verification. The Iraqi-dialect money-making format was reconfirmed as the top post at 0.0076, reinforcing that concrete own-voice value posts are where this account wins.
+- instructions: Metrics refresh (20 own posts, 43,690 followers) re-measured the follower-normalized basel
+- strategy: Follower-normalized baseline (R247) [working]
+- strategy: Money-making ideas in Iraqi dialect (R132) [working]
+
+## 2026-09-07 05:10 · reflect:metrics
+metrics refresh — real performance data — The refresh validates rather than revises: baseline 0.00138 held and the livestream money post is still #1 at 0.0076, confirming R132 and R247. With the sample still stuck at 60 posts, I should resist drawing new format or hour conclusions until it roughly doubles.
+- instructions: Metrics refresh at 60 posts / 43,690 followers re-confirms the 0.00138 follower-normalized
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+- strategy: Follower-normalized engagement baseline (R247) [working]
+
+## 2026-09-07 05:13 · reflect:learn
+This scan was pure confirmation: every datapoint maps to an existing rule, so nothing new was learned and no rules changed (R119). The feed's 0.016 baseline again conflicts with R247's 0.00138; I keep discarding feed-stated baselines (R96). The help desk offer reconfirmed as the top real-count format while the director agent offer is still one confirmation short.
+- instructions: Latest feed scan contained only repeat datapoints already cited in R12/R151/R217/R227/R229
+- strategy: Iraqi Arabic help desk offer (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+- strategy: Over-performed list quality [working]
+
+## 2026-09-07 09:01 · reflect:metrics
+metrics refresh — real performance data — The refresh re-measured the same 60 posts and confirmed the baseline (0.00137 ≈ R247's 0.00138), so no recalibration is needed yet. The livestream money-idea post remains the clear top performer at 0.0076 (~5.5x baseline), reinforcing concrete money-making ideas in Iraqi dialect as the strongest format. Next decision point is ~120 posts.
+- instructions: Metrics refresh on the same 60 posts (43,686 followers) re-confirmed the follower-normaliz
+- strategy: Iraqi-dialect concrete money-idea posts (livestream format, R132) [working]
+- strategy: Follower-normalized baseline maintenance (R247) [working]
+
+## 2026-09-07 09:04 · reflect:learn
+This scan produced no new rules because everything in it was either noise (0♥0💬 per R22), tiny-account inflation (1-2♥ entries per R133), or repeat datapoints already baked into rules (airdrop, director agent, 'مثال' link, hype post, 'i'm an AI' line). The one live signal: the Iraqi Arabic help desk offer reconfirmed hard at 24♥ 16💬 (~22x baseline), so R211 plus R2's reply-invitation pattern remains the account's strongest engagement lever.
+- instructions: This feed scan validated existing guardrails more than it taught anything new: every over-
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Bilingual director agent offer (R246) [mixed]
+
+## 2026-09-07 12:50 · reflect:metrics
+metrics refresh — real performance data — This scan is a stability signal: baseline holds at 0.00138 across 60 posts and 43,681 followers, so no rule churn is warranted. The livestream money-idea post remains the top format at 0.0076 (~5.5x), confirming R132 as the strongest proven original-post thesis; next verification milestone is ~120 posts.
+- instructions: Metrics refresh at 60 posts / 43,681 followers re-confirms the R247 baseline of 0.00138 wi
+- strategy: Iraqi-dialect money-making ideas with promised explanation (R132 livestream form [working]
+
+## 2026-09-07 12:53 · reflect:learn
+This scan showed the rule set is saturated: every entry mapped to an existing rule and most were literal repeats of already cited posts. The one genuine signal is continued strength of the Iraqi Arabic help desk offer (24 hearts, 16 replies), reinforcing R211 and the R2 closing invitation. No new rules warranted; repeats are confirmations, not evidence (R35, R119).
+- instructions: Latest feed scan returned almost exclusively reappearances of already classified posts (R2
+- strategy: Iraqi Arabic help desk offers (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+- strategy: Crypto airdrop anecdote (R227) [mixed]
+
+## 2026-09-07 16:40 · reflect:metrics
+metrics refresh — real performance data — The 60-post refresh changes nothing material: baseline holds at ~0.0014 and the livestream money-idea post remains the top confirmed original format at 0.00762 (~5.4x). Per R119 this is confirmation only; no new formats or rules, and the next real checkpoint is the 120-post re-verification.
+- instructions: Metrics refresh (60 posts, 43,683 followers) re-confirms the follower-normalized baseline
+- strategy: Iraqi-dialect money-idea posts with promised explanation (R132) [working]
+- strategy: Follower-normalized engagement baseline [working]
+
+## 2026-09-07 16:44 · reflect:learn
+This scan validated existing memory rather than extending it: the only strong original was the R211 help desk offer (24♥ 16💬), while every other over-performer was a tiny-count or repeat datapoint already gated by R133, R246 and R227, and under-performers matched R217, R151 and R3 exactly. Nothing here clears the bar for a new rule, which is the guardrails doing their job.
+- instructions: Treat repeat feed scans as regression tests, not discovery: this scan yielded zero new min
+- strategy: Arabic help desk offers (R211 format) [working]
+- strategy: Director agent bilingual talk offer (R246 experiment) [mixed]
+
+## 2026-09-07 20:34 · reflect:metrics
+metrics refresh — real performance data — This refresh is a stability check, not a pivot: baseline and top format both held steady, confirming R132-style money-idea posts as the highest-leverage content. No rule changes warranted since both datapoints are already cited (R119); the memory only needs confirmation that nothing drifted.
+- instructions: Latest refresh (60 posts, 43,682 followers) confirms the follower-normalized baseline at 0
+- strategy: Iraqi-dialect money-making ideas with promised explanation (R132) [working]
+- strategy: Follower-normalized baseline tracking [working]
+
+## 2026-09-07 20:37 · reflect:learn
+This scan returned almost nothing new: top engagement slots were tiny-count noise or already-banned crypto repeats, and the known flops (bare links, hype reactions) flopped again. The real signal is the Iraqi help desk offer at 24 hearts 16 replies, cementing service-style invitation posts as the account's strongest own-voice format.
+- instructions: Treat scans like this one as confirmation-only per R119: every top-eng entry was sub-thres
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Bilingual director agent offer (R246) [mixed]
+- strategy: Data-cost framing for privacy and data topics (R222) [mixed]
+
+## 2026-09-08 00:02 · reflect:rejection
+Every rejected draft relayed someone else's content (link, listicle, like count, quote digest) with no own angle, while every approved post carried first-person Iraqi framing or a proper landmark quote. Curation is not content for this account; live-search engagement is for finding candidates, never for picking or hooking posts.
+- instructions: Owner rejects any draft that relays second-hand material: bare links, paraphrased listicle
+- added R248: DON'T package quote roundups or live-search 'top engagement' picks as posts; picking conte
+- strategy: quote-curation / weekly digest posts [failing]
+- strategy: trend-scout own-angle recast [working]
+- R18: reaffirmed by theses (seen refreshed)
+
+## 2026-09-08 00:02 · reflect:rejection
+All three owner rejections were assembled from other people's popular content with engagement bait hooks, while every approval in the same batch was a first person Iraqi Arabic discovery or a direct source quote. Trends are lead sources, not post material; the owner's lived angle is the only publishable currency.
+- instructions: Owner rejects curation style drafts even on hot topics: tool listicles riding trend terms,
+- added R249: DON'T draft curated roundups of trending third party content (tool listicles, influencer p
+- strategy: trend scout: own angle recast vs curation [mixed]
+- strategy: first person cost and productivity discoveries (R1/R10/R48 core) [working]
+
+## 2026-09-08 00:02 · reflect:chat
+Chat review fired with no chat material provided; there is no evidence to evaluate, so I proposed no memory edits. Conservative stance: unchanged rules stand, especially the approval-before-queue gates (R27, R44, R112, R114).
+
+## 2026-09-08 00:05 · rejection
+consolidated 4 duplicate learned rules (kept 21 distinct)
+- retired R103
+- retired R219
+- retired R242
+- retired R248
+
+## 2026-09-08 00:05 · rejection
+consolidated 3 duplicate learned rules (kept 21 distinct)
+- retired R103
+- retired R219
+- retired R236
+
+## 2026-09-08 00:23 · reflect:metrics
+metrics refresh — real performance data — Baseline re-confirmed at 0.00142 (60 posts, 43,681 followers) with only a 3% drift from the prior measurement, so hour/format comparisons should keep using it. The R132 livestream money post remains the account's top performer at 0.00762 (~5.4x), reinforcing that first-person money-making ideas in Iraqi dialect with a promised explanation are the strongest working format — but it is still one datapoint, so I will not scale it without 2-3 distinct confirmations.
+- instructions: Latest refresh keeps the follower-normalized baseline essentially stable at 0.00142 (vs 0.
+- added R250: DO use 0.00142 as follower-normalized engagement baseline (60 posts, 43,681 followers); su
+- retired R247
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Money-making idea posts in Iraqi dialect with promised explanation (livestream i [working]
+
+## 2026-09-08 00:26 · reflect:learn
+This scan validated existing rules instead of surfacing new patterns: help desk offers remain the strongest original format (24♥ 16💬), while hype, bare links, and AI-persona posts underperformed again. Every high-ratio overperformer was sub-3♥ noise, confirming R133 and the 0/0 noise guard (R22) are keeping false formats out of the rulebook.
+- instructions: Latest feed scan re-confirmed the rulebook rather than extending it: the help desk offer f
+- strategy: Help desk offer format (R211) [working]
+- strategy: Bilingual director agent offer (R246) [mixed]
+
+## 2026-09-08 04:15 · reflect:metrics
+metrics refresh — real performance data — This refresh is a pure confirmation, not a new signal: baseline 0.00142 and the R132 livestream money post (now 0.00762, ~5.4x) both held. Aggregate replies (242) outpace reposts (192), consistent with the R2 reply-invitation thesis. No rule changes are warranted; per R119 these are confirmations of already-cited datapoints.
+- instructions: Metrics refresh on 60 posts / 43,677 followers re-confirmed the 0.00142 follower-normalize
+- strategy: Follower-normalized engagement baseline (0.00142) [working]
+- strategy: Money-making idea posts in Iraqi dialect (R132) [working]
+
+## 2026-09-08 04:18 · reflect:metrics
+metrics refresh — real performance data — The 20-post refresh puts the follower-normalized baseline at 0.00129, about 9% softer than the old 0.00142, so I swapped the operative number to keep future judgments aligned with current performance. The top post is still the Iraqi-dialect money-idea teaser at 0.00762 (~5.9x baseline), which re-confirms R132 rather than adding new signal.
+- instructions: Engagement baseline recalibrated to 0.00129 follower-normalized (20-post refresh, 43,677 f
+- added R251: DO use 0.00129 as the follower-normalized engagement baseline (20-post refresh, 43,677 fol
+- retired R250
+- strategy: Money-idea teaser format (livestream idea, R132) [working]
+- strategy: Baseline recalibration (R247/R250 lineage) [new]
+
+## 2026-09-08 04:18 · reflect:learn
+This scan taught confirmation, not novelty: every tiny over-performer fell under the R133 threshold and every under-performer re-verified an existing ban (bare links R217, hype R3/R229, AI persona lines R151). The help desk offer is now the account's strongest confirmed original format by absolute engagement, which strengthens the R211/R2 reply-invitation pattern as the core of the content strategy.
+- instructions: Repeat feed scan mapped almost entirely onto existing rules, so no new formats were promot
+- strategy: Iraqi Arabic help desk offer (R211) [working]
+- strategy: Bilingual director agent offer (R246) [mixed]
+
+## 2026-09-08 04:22 · reflect:rejection
+The owner refused two on-topic AI trend relays (Grok stock hype; best-agents-2026 listicle) yet approved trend posts that pivot to a first-person angle. Trend-post acceptance is decided by the own-angle pivot, not topic fit; pure relays behave like the drama and listicle patterns already banned.
+- instructions: Two on-topic trend drafts were refused for being pure relays: a Musk/Grok stock-and-leaked
+- added R252: DON'T relay trend buzz (stock moves, leaked roadmaps, year-best lists) as posts; trend pos
+- strategy: Trend-post channel: relay vs first-person pivot [mixed]
+
+## 2026-09-08 08:05 · reflect:metrics
+metrics refresh — real performance data — The re-verification R251 called for is complete: 60 posts now normalize to 0.00142, meaning earlier performance was slightly understated and old 0.00129 references are stale. The Iraqi-dialect money idea with a promised explanation is still the account's strongest format at 0.00762, so R132 holds without modification.
+- instructions: Baseline re-verify is done: at 60 posts (43,677 followers) the follower-normalized engagem
+- added R253: DO use 0.00142 as the follower-normalized engagement baseline (60 posts, 43,677 followers)
+- retired R251
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Money-making ideas in Iraqi dialect (R132) [working]
+
+## 2026-09-08 12:12 · reflect:metrics
+metrics refresh — real performance data — This refresh is a pure confirmation: baseline 0.00142 unchanged at 60 posts, and the R132 money-idea format still leads at 0.00762. No new rules are warranted (R119), and baseline stability means current hour and format decisions in memory remain reliable.
+- instructions: The 60-post metrics refresh re-measured the follower-normalized baseline at 0.00142 with 4
+- strategy: follower-normalized engagement baseline (R253) [working]
+- strategy: Iraqi-dialect money-idea posts (R132) [working]
+
+## 2026-09-08 12:16 · reflect:learn
+Learned that the rulebook fully predicted this scan: every winner and loser matched an existing rule, so the right move was confirming rather than expanding. R211's help desk format is now the proven engagement anchor; the director-agent offer remains unproven on a repeat showing.
+- instructions: This scan produced zero uncovered patterns: every over-performer was either sub-R133 noise
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+- strategy: Own-voice crypto revival watch (R227) [failing]
+- strategy: Banned-format confirmations [working]
+
+## 2026-09-08 16:00 · reflect:metrics
+metrics refresh — real performance data — The 60-post refresh changed nothing structural: the 0.00142 baseline reproduced exactly and the livestream money-idea post strengthened its lead at 0.00762 (~5.4x baseline). Per R119 this scan counts as confirmation only, so no new rules or retirements. The actionable takeaway is that Iraqi-dialect concrete money-making ideas remain the highest-leverage original format to pitch going forward.
+- instructions: Metrics refresh at 60 posts and 43,684 followers re-confirms the 0.00142 follower-normaliz
+- strategy: Follower-normalized engagement baseline (R253) [working]
+- strategy: Concrete money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+
+## 2026-09-08 16:03 · reflect:learn
+This scan produced no genuinely new evidence: it re-confirmed R217 (bare links), R151 (AI persona lines), R3/R229 (pure hype), R227 (crypto airdrop), and R133/R47 (tiny absolute counts inflating ratios in the over-performed list). The only real signal is that first-person service offers in Iraqi Arabic keep winning while the feed's 0.015 baseline must again be discarded in favor of 0.00142.
+- instructions: Latest scan is confirmation only: nearly every entry matches a datapoint already cited in
+- strategy: Iraqi-Arabic help desk offers (R211) [working]
+- strategy: Talk to director agent bilingual offer (R246) [mixed]
+
+## 2026-09-08 19:49 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh changed nothing: the baseline holds at 0.00142 and the livestream money-idea post is still the top own post (now 0.00762, ~5.4x). Confidence in R253 and R132 increases, and since both datapoints are already cited in rules, no new rules or retirements are warranted (R119).
+- instructions: 60-post metrics refresh re-confirmed the follower-normalized baseline at 0.00142 (43,683 f
+- strategy: Follower-normalized engagement baseline (R253) [working]
+- strategy: Iraqi-dialect money-idea posts with promised explanation (R132) [working]
+
+## 2026-09-08 19:52 · reflect:learn
+This scan was pure confirmation, not new signal: the strongest own-voice post was again the R211 help desk offer (24♥ 16💬), while all under-performers mapped to known failure modes (bare links R217, hype R3/R229, AI-persona motivation R151). The noise filters held — nothing worth a new rule, but the help desk format is worth drafting again, pending user approval.
+- instructions: Repeat feed scan yielded no new patterns: every over/under entry is already cited in an ac
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+
+## 2026-09-08 23:36 · reflect:metrics
+metrics refresh — real performance data — This refresh is a clean confirmation: same 60-post sample, baseline 0.00142 unchanged, so R253 stands until the ~120-post recheck. The livestream money-idea post remains the single best format at ~5.4x baseline, keeping R132 the strongest content lever to lean on.
+- instructions: The 60-post refresh reproduced the R253 baseline exactly (0.00142 at 43,678 followers), so
+- strategy: Follower-normalized engagement baseline (R253) [working]
+- strategy: Iraqi-dialect money-making ideas with promised explanation (R132) [working]
+
+## 2026-09-08 23:39 · reflect:learn
+The noise rules are doing their job: nearly every eye-catching ratio in this scan came from tiny-count posts already flagged by R133/R22, and repeats of the director agent offer and crypto airdrop anecdote do not count as new confirmations (R35, R246, R227). The help desk offer is the one format with genuinely strong absolute engagement, so R211 stays the priority template. No new rules warranted.
+- instructions: This scan was almost fully pre-covered: every over and under performer mapped to an existi
+- strategy: Noise filters on feed scans (R133/R22) [working]
+- strategy: Help desk offer format (R211) [working]
+
+## 2026-09-09 03:24 · reflect:metrics
+metrics refresh — real performance data — This refresh confirms rather than changes: the baseline holds at ~0.0014 and the Iraqi-dialect money-idea post extended its lead as top post (0.00762, ~5.4x baseline). The real signal is stability, so I made no rule churn (per R119) and the next meaningful checkpoint is ~120 posts.
+- instructions: Metrics refresh (60 posts, 43,681 followers) reconfirms the follower-normalized baseline a
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Money-making ideas in Iraqi dialect (R132) [working]
+- R21: reaffirmed by theses (seen refreshed)
+- R23: reaffirmed by theses (seen refreshed)
+- R25: reaffirmed by theses (seen refreshed)
+- R27: reaffirmed by theses (seen refreshed)
+
+## 2026-09-09 03:28 · reflect:learn
+This scan validated the rulebook more than it changed it: the only above-threshold winner was the R211 help desk offer (24 hearts 16 replies), while every flop matched an existing DON'T (bare links, hype, 'I'm an AI' persona lines). New contrast worth watching: asks that solve the follower's problem beat asks that demo my own tech (help desk 24/16 vs director agent 0/1). The scan's 0.015 baseline label was not adopted; R253's 0.00142 remains the reference per R96.
+- instructions: This feed scan mostly re-confirmed existing rules rather than surfacing new patterns: the
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Director agent demo offer [mixed]
+- strategy: Own-voice crypto revival [failing]
+
+## 2026-09-09 04:18 · reflect:metrics
+metrics refresh — real performance data — The baseline held at ~0.0013 on a fresh scan, so no threshold or rule changes are warranted. The livestream money post keeps growing (0.00762, ~5.8x), reinforcing that first-person Iraqi-dialect money-making ideas are the account's strongest original format.
+- instructions: Metrics refresh on 20 own posts at 43,680 followers measured a baseline of 0.00131 vs the
+- strategy: Iraqi-dialect money-making ideas (R132 livestream post) [working]
+- strategy: Follower-normalized engagement baseline [working]
+
+## 2026-09-09 04:19 · reflect:rejection
+The borjafat rejection proves the trend-scout first-person pivot must live on the tool or topic, never on my own operations or another poster's mistakes; the approved MarkItDown and Virtuals drafts show the disciplined version lands. Future trend drafts get gated on exactly that distinction before I show them.
+- instructions: Owner rejected the borjafat trend-scout draft: its entire hook was the poster's bare link,
+- added R254: DON'T pivot trend posts on agent self-narration ('I run this account', 'first thing I read
+- strategy: trend-scout recast discipline [mixed]
+
+## 2026-09-10 14:58 · reflect:metrics
+metrics refresh — real performance data — This refresh changed nothing and that is the finding: baseline holds at ~0.00143 and the R132 money-idea post is still the top post at 0.0076 (~5.3x baseline). Per R119 repeated datapoints are confirmation only, so I added no rules and retired none; the next meaningful checkpoint is the ~120-post re-verify named in R253.
+- instructions: Metrics refresh at 60 posts / 43,662 followers re-measured the baseline at 0.00143, essent
+- strategy: Follower-normalized engagement baseline (R253) [working]
+- strategy: Iraqi-dialect money-idea format (R132) [working]
+- R29: reaffirmed by theses (seen refreshed)
+- R34: reaffirmed by theses (seen refreshed)
+- R35: reaffirmed by theses (seen refreshed)
+
+## 2026-09-10 18:48 · reflect:metrics
+metrics refresh — real performance data — The baseline barely moved on re-measurement (0.00145 vs 0.00142), so the estimate is stable and no re-verification is due until ~120 posts. The livestream money-idea post remains the clear top performer at 0.0076 (~5x baseline), reconfirming the Iraqi-dialect money-idea format. Aggregate engagement is like-heavy (3,338 likes vs 251 replies), reinforcing that replies remain the scarce, high-signal metric (R229).
+- instructions: Metrics refresh (60 posts, 43,666 followers) moves the follower-normalized baseline only m
+- added R255: DO use 0.00145 as the follower-normalized engagement baseline (60 posts, 43,666 followers)
+- retired R253
+- strategy: Follower-normalized baseline tracking [working]
+- strategy: Iraqi-dialect money-idea format (R132) [working]
+
+## 2026-09-10 18:51 · reflect:learn
+Small-sample guards held again: all top over-performers bar one were sub-3♥ repeats of already-cited datapoints, so the only honest new signal was the AGI hype quote failing on replies. The help desk format is now twice-confirmed and safe to keep prioritizing. I scoped R7 to usable product launches so grandiose CEO claims stop masquerading as landmark announcements.
+- instructions: This scan's top over-performers (eng 0.082, 0.041, 0.036) were all sub-3♥/3💬 posts already
+- added R256: DON'T repost grandiose milestone claims (e.g. 'we reached AGI') as hype quotes; R7 means u
+- strategy: R211 help desk offers (ask for work problems, promise AI fixes) [working]
+- strategy: R7 landmark announcement reposts [mixed]
+- strategy: Small-sample over-performer mining [working]
+
+## 2026-09-10 22:36 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh re-measured the same 60-post sample: baseline held at 0.00146 and the livestream money-idea post remains top at 0.0076 (~5x baseline), confirming R255 and R132 rather than introducing new signal. This matters because it says hold current strategy steady and defer trend conclusions until the sample roughly doubles.
+- instructions: Same-sample metric re-scans are confirmations, not new evidence (R119): the follower-norma
+- strategy: Follower-normalized engagement baseline (R255) [working]
+- strategy: Money-making idea posts in Iraqi dialect (R132) [working]
+
+## 2026-09-10 22:39 · reflect:learn
+This scan validated rule coverage instead of revealing new patterns: the help desk offer (R211) confirmed strongly at 24♥ 16💬 while every previously-banned format (AGI quote, GTA6 leak, AI-persona motivation, bare link) landed at the bottom again. Noise filters (R133, R22, R96) correctly killed three false positives (eng 0.082, 0.041, 0.036) that would have tempted new rules.
+- instructions: This scan was fully absorbed by the existing rule set: every over/under entry mapped to an
+- strategy: Help desk offer format (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+- strategy: AGI milestone quote ban (R256) [working]
+
+## 2026-09-11 00:27 · outcome
+owner REJECTED #3143 — cited rules logged for pattern mining
+
+## 2026-09-11 02:25 · reflect:metrics
+metrics refresh — real performance data — The metrics refresh shows a stable account: baseline engagement holds at ~0.00145 across 60 posts and 43.7k followers, so core assumptions need no revision yet. The livestream money-idea post grew to 0.0076, reinforcing that first-person Iraqi-dialect money-making offers with a promised explanation are the strongest format. This scan is confirmation data, so no new rules were warranted.
+- instructions: Metrics refresh (60 posts, 43,667 followers) re-confirms the R255 baseline: avg engagement
+- strategy: Follower-normalized engagement baseline (R255) [working]
+- strategy: Money-making ideas in Iraqi dialect with promised explanation (R132) [working]
+- R40: reaffirmed by theses (seen refreshed)
+- R41: reaffirmed by theses (seen refreshed)
+- R42: reaffirmed by theses (seen refreshed)
+- R43: reaffirmed by theses (seen refreshed)
+- R44: reaffirmed by theses (seen refreshed)
+
+## 2026-09-11 02:29 · reflect:learn
+This scan validated the memory system itself: all ten feed entries mapped onto existing rules, so it registers as confirmation rather than new evidence. The one live signal — the help desk offer at 24♥ 16💬 — strengthens R211 as the account's strongest own-voice format, while the director agent offer stays unproven at 0♥ 1💬 under R246.
+- instructions: Feed scan with a stated 0.015 baseline was rejected again per R96/R255; after re-normalizi
+- strategy: Iraqi help desk offer (R211) [working]
+- strategy: Director agent bilingual offer watch (R246) [mixed]
+- strategy: AGI/milestone hype quotes (R256) [failing]
+
+## 2026-09-11 04:17 · reflect:metrics
+metrics refresh — real performance data — The latest 20-post window averages 0.00105 vs the 0.00145 baseline, a dip worth watching but too small a sample to reset the bar (R40). The top post again proves the 'AI replaces a paid service' frame with a named tool (R10), so original drafts should keep leaning there.
+- instructions: Metrics refresh (20 own posts): avg 0.00105 vs the R255 baseline of 0.00145 is a ~28% dip,
+- strategy: Follower-normalized engagement baseline (R255) [mixed]
+- strategy: Cost-saving AI-replacement posts (R10 pattern) [working]
+
+## 2026-09-11 04:18 · reflect:rejection
+Rejections clustered on drafts whose center was someone else's story or habits rather than the user's own AI experience; approvals all pivot first-person. This generalizes R228/R239 beyond named accounts and X-meta to any third-person anecdote used as the post's core.
+- instructions: Both rejections centered on other people's behavior (a friend's $30 NFT gas anecdote; a ca
+- added R257: DON'T center posts on other people's actions (friend's NFT gas story, accounts' bare links
+- strategy: Crypto only as AI-agents framing [working]
+- strategy: First-person pivot on trend posts [mixed]
+
+## 2026-09-11 06:36 · reflect:metrics
+metrics refresh — real performance data — Baseline held at 0.00146 across two scans with identical sample size (60 posts, 43,666 followers), so no rule churn is warranted and the next checkpoint is ~120 posts. The livestream money-idea post's continued climb to 0.00758 confirms Iraqi-dialect money-making ideas with a promised explanation as the proven top format, and the strong reply volume keeps validating the closing-question default.
+- instructions: Metrics refresh at 60 posts / 43,666 followers re-confirms the follower-normalized baselin
+- strategy: Iraqi-dialect money-making ideas with promised explanation (R132) [working]
+- strategy: Follower-normalized baseline tracking (R255) [working]
+- strategy: Reply-driven engagement (R2) [working]
+
+## 2026-09-11 06:40 · reflect:learn
+This scan was almost pure re-confirmation: every rule already on the books predicted the under-performers, and the other over-performers were sub-threshold noise (R133/R22) or already-banned crypto (R227). The one genuine signal is the Iraqi-Arabic help desk offer at 24 hearts 16 replies, re-confirming R211 as a top format. The feed's stated 0.015 baseline is roughly 10x inflated versus our 0.00145 (R255), so it was ignored per R96.
+- strategy: Help desk offer format (R211) [working]
+- strategy: Director agent bilingual talk offer [mixed]
+- strategy: Banned-pattern under-performance check [working]
+
+## 2026-09-11 10:26 · reflect:metrics
+metrics refresh — real performance data — This refresh is a stability check, not new evidence: same 60-post sample, so the ~0.0015 baseline is confirmed rather than moved. The livestream money post strengthened to 0.00758 but stays a single-post signal until a distinct post replicates it, keeping me conservative about scaling that format.
+- instructions: Latest metrics refresh (60 posts, 43,663 followers) re-confirms the follower-normalized ba
+- strategy: Follower-normalized baseline (R255) [working]
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+
+## 2026-09-11 10:29 · reflect:learn
+This scan was a pure repeat: every datapoint already lives in an existing rule, so per R119 I proposed nothing new. The key discipline is ignoring the feed's 0.015 baseline and inflated tiny-account ratios, and treating R211's help desk format as the only newly re-confirmed winner.
+- instructions: The latest feed scan produced zero genuinely new datapoints: every entry (tiny 1-3♥ replie
+- strategy: Feed-scan rule set validation [working]
+
+## 2026-09-11 14:15 · reflect:metrics
+metrics refresh — real performance data — The baseline is stable at 0.00147 on the same 60-post sample, so no recalibration until the sample roughly doubles to ~120 posts. The R132 money-idea format reconfirmed as the top post at 0.00758 (~5x baseline), making it the flagship own-voice play; this scan is confirmation, not new evidence, so no rules were touched.
+- instructions: Metrics refresh (60 posts, 43,660 followers) re-confirms the follower-normalized baseline
+- strategy: Follower-normalized engagement baseline (R255) [working]
+- strategy: Money-making idea posts in Iraqi dialect (R132 livestream format) [working]
+
+## 2026-09-11 14:18 · reflect:learn
+This scan was almost entirely re-confirmations of existing rules rather than new signal: every banned format (bare links, AI persona motivation, GTA 6 leaks, AGI hype quotes, payments chatter) re-appeared under-performing. The one fresh high-absolute datapoint was the help-desk offer at 24♥ 16💬, cementing R211 as the flagship engagement format; I also re-normalized the feed's stated 0.015 baseline against R255's 0.00145 before judging anything.
+- instructions: Repeat feed scans that only re-cite datapoints already covered by rules should be logged a
+- strategy: Help desk offers (R211) [working]
+- strategy: Director agent bilingual offer [mixed]
+- strategy: Banned-format re-confirmations (R217, R151, R134, R256, R207) [working]
+
+## 2026-09-11 18:03 · reflect:metrics
+metrics refresh — real performance data — This refresh changed nothing materially: baseline steady at ~0.0015 and the livestream money post still leads at 0.00758, so every datapoint here was already encoded in R132/R255. Restraint was the correct move; repeat scans confirm existing rules rather than justify new ones, and the baseline re-verification should wait until the sample roughly doubles.
+- instructions: Metrics refresh (60 own posts, 43,660 followers) is a pure confirmation pass, not new evid
+- strategy: Iraqi-dialect money-making idea posts (R132 thesis) [working]
+- strategy: Follower-normalized baseline methodology (R255) [working]
+
+## 2026-09-11 18:07 · reflect:learn
+This scan was a confirmation sweep, not new evidence: all nine entries mapped to existing rules (help desk, gaming leaks, AGI hype, bare links, AI-persona lines, crypto airdrop, director-agent repeat, small-account noise). The only strong absolute signal was the R211 help desk offer at 24♥ 16💬, cementing it as the top conversation-driving format. Rejected the feed's 0.015 baseline per R96/R255; 0.00145 remains canonical until the ~120-post re-verification.
+- instructions: Treat repeat feed scans as confirmation sweeps: when an entry matches a rule's already-cit
+- strategy: Help desk offer (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+- strategy: Feed-scan noise filters (R22/R133/R35/R47/R256) [working]
+
+## 2026-09-11 21:50 · reflect:metrics
+metrics refresh — real performance data — This metrics refresh confirms rather than changes anything: baseline 0.00147 vs 0.00145 on the same 60 posts with followers flat at ~43.7k. The Iraqi-dialect livestream money-idea post remains the top performer at 0.00758 (~5.2x baseline), making R132 the strongest confirmed format. The next real decision point is re-verifying R255 near ~120 posts.
+- instructions: Baseline re-measured at 0.00147 on the same 60 posts and 43,658 followers, essentially unc
+- strategy: Iraqi-dialect money-making idea posts [working]
+- strategy: Follower-normalized baseline calibration [working]
+
+## 2026-09-11 21:53 · reflect:learn
+This scan validated the rulebook rather than extending it: the lone qualifying over-performer was the help desk offer already codified in R211, and every under-performer matched an existing ban. The 0♥0💬 data-cost post stays noise under R22, so that framing remains untested. Value now comes from repeating proven formats at R20/R50 hours, not from mining sub-bar feed entries.
+- instructions: Repeat feed scan was confirmation-only: every under-performer mapped to an existing ban (R
+- strategy: Help desk offers (R211) [working]
+- strategy: AGI milestone hype quotes (R256) [failing]
+
+## 2026-09-12 01:40 · reflect:metrics
+metrics refresh — real performance data — This refresh is confirmation, not new signal: baseline steady at ~0.0015 and the R132 money-idea post widened its lead to ~5.2x. It matters because it validates avoiding rule churn on repeat scans and keeps the concrete money-idea-in-Iraqi-dialect format as the top mine to work.
+- instructions: Metrics refresh (60 posts, 43,659 followers) measured avg engagement 0.00147, confirming t
+- strategy: Follower-normalized engagement baseline (R255) [working]
+- strategy: Iraqi-dialect money-making idea posts (R132) [working]
+- R46: reaffirmed by theses (seen refreshed)
+- R49: reaffirmed by theses (seen refreshed)
+- R50: reaffirmed by theses (seen refreshed)
+- R91: reaffirmed by theses (seen refreshed)
+- R92: reaffirmed by theses (seen refreshed)
+- R96: reaffirmed by theses (seen refreshed)
+- R53: retired (stale — unreaffirmed for 15d)
+
+## 2026-09-12 01:43 · reflect:learn
+Nearly every entry in this scan was a datapoint already encoded in a rule, so the conservative move was to change almost nothing and count it as confirmation only. The help desk offer at 24♥ 16💬 is the one genuinely fresh strong signal, reinforcing reply-driving ask-formats as the account's best lane. The feed's 0.015 baseline conflicts with R255 and was discarded; the 0♥0💬 data-cost post stays noise per R22, so no verdict on R222 framing yet.
+- instructions: This feed scan was almost entirely repeat datapoints already encoded in rules (GTA 0.004,
+- strategy: Help desk offer (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+- strategy: Off-topic and hype bucket (R134/R256/R151/R217) [failing]
+
+## 2026-09-12 04:18 · reflect:metrics
+metrics refresh — real performance data — Refreshed the own-post baseline to 0.00106 (20 posts, 43,659 followers), down from 0.00145 — re-verify at ~40 posts before treating the dip as a trend. The top post (0.003) reconfirms the winning formula: Iraqi-Arabic first-person cost-saving discovery naming the exact tool that replaces a paid human service.
+- instructions: Metrics refresh (20 own posts, 43,659 followers) puts the follower-normalized baseline at
+- added R258: DO use 0.00106 as the follower-normalized baseline (20 own posts, 43,659 followers); super
+- retired R255
+- strategy: Stop-paying-someone cost-saving posts (R10+R4 anchor) [working]
+- strategy: Engagement baseline drift [mixed]
+
+## 2026-09-12 04:19 · reflect:rejection
+The two rejected drafts share one flaw: they center on other people's actions (others posting bare links, a friend's NFT mint) while every approved draft pivots to own first-person value or product capability. The pattern is already codified (R228, R239, R257, R207), so the fix is applying the recast before drafts reach the owner, not adding rules.
+- instructions: Both owner rejections this cycle were repeat instances of already-coded patterns, not new
+- strategy: trend-scout / scan draft sourcing [mixed]
+
+## 2026-09-12 05:51 · reflect:metrics
+metrics refresh — real performance data — The mandated baseline re-check at 60 posts confirms the pivot is compounding: engagement rose 39% to 0.00147 with flat followers, meaning depth of engagement is growing even as audience size stalls. The top post is unchanged (R132 livestream money idea, 0.00758, ~5.2x baseline), so I updated the normalization constant and set the next re-verification at ~120 posts.
+- instructions: Baseline re-verification triggered by R258 is complete: at 60 own posts the follower-norma
+- added R259: DO use 0.00147 as the follower-normalized baseline (60 own posts, 43,661 followers); super
+- retired R258
+- strategy: Follower-normalized engagement baseline [working]
+- strategy: Iraqi-dialect money-idea format (R132 livestream post) [working]
+
+## 2026-09-12 05:53 · reflect:learn
+This scan validated existing rules instead of surfacing new ones: every flagged entry maps to an already-cited rule (R246, R227, R133, R217, R151, R134, R256), so nothing new was mined per R119. The one true confirmation is the R211 help desk offer at 24♥/16💬 (~20x baseline), and the 0♥/0💬 data-cost post stays noise under R22. The feed's new 0.015 baseline was rejected per R96/R259 in favor of 0.00147.
+- instructions: Repeat feed scan confirmed the rulebook rather than teaching new patterns: the help desk o
+- strategy: Help desk offer format (R211) [working]
+- strategy: Bilingual director agent offer (R246) [mixed]
+- strategy: Feed baseline discipline (R96/R259) [working]
+
+## 2026-09-12 09:38 · reflect:metrics
+metrics refresh — real performance data — The follower-normalized baseline held at 0.00148 with post count unchanged at 60, confirming R259 rather than demanding new rules. The livestream money-idea format re-measured at 0.00758 (~5.1x baseline), cementing R132 as the account's strongest format; keep re-verifying the baseline at ~120 posts.
+- instructions: Repeat metric refreshes with an unchanged post count (still 60 own posts) are engagement a
+- strategy: Follower-normalized baseline (R259) [working]
+- strategy: Money-idea posts in Iraqi dialect (R132) [working]
+
+## 2026-09-12 09:41 · reflect:learn
+This scan was dominated by repeat appearances of already-scored posts, so it confirms the rulebook instead of expanding it. The help desk offer (24♥ 16💬) is now doubly confirmed as the strongest format, while every banned format stayed weak even with high like counts (AGI 108♥ but 3💬), reinforcing that replies, not likes, are the real signal. All sub-threshold over-performers (1♥1💬, 0♥1💬, 2♥1💬) were correctly filtered by R133 and the feed's 0.015 baseline was rejected per R96/R259.
+- instructions: Repeat-heavy feed scans should reinforce the existing rulebook, not grow it (R119/R35): th
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Director agent bilingual teaser (R246) [mixed]
+- strategy: Banned-format repeat sweep (AGI milestone, gaming leaks, bare link, AI-persona,  [failing]
+- strategy: Follower-normalized baseline (R259) [working]
+
+## 2026-09-12 13:26 · reflect:metrics
+metrics refresh — real performance data — The baseline held at 0.00148 across this refresh, confirming R259 needs no adjustment until the post sample doubles. The livestream money post remains the top performer at 0.00758, a second confirmation that the Iraqi-dialect money-idea-with-promised-explanation format is the account's strongest original-content angle.
+- instructions: Metrics refresh (60 own posts, 43,667 followers) re-confirms the follower-normalized basel
+- strategy: Iraqi-dialect money-making idea posts (R132 livestream format) [working]
+- strategy: Follower-normalized baseline (R259) [working]
+
+## 2026-09-12 13:30 · reflect:learn
+This scan produced no new rules because every datapoint maps to an existing one — the clearest signal is the help desk offer's 24♥ 16💬, confirming R211 as the account's strongest repeatable format. Meanwhile high-like/low-reply hype (AGI repost at 108♥ 3💬) again landed under baseline, reinforcing that replies, not likes, are this account's real currency.
+- instructions: Latest feed scan reconfirms the playbook rather than extending it: the R211 help desk offe
+- strategy: Help desk offers in Iraqi Arabic (R211) [working]
+- strategy: Director agent bilingual offer (R246) [mixed]
+- strategy: Follower-normalized baseline vs feed baselines (R96/R259) [working]
+
+## 2026-09-12 17:12 · reflect:metrics
+metrics refresh — real performance data — Baseline is stable: 0.00149 vs 0.00147 at the same 60-post sample, so normalization numbers barely move and no format conclusions should be drawn from this refresh. The livestream money-idea post remains the account's top post at ~5.1x baseline, confirming R132 rather than adding anything new.
+- instructions: Baseline refreshed to 0.00149 follower-normalized (60 own posts, 43,677 followers), effect
+- added R260: DO use 0.00149 as the follower-normalized baseline (60 own posts, 43,677 followers); super
+- retired R259
+- strategy: Money-making idea format (livestream post, R132) [working]
+- strategy: Follower-normalized baseline tracking [working]
+
+## 2026-09-12 17:16 · reflect:learn
+This scan is the first where every single datapoint mapped onto an existing rule, so I proposed zero changes per R119. That predictive hit rate is itself the signal: the noise filters and content bans are working, and the watchlist items (director agent offer, airdrop anecdote) correctly stayed unconfirmed.
+- instructions: Feed re-scan produced zero genuinely new patterns: all five under-performers matched exist
+- strategy: Help desk offer format (R211) [working]
+- strategy: Director agent bilingual offer (R246 watchlist) [mixed]
+- strategy: Noise-filter stack (R22/R96/R133/R260) [working]
