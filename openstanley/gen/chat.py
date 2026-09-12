@@ -367,6 +367,40 @@ def _intent_actions(reply: str, cfg: Config) -> list[dict]:
     return actions
 
 
+# \b anchors don't fit Arabic morphology (اعتمدهم = اعتمد + suffix) —
+# the Arabic alternatives match as substrings, English keeps boundaries
+_APPROVE_INTENT_RE = re.compile(r"(?i)(\bapprove[ds]?\b|اعتمد|موافق)")
+_DRAFT_ACTION_TOOLS = ("approve_draft", "delete_draft", "reschedule_draft",
+                       "publish_draft", "schedule_draft", "edit_draft")
+
+
+def _warn_unexecuted_approval(user_message: str,
+                              tool_results: list[dict]) -> None:
+    """DETERMINISTIC BACKSTOP (live 2026-09-12 19:32: 'Approved them' got a
+    queue analysis, zero actions — the prompt rule makes that rare, this
+    makes it IMPOSSIBLE to miss): when the owner's message carries
+    approval intent and the turn executed NO draft actions, the owner is
+    told within seconds instead of finding out when the window closes."""
+    if not _APPROVE_INTENT_RE.search(user_message or ""):
+        return
+    acted = any(tr.get("name") in _DRAFT_ACTION_TOOLS and tr.get("ok")
+                for tr in (tool_results or []))
+    if acted:
+        return
+    db.log("watchdog", "approval-intent turn executed NO draft actions — "
+                      "the agent likely listed without acting",
+           level="warn")
+    try:
+        from ..integrations import telegram as _tg
+        if _tg.is_enabled():
+            _tg.notify_bg(
+                "⚠️ Your approve message got NO executed actions — I "
+                "described the queue but approved nothing. Check /drafts "
+                "or repeat the command.")
+    except Exception:  # noqa: BLE001 — the warning is best-effort
+        pass
+
+
 def _run_tools(cfg: Config, reply: str, max_rounds: int = 3) -> tuple[str, list[dict]]:
     """Hermes-grade agentic loop: execute tool actions, feed results back for
     a follow-up turn, and KEEP GOING while the model chains more actions —
@@ -503,6 +537,7 @@ def _chat_reply_inner(cfg: Config, user_message: str,
 
     clean, tool_results = _run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
+    _warn_unexecuted_approval(user_message, tool_results)
     if tool_results:
         extra = _followup(cfg, reply, tool_results, user_message)
         if extra:

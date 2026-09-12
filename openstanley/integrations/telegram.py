@@ -820,6 +820,7 @@ def _chat_reply_tg_stream_inner(cfg: Config, chat_id: int, user_message: str):
     reply = "".join(full)
     clean, tool_results = chat_mod._run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
+    chat_mod._warn_unexecuted_approval(user_message, tool_results)
     if tool_results:
         extra = chat_mod._followup(cfg, reply, tool_results, user_message)
         if extra:  # web parity: real tool results folded into prose

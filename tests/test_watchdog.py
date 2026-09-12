@@ -175,3 +175,29 @@ def test_user_turn_resets_burst_guard():
     for _ in range(6):
         wd.note_chat_draft()
     assert wd.allow_chat_draft() is False       # runaway still caught
+
+
+def test_unexecuted_approval_warns(monkeypatch):
+    """DETERMINISTIC BACKSTOP (live 2026-09-12 19:32): 'Approved them' got
+    a queue analysis and zero actions. The prompt rule makes that rare;
+    this tripwire makes it impossible to MISS — approval intent + no
+    executed draft action = owner warned on TG within the same turn."""
+    import openstanley.integrations.telegram as _tg
+    from openstanley.gen import chat as cmod
+    sent = []
+    monkeypatch.setattr(_tg, "is_enabled", lambda: True)
+    monkeypatch.setattr(_tg, "notify_bg", lambda t: sent.append(t))
+    # intent, no action → warn
+    cmod._warn_unexecuted_approval("Approved them", [])
+    assert sent and "NO executed actions" in sent[-1]
+    # intent + executed approve → silence
+    sent.clear()
+    cmod._warn_unexecuted_approval(
+        "Approved them", [{"name": "approve_draft", "ok": True}])
+    assert not sent
+    # no intent → silence even with no actions
+    cmod._warn_unexecuted_approval("what's scheduled today?", [])
+    assert not sent
+    # arabic intent
+    cmod._warn_unexecuted_approval("اعتمدهم كلهم", [])
+    assert sent
