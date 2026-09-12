@@ -6,6 +6,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   Music2,
+  Link2 as LinkIcon,
   Quote as QuoteIcon,
   RefreshCw,
   Send,
@@ -211,6 +212,24 @@ export function DraftCard({ draft, defaultSlot, onChanged }: DraftCardProps) {
             <ExternalLink size={10} />
           </span>
           {draft.quote_of.text}
+        </a>
+      ) : null}
+
+      {/* link ships as first reply — visible on the DRAFT card too, not
+          only after scheduling (owner 2026-09-13: 'I can see it only when
+          I add the draft to a schedule') */}
+      {draft.meta?.link_reply ? (
+        <a
+          href={draft.meta.link_reply}
+          target="_blank"
+          rel="noreferrer"
+          dir="ltr"
+          className="mb-2.5 flex items-center gap-1.5 rounded-lg border border-edge border-s-2 border-s-teal bg-panel2/60 px-3 py-1.5 text-[12px] text-muted transition-colors hover:border-teal/50"
+        >
+          <LinkIcon size={11} className="shrink-0 text-teal" />
+          <span className="shrink-0 font-medium text-teal">{t('calendar.linkReply')}:</span>
+          <span className="truncate">{draft.meta.link_reply.replace(/^https?:\/\//, '')}</span>
+          <ExternalLink size={10} className="ms-auto shrink-0" />
         </a>
       ) : null}
 
