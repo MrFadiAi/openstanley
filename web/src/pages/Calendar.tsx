@@ -136,6 +136,7 @@ interface DetailItem {
   x_id?: string | null;
   reply_to?: { x_id?: string | null; author?: string } | null;
   quote_to?: { x_id?: string | null; author?: string } | null;
+  link_reply?: string | null;
 }
 
 function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: () => void; onClose?: () => void }) {
@@ -215,6 +216,20 @@ function PostDetail({ it, onChanged, onClose }: { it: DetailItem; onChanged?: ()
         >
           <Send size={10} className="shrink-0 text-green" />
           <span className="font-medium">{t('calendar.viewPost')}</span>
+          <ExternalLink size={10} className="ms-auto shrink-0" />
+        </a>
+      ) : null}
+
+      {it.link_reply ? (
+        <a
+          href={it.link_reply}
+          target="_blank"
+          rel="noopener noreferrer"
+          dir="ltr"
+          className="mb-2 flex items-center gap-1 rounded-lg border border-teal/40 bg-inset px-2 py-1.5 text-[11.5px] text-ink-2 underline-offset-2 hover:text-ink hover:underline"
+        >
+          <span className="font-medium text-teal">{t('calendar.linkReply')}:</span>
+          <span className="truncate">{it.link_reply.replace(/^https?:\/\//, '')}</span>
           <ExternalLink size={10} className="ms-auto shrink-0" />
         </a>
       ) : null}
@@ -374,6 +389,9 @@ function SlotPost({ item, onChanged }: { item: CalendarItem; onChanged?: () => v
             ) : null}
             {item.quote_to?.x_id ? (
               <span className="truncate font-mono text-[10px] text-ink-3">❝ {item.quote_to.author || 'quote'}</span>
+            ) : null}
+            {item.link_reply ? (
+              <span className="font-mono text-[10px] text-teal">🔗↩</span>
             ) : null}
             {item.image ? <span className="font-mono text-[10px] text-ink-3">· 🖼</span> : null}
             <span className="ms-auto flex items-center gap-1.5 font-mono text-[10px] text-ink-3">
@@ -616,6 +634,7 @@ function QueueCard({ draft, onChanged }: { draft: Draft; onChanged?: () => void 
           it={{ id: draft.id, kind: draft.kind, state: draft.status, text: draft.text,
                 scheduled_at: draft.scheduled_at, language: draft.language, image: draft.image,
                 x_id: draft.x_id,
+                link_reply: draft.meta?.link_reply ?? undefined,
                 reply_to: draft.meta?.reply_to_x_id
                   ? { x_id: draft.meta.reply_to_x_id,
                       author: draft.meta.target_author || draft.meta.author || '' }

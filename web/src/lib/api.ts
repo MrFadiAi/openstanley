@@ -52,6 +52,8 @@ export interface DraftMeta {
   target_author?: string;
   /** mention-reply drafts carry the engagement author here */
   author?: string;
+  /** the URL that ships as the FIRST REPLY under the post */
+  link_reply?: string;
   target_score?: TargetScore;
   engagement_id?: number;
   idea_title?: string;
@@ -126,6 +128,7 @@ export interface CalendarItem {
   scheduled_reason?: string | null;
   reply_to?: { x_id?: string | null; author?: string } | null;
   quote_to?: { x_id?: string | null; author?: string } | null;
+  link_reply?: string | null;
   x_id?: string | null;
   is_thread?: boolean;
 }

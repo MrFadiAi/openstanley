@@ -1541,7 +1541,8 @@ def _cal_item(d: dict, state: str) -> dict:
             "image": d.get("image"), "score": alg.get("score"),
             "language": meta.get("language") or "en",
             "scheduled_reason": meta.get("scheduled_reason"),
-            "reply_to": reply_to, "quote_to": quote_to}
+            "reply_to": reply_to, "quote_to": quote_to,
+            "link_reply": meta.get("link_reply")}
 
 
 def _empty_slots(by_date) -> dict:
