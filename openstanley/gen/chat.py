@@ -599,6 +599,7 @@ def _chat_reply_stream_inner(cfg: Config, user_message: str) -> Iterator[dict]:
     # tools + follow-up run AFTER the stream so tokens land fast
     clean, tool_results = _run_tools(cfg, reply)
     clean = tools_mod.strip_actions(reply)
+    _warn_unexecuted_approval(user_message, tool_results)
     for res in tool_results:
         yield {"type": "tool", "name": res["name"], "args": res.get("args"),
                "ok": bool(res.get("ok")), "result": res}
