@@ -18,6 +18,7 @@ import { HarnessPage } from '@/pages/Harness';
 import { ConnectPage } from '@/pages/Connect';
 import { SettingsPage } from '@/pages/Settings';
 import { LogPage } from '@/pages/Log';
+import { LoopsPage } from '@/pages/Loops';
 
 // recharts is heavy — only fetched when the Insights tab opens
 const InsightsPage = lazy(() =>
@@ -157,6 +158,8 @@ export default function App() {
         return <ConnectPage />;
       case 'settings':
         return <SettingsPage />;
+      case 'loops':
+        return <LoopsPage />;
       case 'log':
         return <LogPage />;
     }

@@ -167,6 +167,18 @@ class Agent:
         if rep["added"]:
             db.log("create", f"[account {acct}] bank low ({rep['bank_before']}) — replenished "
                              f"+{rep['added']} from {','.join(rep['sources'])}")
+        # AUTONOMOUS BEHAVIOR: github_daily (owner-toggled, Loops page)
+        from . import behaviors as beh
+        if beh.github_beat_due(self.cfg, acct):
+            try:
+                from .tools import _tool_github_drafts
+                res = await asyncio.to_thread(_tool_github_drafts, self.cfg)
+                if res.get("ok") and res.get("draft_ids"):
+                    db.log("create", f"behavior github_daily: drafted from "
+                                    f"{res.get('repos', '?')} repo(s)")
+                beh.mark_github_done(acct)
+            except Exception as e:  # noqa: BLE001 — the beat never blocks create
+                db.log("create", f"github_daily failed: {e}", level="warn")
         ids = await asyncio.to_thread(drafts_mod.generate_drafts, self.cfg, acct=acct)
         _tg_draft_cards(ids)
         out = {"drafts": len(trend_ids + ids), "account": acct,

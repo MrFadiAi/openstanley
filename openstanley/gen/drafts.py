@@ -154,6 +154,13 @@ def generate_drafts(cfg: Config, count: int = None,
                             "kept this run, rest saved for tomorrow")
             break
         recent = [draft["text"]] + recent[:div.RECENT_WINDOW - 1]
+        # AUTONOMOUS BEHAVIORS (owner 2026-09-13: toggled from the Loops
+        # page, OFF by default): first-reply links, landmark quotes
+        from . import behaviors as beh
+        draft = beh.shape_draft(draft, idea)
+        if draft.get("behavior_quote"):
+            db.log("create", f"behavior quote_landmarks: draft from idea "
+                            f"{idea['id']} quotes {idea.get('source_handle')}")
         image = draft.get("image")
         if not image and draft.get("kind", "post") == "post" and not draft.get("thread"):
             # media auto-attach: a clean typographic card beats no image —
@@ -171,7 +178,8 @@ def generate_drafts(cfg: Config, count: int = None,
             kind=draft.get("kind", "post"),
             thread=draft.get("thread"), temperature=temp,
             image=image,
-            quote_of=(draft.get("quote") or {}).get("x_id") if draft.get("quote") else None,
+            quote_of=(draft.get("quote") or {}).get("x_id")
+                if draft.get("quote") else draft.get("quote_of"),
             meta=_draft_meta(idea, draft, lang), acct=acct,
         )
         db.mark_idea(idea["id"], "drafted", acct=acct)
@@ -186,6 +194,8 @@ def _draft_meta(idea: dict, draft: dict, lang: str) -> dict:
             "language": detect(draft["text"])}
     if draft.get("rules_cited"):
         meta["rules_cited"] = draft["rules_cited"]
+    if draft.get("meta", {}).get("link_reply"):
+        meta["link_reply"] = draft["meta"]["link_reply"]
     if draft.get("quote"):
         meta["quote"] = draft["quote"]
     if draft.get("voice_lock"):

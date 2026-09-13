@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  Repeat,
   Brain,
   CalendarDays,
   FlaskConical,
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
   { tab: 'strategy', icon: Target, key: 'nav.strategy', section: 'objects' },
   { tab: 'brain', icon: Brain, key: 'nav.brain', section: 'objects' },
   { tab: 'insights', icon: TrendingUp, key: 'nav.insights', section: 'objects' },
+  { tab: 'loops', icon: Repeat, key: 'nav.loops', section: 'objects' },
   { tab: 'harness', icon: FlaskConical, key: 'nav.harness', section: 'objects' },
   { tab: 'connect', icon: Link2, key: 'nav.connect', section: 'system' },
   { tab: 'settings', icon: Settings, key: 'nav.settings', section: 'system' },

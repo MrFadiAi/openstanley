@@ -1008,6 +1008,23 @@ def _loops_status_data() -> dict:
     return {"loops": loops, "scheduler_running": scheduler is not None}
 
 
+# ---------------- autonomous behaviors (Loops page) ----------------
+
+@app.get("/api/behaviors")
+async def behaviors_ep():
+    from ..gen import behaviors as beh
+    return {"ok": True, "behaviors": beh.get_behaviors()}
+
+
+@app.post("/api/behaviors/{behavior_id}")
+async def set_behavior_ep(behavior_id: str, body: DraftAction):
+    from ..gen import behaviors as beh
+    enabled = bool(body.text == "true" or body.text is True)
+    if not beh.set_behavior(behavior_id, enabled):
+        raise HTTPException(404, f"unknown behavior {behavior_id}")
+    return {"ok": True, "id": behavior_id, "enabled": enabled}
+
+
 @app.get("/api/loops/status")
 async def loops_status():
     return _loops_status_data()

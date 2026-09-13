@@ -12,7 +12,7 @@ export type Tab =
   | 'harness'
   | 'connect'
   | 'settings'
-  | 'log';
+  | 'loops' | 'log';
 
 export interface AppCtx {
   lang: Lang;
