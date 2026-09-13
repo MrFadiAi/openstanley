@@ -1025,6 +1025,78 @@ async def set_behavior_ep(behavior_id: str, body: DraftAction):
     return {"ok": True, "id": behavior_id, "enabled": enabled}
 
 
+# ---------------- custom loops (owner-built, Loops page) ----------------
+
+class CustomLoopCreate(BaseModel):
+    name: str
+    source: str                  # github_trending | github_user | x_topic
+    param: str = ""
+    interval_h: int = 24
+    draft_count: int = 1
+
+
+@app.get("/api/custom-loops")
+async def custom_loops_ep():
+    from ..gen import custom_loops as cl
+    return {"ok": True, "loops": cl.list_loops(),
+            "sources": cl.SOURCES}
+
+
+@app.post("/api/custom-loops")
+async def create_custom_loop_ep(body: CustomLoopCreate):
+    from ..gen import custom_loops as cl
+    try:
+        loop = cl.create_loop(body.name, body.source, body.param,
+                              body.interval_h, body.draft_count)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True, "loop": loop}
+
+
+@app.post("/api/custom-loops/{loop_id}")
+async def update_custom_loop_ep(loop_id: str, body: CustomLoopCreate):
+    """Toggle/pause/edit: any subset of fields (name/source/param are
+    ignored when blank; enabled rides on draft_count==-1 sentinel? no —
+    pass enabled via the dedicated endpoint)."""
+    from ..gen import custom_loops as cl
+    updated = cl.update_loop(loop_id, name=body.name or None,
+                             param=body.param or None,
+                             interval_h=body.interval_h or None,
+                             draft_count=body.draft_count or None)
+    if not updated:
+        raise HTTPException(404, f"no custom loop {loop_id}")
+    return {"ok": True, "loop": updated}
+
+
+@app.post("/api/custom-loops/{loop_id}/toggle")
+async def toggle_custom_loop_ep(loop_id: str, body: DraftAction):
+    from ..gen import custom_loops as cl
+    cur = next((l for l in cl.list_loops() if l["id"] == loop_id), None)
+    if not cur:
+        raise HTTPException(404, f"no custom loop {loop_id}")
+    target = not cur.get("enabled", True)
+    updated = cl.update_loop(loop_id, enabled=target)
+    return {"ok": True, "enabled": updated["enabled"]}
+
+
+@app.post("/api/custom-loops/{loop_id}/run")
+async def run_custom_loop_ep(loop_id: str):
+    from ..gen import custom_loops as cl
+    loop = next((l for l in cl.list_loops() if l["id"] == loop_id), None)
+    if not loop:
+        raise HTTPException(404, f"no custom loop {loop_id}")
+    res = await asyncio.to_thread(cl.run_custom_loop, cfg, loop)
+    return {"ok": True, **res}
+
+
+@app.delete("/api/custom-loops/{loop_id}")
+async def delete_custom_loop_ep(loop_id: str):
+    from ..gen import custom_loops as cl
+    if not cl.delete_loop(loop_id):
+        raise HTTPException(404, f"no custom loop {loop_id}")
+    return {"ok": True}
+
+
 @app.get("/api/loops/status")
 async def loops_status():
     return _loops_status_data()
@@ -2156,6 +2228,17 @@ def start_scheduler():
             db.log("watch", f"watch check failed: {e}", level="warn")
     sched.add_job(_watch_job, IntervalTrigger(hours=1),
                   id="trend_watches")
+
+    # custom loops (owner-built on the Loops page): one runner tick every
+    # 30 min; each loop fires only when its own interval has elapsed
+    async def _custom_loops_job():
+        from ..gen import custom_loops as cl
+        try:
+            cl.run_due(cfg)
+        except Exception as e:  # noqa: BLE001 — one bad loop never kills the runner
+            db.log("custom_loops", f"runner tick failed: {e}", level="warn")
+    sched.add_job(_custom_loops_job, IntervalTrigger(minutes=30),
+                  id="custom_loops")
     # 05:00 daily session reset (like Hermes): both the web chat and
     # Telegram start FRESH each morning — yesterday's context stays in
     # the DB but leaves the live window
