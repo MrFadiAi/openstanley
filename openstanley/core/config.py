@@ -93,7 +93,7 @@ class AgentConfig:
     # (engagement-by-hour, spread vs last post, freshness) instead of the
     # static post_times rotation; post_times stays as the heuristic fallback
     smart_slots: bool = True
-    autopilot_interval_min: int = 45
+    autopilot_interval_min: int = 10
     # v0.3.9 mention inbox — reply budget per mentions-loop run, and the
     # standalone every-30-min cron (only while autopilot is disabled)
     mention_drafts_per_run: int = 3

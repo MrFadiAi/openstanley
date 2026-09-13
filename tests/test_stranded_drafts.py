@@ -83,19 +83,20 @@ def test_no_stranded_no_alert(monkeypatch):
     assert sent == []
 
 
-def test_tg_approve_explains_cross_account(monkeypatch):
-    """get_draft is active-account-filtered, so a cross-account approve
-    fails with 'No draft #N' — the explainer must say it belongs to
-    another account instead of sending the owner hunting."""
+def test_tg_approve_cross_account_now_works():
+    """Now cross-account approvals work automatically without manual switching."""
     from openstanley.integrations import telegram as tg_mod
+    from openstanley.core.config import load_config
     _ensure_accounts(1, 2)
     db.set_active_account(2)
     did = db.add_draft(text="old orbexai draft", kind="post", acct=1,
                        status="draft")
-    msg = tg_mod.approve_draft_tg(None, did)
-    assert "No approvable draft" in msg and "ACCOUNT 1" in msg and "/account 1" in msg, msg
+    msg = tg_mod.approve_draft_tg(load_config(), did)
+    assert f"Draft #{did} approved" in msg
+    d = db.get_draft(did, any_account=True)
+    assert d is not None and d["status"] == "approved"
     msg_r = tg_mod.reject_draft_tg(did)
-    assert "ACCOUNT 1" in msg_r, msg_r
+    assert f"Draft #{did} rejected" in msg_r
     with db.connect() as c:
         c.execute("DELETE FROM drafts WHERE id=?", (did,))
 

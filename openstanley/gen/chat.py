@@ -100,9 +100,9 @@ HOW YOU BEHAVE (like getstanley.ai):
   approval. schedule_draft queues it; the calendar + approval own the rest.
 - If account is in dry-run mode and user asks about posting, remind them
   nothing real goes out.
-- LANGUAGE: mirror the user. If they write Arabic, reply in Arabic. If they
-  mix, mix. When writing a post, keep the post itself in the language they
-  asked for (default: the language of their message).
+- LANGUAGE MANDATE: ARABIC ONLY.
+  All conversation, explanations, ideas, and drafted posts MUST be in natural, fluent, high-impact Arabic.
+  NEVER respond in English or draft posts in English, even if past posts were in English. The account is an Arabic account.
 
 {tools}
 
@@ -124,20 +124,14 @@ bank, drafts, strategy, recent metrics (injected below) — and the same
 tools.
 
 HOW YOU WRITE HERE — this chat is a conversation, not a post:
-- Speak as a clean, warm, direct assistant: proper casing and punctuation,
+- Speak as a clean, warm, direct assistant in Arabic: proper punctuation,
   concise paragraphs. Telegram messages: short paragraphs, bold for key
-  terms, bullet lists for collections. No tables, no headers, no
-  horizontal rules — Telegram cannot render them.
-- The X-post voice — lowercase prose, stylized misspellings, post-style
-  punctuation — belongs only inside post drafts, never in the conversation
-  around them. Do not imitate typos or post quirks in your replies.
-- The voice tuning knobs shape the POSTS you draft, not the chat surface;
-  the chat stays clear and professional while mirroring the user's language.
-- When asked to write a post: give the candidate in a markdown quote block
-  (> like this), written in the user's real X voice — casing and quirks
-  exactly as the post should appear.
-- Proactive, opinionated, brief. Suggest the next action. Never claim to
-  have posted anything — publishing needs explicit approval.
+  terms, bullet lists for collections.
+- CRITICAL DRAFTING RULE: NEVER wrap whole conversation paragraphs, market reports, analysis, headers, or bullet points in markdown quote blocks (>).
+- Markdown quote blocks (> like this) are STRICTLY and EXCLUSIVELY reserved for exact X-post draft candidates ready to be published as tweets.
+- When suggesting an X post, present your conversational explanation normally, and put ONLY the literal text of the tweet inside a single markdown quote block (> tweet text here).
+- The X-post voice — punchy, engaging, focused — belongs only inside post drafts, never in the conversation around them.
+- Suggest the next action. Never claim to have posted anything — publishing needs explicit approval.
 
 {tools}
 
@@ -160,10 +154,13 @@ def _context_trace(cfg: Config) -> dict:
     sources that actually exist so the UI never renders empty trace rows.
     """
     me = db.get_me()
-    parts = [f"ACCOUNT: @{me.get('username', cfg.x.username or 'unknown')} "
-             f"({me.get('followers', '?')} followers, mode={cfg.x.mode})"]
-    steps = [{"id": "account", "primary": "Reading your account",
-              "secondary": f"@{me.get('username', cfg.x.username or 'unknown')}"}]
+    acct_id = db.active_account()
+    acct = db.get_account(acct_id) or {}
+    handle = acct.get("handle") or me.get("username", cfg.x.username or "unknown")
+    parts = [f"ACTIVE TARGET ACCOUNT: @{handle} (ID: #{acct_id}, followers: {acct.get('followers', me.get('followers', '?'))}, mode={cfg.x.mode})",
+             "IMPORTANT: All generated draft post suggestions and content ideas in this conversation MUST be tailored exclusively for this target account (@" + handle + "). Do not mix accounts."]
+    steps = [{"id": "account", "primary": "Reading your active account",
+              "secondary": f"@{handle}"}]
     chunks: list[dict] = []
 
     vp = db.get_setting("voice_profile")
@@ -327,29 +324,58 @@ def _looks_like_scaffolding(text: str) -> bool:
 
 
 def _extract_candidates(reply: str, cfg: Config) -> list[dict]:
-    """Markdown quote blocks = post candidates. Each gets an algorithm score
-    and a voice-lock check (the Write page shows the voice chip on it).
-    Scaffolding (the agent's own planning lines) is filtered — plans are
-    not posts."""
+    """Markdown quote blocks = post candidates.
+    Pairs each candidate with its preceding option heading (e.g. 'الخيار 1: ...')."""
+    lines = reply.splitlines()
+    last_heading = None
+    blocks: list[dict] = []
+    current: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        m_head = re.match(r"^\*{0,2}(الخيار\s*\d+[^:*]*[:\-–—]?.*|\d+[\.\-\)]\s*.*)\*{0,2}$", stripped)
+        m_quote = re.match(r"^\s*>[ \t]?(.*)$", line)
+
+        if m_quote:
+            val = m_quote.group(1).strip()
+            if val:
+                current.append(val)
+        else:
+            if current:
+                quote_text = "\n".join(current).strip()
+                if quote_text:
+                    blocks.append({"heading": last_heading, "text": quote_text})
+                current = []
+                last_heading = None
+            if m_head and not stripped.startswith(">"):
+                clean_head = re.sub(r"^\*+|\*+$", "", stripped).strip()
+                last_heading = clean_head
+
+    if current:
+        quote_text = "\n".join(current).strip()
+        if quote_text:
+            blocks.append({"heading": last_heading, "text": quote_text})
+
     candidates = []
-    for block in re.findall(r"^\s*>[ \t]?(.+)$", reply, re.MULTILINE):
-        text = block.strip()
-        if len(text) < 15:
+    for item in blocks:
+        text = item["text"].strip()
+        heading = item.get("heading")
+        if len(text) < 20 or text.startswith(("#", "* **الواقع", "📊", "---")):
             continue
         if _looks_like_scaffolding(text):
-            db.log("chat", "scaffolding candidate filtered: "
-                           f"{text[:70]}")
+            db.log("chat", f"scaffolding candidate filtered: {text[:70]}")
             continue
         alg = score_draft(text)
         cand = {"text": text, "alg": alg,
+                "heading": heading,
                 "language": detect(text),
                 "voice_match": voice_match(text)}
-        try:  # the lock must never break chat — worst case: no chip
+        try:
             vc = voice_lock.check_draft(cfg, text)
-            if vc.fixed_text:  # the rewrite won → show the fixed text
+            if vc.fixed_text:
                 cand["text"] = vc.fixed_text
             cand["voice"] = vc.meta()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             db.log("voice", f"chat candidate check failed: {e}", level="warn")
         candidates.append(cand)
     return candidates[:4]
@@ -662,22 +688,13 @@ def force_post_candidate(cfg: Config, user_message: str) -> Optional[str]:
     return None
 
 
-def draft_from_chat(cfg: Config, text: str, image: str | None = None) -> int:
-    """User approved a post written in chat → save as a real draft for the queue.
-
-    The human already approved it, so the voice lock never rejects here —
-    it only attaches the score (the Inbox chip shows the verdict).
-    """
-    # watchdog burst guard: a confused reply storm must not be able to fill
-    # the queue — returns -1 (caller surfaces "not saved") when tripped
+def draft_from_chat(cfg: Config, text: str, image: str | None = None,
+                    title: str | None = None) -> int:
+    """User approved a post written in chat → save as a real draft for the queue."""
     if not watchdog.allow_chat_draft():
         db.log("chat", "chat draft save BLOCKED by watchdog burst guard",
                level="warn")
         return -1
-    # SCAFFOLDING GATE (live 2026-09-08: a published post was the agent's
-    # own plan line — '**Quote Post 1**, attach via X quote (اللينك ما
-    # يدخل بالنص): https://...'). Even an approved candidate that is
-    # actually planning text never becomes a draft.
     if _looks_like_scaffolding(text):
         db.log("chat", f"scaffolding draft REFUSED at save: {text[:70]}")
         return -1
@@ -685,6 +702,8 @@ def draft_from_chat(cfg: Config, text: str, image: str | None = None) -> int:
     meta = {"source": "chat", "via": "openstanley-chat",
             "language": detect(text), "alg": alg,
             "voice_match": voice_match(text)}
+    if title:
+        meta["title"] = title
     try:
         meta["voice"] = voice_lock.check_draft(cfg, text,
                                                allow_fix=False).meta()
