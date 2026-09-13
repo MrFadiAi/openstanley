@@ -701,7 +701,12 @@ def _tool_create_loop(cfg, instruction: str = "") -> dict:
             "link_first_reply": loop["link_first_reply"],
             "note": f"loop created: {loop['name']} — {when}. Drafts "
                     f"land in the approval queue; manage it on the Loops "
-                    f"page."}
+                    f"page. LEAD your reply with THIS confirmation (name, "
+                    "schedule, extras) — and do NOT draft an announcement "
+                    "post about the loop itself unless the owner "
+                    "explicitly asks for one (live 2026-09-13 18:38: the "
+                    "owner taught a loop and got an unsolicited 'new "
+                    "daily ritual' post instead of the confirmation)."}
 
 
 register("create_loop", _tool_create_loop)
