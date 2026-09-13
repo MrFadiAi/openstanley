@@ -24,3 +24,4 @@ data/media/
 data/KEEPALIVE_LOCK
 data/server_keepalive.log
 data/accounts/
+data/accounts-backup*
