@@ -148,6 +148,7 @@ def _trending_repos(limit: int = 3) -> list[dict]:
                 out.append({"name": d["name"], "full_name": full,
                             "desc": d["description"][:200],
                             "lang": d.get("language") or "mixed",
+                            "url": d.get("html_url", ""),
                             "stars": d.get("stargazers_count", 0)})
         except Exception:  # noqa: BLE001 — one bad repo never stops the batch
             continue
