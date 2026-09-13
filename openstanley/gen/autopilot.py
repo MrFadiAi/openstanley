@@ -58,8 +58,15 @@ def set_state(**fields: Any) -> dict[str, Any]:
     return st
 
 
-def set_enabled(enabled: bool) -> dict[str, Any]:
-    return set_state(enabled=enabled)
+def set_enabled(enabled: bool, cfg: Config | None = None) -> dict[str, Any]:
+    fields: dict[str, Any] = {"enabled": enabled}
+    if enabled:
+        now = datetime.now()
+        interval = interval_minutes(cfg) if cfg else 45
+        fields["next_tick"] = compute_next_tick(now, interval).isoformat(timespec="seconds")
+    else:
+        fields["next_tick"] = None
+    return set_state(**fields)
 
 
 # ---------- scheduling math (pure — tested without a scheduler) ----------
@@ -163,10 +170,30 @@ async def _run_tick_locked(agent, cfg: Config) -> dict:
     st = get_state()
     phase = next_phase(st["ticks"])
     now = datetime.now()
-    acct = db.active_account()  # autopilot drives the ACTIVE account (v0.5.0 —
-    ok, result, error = True, None, None  # one at a time; switch between ticks)
-    db.log("autopilot", f"tick #{st['ticks'] + 1}: phase '{phase}' "
-                        f"[account {acct}]")
+    
+    # Rotate round-robin across all active accounts on each tick
+    accounts = [a for a in db.list_accounts() if a.get("status") == "active" and a.get("cookies_set")]
+    if not accounts:
+        accounts = db.list_accounts()
+    
+    acct = db.active_account()
+    if accounts:
+        acct_ids = [a["id"] for a in accounts]
+        next_idx = (st["ticks"]) % len(acct_ids)
+        target_acct = acct_ids[next_idx]
+        if target_acct != acct:
+            db.set_active_account(target_acct)
+            acct = target_acct
+            try:
+                from ..server.__main__ import _rebuild_agent
+                _rebuild_agent()
+            except Exception:
+                pass
+
+    ok, result, error = True, None, None
+    acct_obj = db.get_account(acct) or {}
+    handle = acct_obj.get("handle") or f"Account #{acct}"
+    db.log("autopilot", f"tick #{st['ticks'] + 1}: phase '{phase}' [@{handle}]")
     try:
         if phase == "engage":
             result = await _phase_engage(agent, cfg)

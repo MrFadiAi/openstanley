@@ -839,18 +839,28 @@ def update_draft(draft_id: int, acct: Optional[int] = None, **fields: Any) -> No
     if not sets:
         return
     vals.append(draft_id)
-    vals.append(_acct(acct))
     with _lock, connect() as c:
-        c.execute(f"UPDATE drafts SET {', '.join(sets)} WHERE id=? AND account_id=?", vals)
+        if acct == -1:
+            c.execute(f"UPDATE drafts SET {', '.join(sets)} WHERE id=?", vals)
+        else:
+            vals.append(_acct(acct))
+            c.execute(f"UPDATE drafts SET {', '.join(sets)} WHERE id=? AND account_id=?", vals)
 
 
 def drafts_by_status(status: str, limit: int = 100,
-                     acct: Optional[int] = None) -> list[dict]:
+                     acct: Optional[int] = None,
+                     all_accounts: bool = False) -> list[dict]:
     with _lock, connect() as c:
-        rows = c.execute(
-            "SELECT * FROM drafts WHERE account_id=? AND status=? "
-            "ORDER BY created_at DESC LIMIT ?", (_acct(acct), status, limit)
-        ).fetchall()
+        if all_accounts:
+            rows = c.execute(
+                "SELECT * FROM drafts WHERE status=? "
+                "ORDER BY created_at DESC LIMIT ?", (status, limit)
+            ).fetchall()
+        else:
+            rows = c.execute(
+                "SELECT * FROM drafts WHERE account_id=? AND status=? "
+                "ORDER BY created_at DESC LIMIT ?", (_acct(acct), status, limit)
+            ).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -876,12 +886,16 @@ def next_scheduled(acct: Optional[int] = None) -> Optional[dict]:
     return d
 
 
-def get_draft(draft_id: int, acct: Optional[int] = None) -> Optional[dict]:
-    """Fetch one draft of any status (active-account scoped), with parsed
-    thread/meta."""
+def get_draft(draft_id: int, acct: Optional[int] = None,
+              any_account: bool = False) -> Optional[dict]:
+    """Fetch one draft of any status (active-account scoped unless any_account=True),
+    with parsed thread/meta."""
     with _lock, connect() as c:
-        row = c.execute("SELECT * FROM drafts WHERE id=? AND account_id=?",
-                        (draft_id, _acct(acct))).fetchone()
+        if any_account or acct == -1:
+            row = c.execute("SELECT * FROM drafts WHERE id=?", (draft_id,)).fetchone()
+        else:
+            row = c.execute("SELECT * FROM drafts WHERE id=? AND account_id=?",
+                            (draft_id, _acct(acct))).fetchone()
     if row is None:
         return None
     d = dict(row)

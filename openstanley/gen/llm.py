@@ -53,6 +53,7 @@ def _chat_openai(cfg: LLMConfig, system: str, user: str, temp: float, json_mode:
         ],
         "temperature": temp,
         "max_tokens": cfg.max_tokens,
+        "reasoning_effort": "none",
     }
     if json_mode:
         body["response_format"] = {"type": "json_object"}
@@ -211,6 +212,7 @@ def _stream_openai(cfg: LLMConfig, system: str, user: str, temp: float):
         "temperature": temp,
         "max_tokens": cfg.max_tokens,
         "stream": True,
+        "reasoning_effort": "none",
     }
     url = cfg.base_url.rstrip("/") + "/chat/completions"
     with httpx.stream("POST", url, headers=headers, json=body, timeout=180) as r:

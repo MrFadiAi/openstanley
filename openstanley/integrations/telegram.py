@@ -63,26 +63,42 @@ TOKEN_MIN_LEN = 10           # anything shorter is not a real bot token
 FILE_URL = "https://api.telegram.org/file/bot{token}/{path}"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024   # matches the /api/media upload cap
 
-HELP_TEXT = (
-    "I'm OpenStanley — your AI Head of Content, now on Telegram.\n\n"
-    "/status — active account, autopilot, health, bank, today's caps\n"
-    "/account — list accounts; /account <id> switches the active one.\n"
-    "   ALL drafts follow the SELECTED account's voice + language.\n"
+HELP_TEXT_AR = (
+    "أهلاً بك! أنا OpenStanley — مدير المحتوى الذكي لحسابك على منصة X.\n\n"
+    "الأوامر المتاحة:\n"
+    "/status — حالة الحساب النشط والطيار الآلي\n"
+    "/account — عرض الحسابات أو التبديل بينها\n"
+    "/ideas — استعراض أفضل الأفكار المقترحة\n"
+    "/drafts — المسودات الجاهزة بانتظار موافقتك\n"
+    "/approve <id> — الموافقة على مسودة لجدولتها ونشرها\n"
+    "/reject <id> — رفض مسودة\n"
+    "/thread <topic> — صياغة ثريد متكامل\n"
+    "/post <text> — حفظ فكرتك كمسودة جديدة\n"
+    "/study — دراسة حسابك على X وتحديث نبرة الصوت\n"
+    "/digest — التقرير اليومي\n"
+    "/lang [ar|en] — تغيير لغة البوت والواجهة\n\n"
+    "💡 تحدث معي بالعربية عن أي فكرة أو أرسل رسالة صوتية (فويس) وسأصيغ لك التغريدات فوراً!"
+)
+
+HELP_TEXT_EN = (
+    "I'm OpenStanley — your AI Head of Content on X.\n\n"
+    "Available commands:\n"
+    "/status — active account, autopilot, health, bank, caps\n"
+    "/account — list accounts; /account <id> switches the active one\n"
     "/ideas — top idea-bank angles\n"
     "/drafts — drafts waiting for your approval\n"
-    "/approve <id> — approve a draft (it gets scheduled)\n"
+    "/approve <id> — approve a draft (scheduled for publishing)\n"
     "/reject <id> — reject a draft\n"
-    "(approval cards and /drafts carry one-tap buttons — tap, done)\n"
-    "/img <id> — attach a photo to a draft (send the photo with this caption,\n"
-    "           or just reply to a draft card with a photo)\n"
-    "/thread <topic> — compose a 3-6 tweet thread draft\n"
-    "/post <text> — save your own text as a draft for review\n"
-    "or just send a VOICE NOTE — heard, transcribed, drafted from your words\n"
-    "/digest — today's report, on demand\n"
-    "/study — study your X account fully & refresh my brain\n"
-    "\nAnything else you type, I answer — same brain as the dashboard. Ask me\n"
-    "to write a post and I'll save it as a draft for your /approve."
+    "/thread <topic> — compose a multi-tweet thread draft\n"
+    "/post <text> — save your idea as a draft for review\n"
+    "/study — study your X account & refresh brain\n"
+    "/digest — daily report on demand\n"
+    "/lang [ar|en] — switch language between Arabic & English\n\n"
+    "💡 Chat or send a voice note anytime — I'll draft tweets for you!"
 )
+
+def get_help_text() -> str:
+    return HELP_TEXT_AR if _get_lang() == "ar" else HELP_TEXT_EN
 
 # module state — single poller per process, like autopilot's module state
 _state: dict = {
@@ -129,17 +145,19 @@ def mask_token(token: str) -> str:
 
 # ---------------- transport (sync httpx — faked at this seam in tests) ----------------
 
+_client = httpx.Client(timeout=HTTP_TIMEOUT_S)
+
+
 def _api(token: str, method: str, params: dict) -> httpx.Response:
-    """One Bot API call. Raw httpx — no SDK, no session, no retry."""
-    return httpx.post(API_URL.format(token=token, method=method), json=params,
-                      timeout=HTTP_TIMEOUT_S)
+    """One Bot API call via persistent connection pool."""
+    return _client.post(API_URL.format(token=token, method=method), json=params)
 
 
 def _get_updates(token: str, offset: int) -> httpx.Response:
-    return httpx.post(API_URL.format(token=token, method="getUpdates"),
-                      json={"offset": offset, "timeout": POLL_TIMEOUT_S,
-                            "allowed_updates": ["message", "callback_query"]},
-                      timeout=POLL_TIMEOUT_S + HTTP_TIMEOUT_S)
+    return _client.post(API_URL.format(token=token, method="getUpdates"),
+                       json={"offset": offset, "timeout": POLL_TIMEOUT_S,
+                             "allowed_updates": ["message", "callback_query"]},
+                       timeout=POLL_TIMEOUT_S + HTTP_TIMEOUT_S)
 
 
 def _entities_rejected(r: httpx.Response) -> bool:
@@ -555,6 +573,7 @@ def send_stream(chat_id: int, text_stream) -> dict:
     chunks_since_edit = 0
     last_ping_t = time.time()
     try:
+        _api(token, "sendChatAction", {"chat_id": chat_id, "action": "typing"})
         for chunk in text_stream:
             if not chunk:
                 continue
@@ -637,13 +656,20 @@ def _send_and_capture(token: str, chat_id: int, text: str,
             "error": None if ok else r.text[:200]}
 
 
+def _get_lang() -> str:
+    """Return active language setting ('ar' or 'en', default 'ar')."""
+    return str(db.get_setting("language") or "ar").lower()
+
+
 def _approve_keyboard(draft_ids: list[int]) -> str:
-    """One [approve, reject, show] row per draft — one-tap decisions plus a
-    read-only full-text view. callback_data stays tiny (a:/r:/s: + id) well
-    under Telegram's 64 bytes."""
-    rows = [[{"text": f"approve {i}", "callback_data": f"a:{i}"},
-             {"text": f"reject {i}", "callback_data": f"r:{i}"},
-             {"text": "show", "callback_data": f"s:{i}"}]
+    """One [approve, reject, show] row per draft with language support."""
+    is_ar = _get_lang() == "ar"
+    lbl_app = "موافقة" if is_ar else "approve"
+    lbl_rej = "رفض" if is_ar else "reject"
+    lbl_show = "عرض" if is_ar else "show"
+    rows = [[{"text": f"{lbl_app} {i}", "callback_data": f"a:{i}"},
+             {"text": f"{lbl_rej} {i}", "callback_data": f"r:{i}"},
+             {"text": f"{lbl_show} {i}", "callback_data": f"s:{i}"}]
             for i in draft_ids[:DRAFTS_PAGE]]
     return json.dumps({"inline_keyboard": rows})
 
@@ -699,17 +725,23 @@ def notify_new_drafts(draft_ids: list[int]) -> dict:
 
 # ---------------- inbound parsing + auth ----------------
 
-_CMD_RE = re.compile(r"^/([a-z]+)(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOTALL)
+_CMD_RE = re.compile(r"^/([a-z]+)(?:_(\d+))?(?:@\w+)?\s*(.*)$", re.IGNORECASE | re.DOTALL)
 
 
 def parse_command(text: str) -> Optional[tuple[str, str]]:
-    """'/Approve@mybot 12  x' → ('approve', '12  x'). None for plain text."""
+    """'/Approve@mybot 12  x' → ('approve', '12  x').
+    '/approve_12' → ('approve', '12').
+    None for plain text."""
     if not text or not text.startswith("/"):
         return None
     m = _CMD_RE.match(text.strip())
     if not m:
         return None
-    return m.group(1).lower(), m.group(2).strip()
+    name = m.group(1).lower()
+    inline_id = m.group(2)
+    rest = m.group(3).strip()
+    args = f"{inline_id} {rest}".strip() if inline_id else rest
+    return name, args
 
 
 def _auth_reply(chat_id: int) -> Optional[str]:
@@ -862,7 +894,7 @@ def _chat_reply_tg_stream_inner(cfg: Config, chat_id: int, user_message: str):
             db.log("telegram", f"thread merge failed: {e}", level="warn")
     for cand in cands:
         try:
-            did = chat_mod.draft_from_chat(cfg, cand["text"])
+            did = chat_mod.draft_from_chat(cfg, cand["text"], title=cand.get("heading"))
             if did > 0:  # -1 = watchdog burst guard — not saved
                 draft_ids.append(did)
         except Exception as e:  # noqa: BLE001 — a failed save must not kill the reply
@@ -884,8 +916,16 @@ def _chat_reply_tg_stream_inner(cfg: Config, chat_id: int, user_message: str):
                 db.log("telegram", f"forced draft save failed: {e}",
                        level="warn")
     if draft_ids:
-        clean += "\n" + "\n".join(
-            f"📝 Saved as draft #{d} — /approve {d} to publish" for d in draft_ids)
+        is_ar = _get_lang() == "ar"
+        for did in draft_ids:
+            d = db.get_draft(did) or {}
+            title = (d.get("meta") or {}).get("title")
+            if is_ar:
+                title_str = f"**{title}**" if title else f"**مسودة #{did}**"
+                clean += f"\n📝 مسودة جاهزة ({title_str})\nاضغط /approve_{did} للنشر"
+            else:
+                title_str = f"**{title}**" if title else f"**Draft #{did}**"
+                clean += f"\n📝 Draft ready ({title_str})\nTap /approve_{did} to publish"
 
     # instruction memory (same contract as the web chat): a directive-shaped
     # message becomes a standing brain rule NOW, acked visibly with its id
@@ -923,10 +963,12 @@ QUOTE_HARD_CAP = 800            # safety ceiling for pathological /post text
 
 
 def _draft_head(d: dict, show_target: bool = True) -> str:
-    """'#2321 — reply to @naval — voice 100%': em-dash chips, never a dot.
-    show_target=False when the card's context line already names the author."""
+    """'#2321 [@handle] — voice 100%'"""
     meta = d.get("meta") or {}
-    parts = [f"#{d['id']}"]
+    acct_id = d.get("account_id") or db.active_account()
+    acct = db.get_account(acct_id) or {}
+    handle = acct.get("handle") or f"Account #{acct_id}"
+    parts = [f"#{d['id']} [@{handle}]"]
     if show_target and d.get("kind") == "reply":
         who = meta.get("target_author") or meta.get("author")
         if who:
@@ -948,36 +990,53 @@ def _quote(text: str) -> str:
 
 
 def drafts_card(drafts: list[dict]) -> str:
-    """The approval card — ⏳ header, one context line, one block per draft
-    (head line + verbatim quote), /approve footer."""
+    """The approval card — header, one block per draft with FULL verbatim text and status."""
     drafts = [d for d in drafts if d]
+    is_ar = _get_lang() == "ar"
     if not drafts:
-        return "Nothing waiting — the approval queue is clear."
+        return "✨ لا توجد مسودات بانتظار الاعتماد — صندوق المسودات فارغ." if is_ar else "✨ Nothing waiting — the approval queue is clear."
     n = len(drafts)
-    lines = [f"⏳ {n} draft{'s' if n != 1 else ''} waiting for approval"]
-    authors = []
-    for d in drafts:
-        meta = d.get("meta") or {}
-        if d.get("kind") == "reply":
-            who = meta.get("target_author") or meta.get("author")
-            if who:
-                authors.append(who)
-    one_author = len(authors) == n and len(set(authors)) == 1 if authors else False
-    if one_author:
-        lines.append(f"Replies drafted to @{authors[0]}'s recent posts:")
-    elif len(authors) == n:
-        lines.append("Replies drafted to recent posts:")
+    if is_ar:
+        lines = [f"⏳ **المسودات بانتظار الموافقة ({n}):**\n"]
     else:
-        lines.append("Waiting for your review:")
-    lines.append("")
+        lines = [f"⏳ **Drafts waiting for approval ({n}):**\n"]
+
     for d in drafts[:DRAFTS_PAGE]:
-        lines.append(_draft_head(d, show_target=not one_author))
-        lines.append(_quote(d.get("text") or ""))
-        lines.append("")
-    if n > DRAFTS_PAGE:
-        lines.append(f"{n - DRAFTS_PAGE} more in the queue — /drafts")
-        lines.append("")
-    lines.append("Reply /approve <id> or /reject <id>")
+        meta = d.get("meta") or {}
+        acct_id = d.get("account_id") or db.active_account()
+        acct = db.get_account(acct_id) or {}
+        handle = acct.get("handle") or f"Account #{acct_id}"
+        
+        status = d.get("status")
+        if status == "approved":
+            slot = _fmt_slot(d.get('scheduled_at') or '')
+            status_badge = f"✅ معتمد (مجدول: {slot})" if is_ar else f"✅ Approved (scheduled: {slot})"
+        elif status == "rejected":
+            status_badge = "❌ مرفوض" if is_ar else "❌ Rejected"
+        else:
+            status_badge = "⏳ بانتظار الاعتماد" if is_ar else "⏳ Waiting Approval"
+
+        title = meta.get("title")
+        title_str = f" — 📌 **{title}**" if title else ""
+        lbl_draft = "مسودة" if is_ar else "Draft"
+        lines.append(f"📝 **{lbl_draft} #{d['id']} [@{handle}]** [{status_badge}]{title_str}")
+        
+        body = (d.get("text") or "").strip()
+        lines.append(body)
+        
+        if d.get("thread"):
+            for idx, tweet in enumerate(d["thread"][1:], 2):
+                lines.append(f"\n{idx}. {tweet.strip()}")
+        
+        link = meta.get("link_reply")
+        if link:
+            lbl_link = "🔗 أول رد برابط:" if is_ar else "🔗 Link in first reply:"
+            lines.append(f"{lbl_link} {link}")
+        
+        lines.append("─────────────────────")
+        
+    footer = "اضغط الأزرار بالأسفل للاعتماد أو الرفض:" if is_ar else "Tap buttons below to approve or reject:"
+    lines.append(footer)
     return "\n".join(lines).rstrip()
 
 
@@ -986,6 +1045,7 @@ def _cmd_status(cfg: Config) -> str:
     from ..gen import autopilot as ap_mod
     from ..gen import ideas as ideas_mod
 
+    is_ar = _get_lang() == "ar"
     me = db.get_me()
     account = db.get_account(db.active_account()) or {}
     handle = me.get("username") or account.get("handle") or cfg.x.username or "unknown"
@@ -993,23 +1053,37 @@ def _cmd_status(cfg: Config) -> str:
     smoke = db.get_setting("smoke_last") or {}
     bank = ideas_mod.bank_health()
     caps = usage()
-    ap_line = (f"{BULLET} **Autopilot** on — phase {ap.get('phase')}, "
-               f"next {ap.get('next_tick')}" if ap.get("enabled")
-               else f"{BULLET} **Autopilot** off")
-    bank_line = f"{BULLET} **Idea bank** {bank['count']} idea(s)"
-    if (bank.get("last") or {}).get("at"):
-        bank_line += f", replenished {bank['last']['at'][:10]}"
-    lines = [
-        f"🤖 Account #{db.active_account()} — @{handle}"
-        f" ({me.get('followers', '?')} followers, mode {cfg.x.mode})",
-        "",
-        ap_line,
-        f"{BULLET} **Health check** {smoke.get('status', 'never')}",
-        bank_line,
-        f"{BULLET} **Today** {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} posts, "
-        f"{caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
-        f"{BULLET} **Watchdog** {wd_health()}",
-    ]
+    
+    if is_ar:
+        ap_line = (f"{BULLET} **الطيار الآلي:** شغال ✅ — المرحلة: {ap.get('phase')}, "
+                   f"الدور القادم: {ap.get('next_tick')}" if ap.get("enabled")
+                   else f"{BULLET} **الطيار الآلي:** متوقف 🛑")
+        bank_line = f"{BULLET} **بنك الأفكار:** {bank['count']} فكرة متاحة"
+        lines = [
+            f"🤖 **الحساب النشط:** #{db.active_account()} — @{handle} ({account.get('followers', me.get('followers', '?'))} متابع)",
+            "",
+            ap_line,
+            f"{BULLET} **فحص السلامة:** {smoke.get('status', 'لم يتم بعد')}",
+            bank_line,
+            f"{BULLET} **نشاط اليوم:** {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} منشورات, "
+            f"{caps.get('replies', 0)}/{cfg.x.max_replies_per_day} ردود",
+            f"{BULLET} **حالة النظام:** {wd_health()}",
+        ]
+    else:
+        ap_line = (f"{BULLET} **Autopilot** on — phase {ap.get('phase')}, "
+                   f"next {ap.get('next_tick')}" if ap.get("enabled")
+                   else f"{BULLET} **Autopilot** off")
+        bank_line = f"{BULLET} **Idea bank** {bank['count']} idea(s)"
+        lines = [
+            f"🤖 Account #{db.active_account()} — @{handle} ({account.get('followers', me.get('followers', '?'))} followers)",
+            "",
+            ap_line,
+            f"{BULLET} **Health check** {smoke.get('status', 'never')}",
+            bank_line,
+            f"{BULLET} **Today** {caps.get('posts', 0)}/{cfg.x.max_posts_per_day} posts, "
+            f"{caps.get('replies', 0)}/{cfg.x.max_replies_per_day} replies",
+            f"{BULLET} **Watchdog** {wd_health()}",
+        ]
     try:
         from ..system.resilience import cookie_warning_line
         cw = cookie_warning_line()
@@ -1029,44 +1103,82 @@ def wd_health() -> str:
         return f"unavailable ({e})"
 
 
+def _cmd_lang(args: str) -> str:
+    """Switch language between Arabic and English (/lang ar | /lang en)."""
+    val = (args or "").strip().lower()
+    if val in ("ar", "arabic", "عربي"):
+        db.set_setting("language", "ar")
+        sync_bot_commands()
+        return "✅ تم ضبط اللغة على: **العربية** بنجاح!\nكل الأزرار، والبطاقات، والرسائل ستكون بالعربية 100٪."
+    elif val in ("en", "english", "انجليزي", "إنكليزي"):
+        db.set_setting("language", "en")
+        sync_bot_commands()
+        return "✅ Language switched to: **English** successfully!\nAll buttons, cards, and responses will be in English 100%."
+    else:
+        current = _get_lang()
+        curr_str = "العربية (Arabic)" if current == "ar" else "English"
+        if current == "ar":
+            return f"🌐 اللغة الحالية: **{curr_str}**\nلتغيير اللغة اكتب:\n• `/lang ar` للغة العربية\n• `/lang en` للغة الإنجليزية"
+        else:
+            return f"🌐 Current language: **{curr_str}**\nTo change language use:\n• `/lang en` for English\n• `/lang ar` for Arabic"
+
+
 def _cmd_account(args: str) -> str:
     """v0.5.0 — list accounts, or switch the active one (/account 2)."""
+    is_ar = _get_lang() == "ar"
     parts = args.split()
     accounts = db.list_accounts()
     if not parts:
-        lines = [f"👤 Accounts ({len(accounts)})"]
-        for a in accounts:
-            mark = "✅" if a["active"] else BULLET
-            fol = f", {a['followers']} followers" if a["followers"] is not None else ""
-            posts = f", {a['own_posts']} posts" if a["own_posts"] else ""
-            lines.append(f"{mark} #{a['id']}. @{a['handle'] or 'no handle yet'}{fol}{posts}")
-        lines.append("")
-        lines.append(f"Active: #{db.active_account()} — /account <id> switches.")
+        if is_ar:
+            lines = [f"👤 الحسابات المتاحة ({len(accounts)}):"]
+            for a in accounts:
+                mark = "✅ (النشط)" if a["active"] else "▫️"
+                fol = f" | {a['followers']} متابع" if a["followers"] is not None else ""
+                lines.append(f"{mark} #{a['id']}. @{a['handle'] or 'بدون معرف'}{fol}")
+            lines.append("")
+            lines.append(f"الحساب النشط حالياً: #{db.active_account()}")
+            lines.append("للتبديل اكتب رقم الحساب: مثل `/account 2` أو `/account 3`")
+        else:
+            lines = [f"👤 Available Accounts ({len(accounts)}):"]
+            for a in accounts:
+                mark = "✅ (Active)" if a["active"] else "▫️"
+                fol = f", {a['followers']} followers" if a["followers"] is not None else ""
+                lines.append(f"{mark} #{a['id']}. @{a['handle'] or 'no handle'}{fol}")
+            lines.append("")
+            lines.append(f"Active account: #{db.active_account()}")
+            lines.append("To switch use: `/account <id>` (e.g. `/account 2`)")
         return "\n".join(lines)
     try:
         target = int(parts[0])
     except ValueError:
-        return "Usage: /account [id]"
+        return "الاستخدام: `/account [رقم الحساب]`" if is_ar else "Usage: `/account <id>`"
     if not db.set_active_account(target):
-        return f"No account #{target} — /account lists them."
-    try:  # rebuild the agent so cookie mode uses the new account's cookies
+        return f"لا يوجد حساب برقم #{target} — اكتب `/account` لرؤية القائمة." if is_ar else f"No account #{target} — /account lists them."
+    try:
         from ..server.__main__ import _rebuild_agent
         _rebuild_agent()
-    except Exception as e:  # noqa: BLE001 — the switch itself already happened
+    except Exception as e:
         db.log("telegram", f"account switch agent rebuild failed: {e}", level="warn")
     account = db.get_account(target) or {}
+    handle = account.get('handle') or f'Account #{target}'
     db.log("accounts", f"TG switched active account → #{target}")
-    return (f"✅ Active account → #{target} "
-            f"(@{account.get('handle') or 'no handle yet'}) — everything now "
-            f"reads and writes this account. /status to confirm.")
+    if is_ar:
+        return (f"✅ تم تحويل الحساب النشط إلى: @{handle} (#{target})\n"
+                f"🎯 الآن كل المحادثات والمنشورات والاقتراحات والتحليلات مخصصة لهذا الحساب حصراً.")
+    else:
+        return (f"✅ Active account switched to: @{handle} (#{target})\n"
+                f"🎯 All conversations, drafts, and suggestions are now dedicated to this account.")
 
 
 def _cmd_ideas() -> str:
     ideas = db.fresh_ideas(IDEAS_PAGE)
+    is_ar = _get_lang() == "ar"
     if not ideas:
-        return "Idea bank is empty — /study refills it."
-    return ("💡 Idea bank — top angles\n\n" + "\n".join(
-        f"{BULLET} {idea['title']} (score {idea['score']})" for idea in ideas))
+        return "بنك الأفكار فارغ حالياً — اكتب /study لإعادة تعبئته." if is_ar else "Idea bank is empty — /study refills it."
+    header = "💡 بنك الأفكار — أبرز الزوايا المقترحة:\n\n" if is_ar else "💡 Idea bank — top angles:\n\n"
+    score_lbl = "التقييم" if is_ar else "score"
+    return header + "\n".join(
+        f"{BULLET} {idea['title']} ({score_lbl} {idea['score']})" for idea in ideas)
 
 
 def _latest_draft_id() -> int:
@@ -1076,10 +1188,8 @@ def _latest_draft_id() -> int:
 
 
 def _push_mini_card(chat_id: int, before_id: int) -> None:
-    """Anything that created a draft during this TG interaction gets a
-    one-tap approve/reject card right after — chat candidates, /thread,
-    /post, tool saves. Tapping behaves exactly like the loop cards
-    (live rewrite, slot shown)."""
+    """Anything that created a draft during this TG interaction gets an approval card
+    showing the FULL text of each draft, perfectly matching the format of /drafts."""
     try:
         with db.connect() as c:
             rows = c.execute(
@@ -1091,20 +1201,12 @@ def _push_mini_card(chat_id: int, before_id: int) -> None:
     if not rows:
         return
     ids = [r["id"] for r in rows]
-    lines = ["saved, your call:"]
-    # FULL text, same quote contract as the loop cards — the human approves
-    # what they actually read, never a truncated 80-char preview
-    import json as _json
-    for r in rows:
-        try:
-            meta = _json.loads(r["meta_json"] or "{}")
-        except Exception:  # noqa: BLE001
-            meta = {}
-        lines.append(_draft_head({"id": r["id"], "kind": r["kind"],
-                                  "meta": meta}, show_target=False))
-        lines.append(_quote(r["text"] or ""))
-        lines.append("")
-    r = send_message(chat_id, chr(10).join(lines),
+    draft_objs = [db.get_draft(i, any_account=True) for i in ids]
+    draft_objs = [d for d in draft_objs if d]
+    
+    # Use the unified drafts_card so all drafts appear in full text uniformly!
+    card_text = drafts_card(draft_objs)
+    r = send_message(chat_id, card_text,
                      reply_markup=_approve_keyboard(ids))
     if r.get("message_id"):
         _card_map.setdefault(chat_id, {})[r["message_id"]] = ids
@@ -1129,7 +1231,7 @@ def _cmd_thread(cfg: Config, args: str) -> str:
 
 
 def _cmd_drafts() -> str:
-    return drafts_card(db.drafts_by_status("draft", DRAFTS_PAGE))
+    return drafts_card(db.drafts_by_status("draft", DRAFTS_PAGE, all_accounts=True))
 
 
 STUDY_LOOPS = ("import", "study", "scan", "learn")
@@ -1183,8 +1285,12 @@ def _cmd_study(cfg: Config) -> str:
 
 def _cmd_digest(cfg: Config) -> str:
     from ..gen import digest as digest_mod
+    acct_id = db.active_account()
+    acct = db.get_account(acct_id) or {}
+    handle = acct.get("handle") or f"Account #{acct_id}"
     d = digest_mod.build_digest(cfg)
-    return digest_mod.render_text(d, str(db.get_setting("language") or "en"))
+    rep = digest_mod.render_text(d, str(db.get_setting("language") or "ar"))
+    return f"📊 تقرير الحساب [@{handle}]:\n\n" + rep
 
 
 def _foreign_draft_note(draft_id: int) -> str:
@@ -1209,14 +1315,14 @@ def approve_draft_tg(cfg: Config, draft_id: int) -> str:
     slot (or static cadence when off). Same gate — approving is the human
     action; publishing still only happens through the publish loop."""
     from ..gen import slots as slots_mod
+    is_ar = _get_lang() == "ar"
 
-    d = db.get_draft(draft_id)
+    d = db.get_draft(draft_id, any_account=True)
     if not d or d["status"] not in ("draft", "approved"):
-        return (f"No approvable draft #{draft_id}"
-                + _foreign_draft_note(draft_id) + " — /drafts lists them.")
+        return ("لا توجد مسودة صالحة للاعتماد #" + str(draft_id)) if is_ar else (f"No approvable draft #{draft_id} — /drafts lists them.")
     sched, reason = d.get("scheduled_at"), (d.get("meta") or {}).get("scheduled_reason")
     if sched is None:
-        if cfg.agent.smart_slots:
+        if cfg and cfg.agent.smart_slots:
             picked, reason = slots_mod.pick_slot_with_reason(
                 cfg, d.get("kind") or "post", datetime.now())
             sched = picked.isoformat(timespec="seconds")
@@ -1225,12 +1331,15 @@ def approve_draft_tg(cfg: Config, draft_id: int) -> str:
     meta = d.get("meta") or {}
     if reason:
         meta["scheduled_reason"] = reason
-    db.update_draft(draft_id, status="approved", scheduled_at=sched, meta_json=meta)
+    db.update_draft(draft_id, acct=-1, status="approved", scheduled_at=sched, meta_json=meta)
     from ..gen import brain as _brain
     _brain.note_outcome(draft_id, True)  # cited rules strengthen
     db.log("telegram", f"draft {draft_id} approved from TG → {sched}")
-    return (f"✅ Draft #{draft_id} approved — scheduled "
-            f"{sched[:16].replace('T', ' ')}\n({reason})")
+    time_str = sched[:16].replace('T', ' ')
+    if is_ar:
+        return f"✅ تم اعتماد المسودة #{draft_id} بنجاح!\n📅 موعد النشر: {time_str}\n({reason})"
+    else:
+        return f"✅ Draft #{draft_id} approved — scheduled {time_str}\n({reason})"
 
 
 def _next_static_slot(cfg: Config) -> str:
@@ -1250,21 +1359,22 @@ def _next_static_slot(cfg: Config) -> str:
 
 def reject_draft_tg(draft_id: int) -> str:
     from ..gen import rejection_learn
-    d = db.get_draft(draft_id)
+    is_ar = _get_lang() == "ar"
+    d = db.get_draft(draft_id, any_account=True)
     if not d or d["status"] not in ("draft", "approved"):
-        return (f"No draft #{draft_id} to reject"
-                + _foreign_draft_note(draft_id) + " — /drafts lists them.")
-    db.update_draft(draft_id, status="rejected")
-    # rejection learning: the owner's NO is teaching signal — stamp it, and
-    # once enough pile up the brain reflects on what they share
+        return ("لا توجد مسودة صالحة للرفض #" + str(draft_id)) if is_ar else (f"No draft #{draft_id} to reject — /drafts lists them.")
+    db.update_draft(draft_id, acct=-1, status="rejected")
     rejection_learn.record_rejection(draft_id, reason="owner", via="tg")
     try:
         from ..core.config import load_config
         rejection_learn.maybe_reflect_async(load_config())
-    except Exception as e:  # noqa: BLE001 — learning never blocks the tap
-        db.log("telegram", f"rejection-learn trigger skipped: {e}", level="warn")
+    except Exception as e:
+        pass
     db.log("telegram", f"draft {draft_id} rejected from TG")
-    return f"🗑 Draft #{draft_id} rejected."
+    if is_ar:
+        return f"❌ تم رفض المسودة #{draft_id} بنجاح واستبعادها من قائمة النشر."
+    else:
+        return f"❌ Draft #{draft_id} rejected."
 
 
 def post_draft_tg(cfg: Config, text: str) -> str:
@@ -1438,26 +1548,22 @@ def _card_status_line(d: dict) -> str:
 
 
 def _rebuild_card(chat_id: int, message_id: int) -> None:
-    """The approval card is LIVE: every decision rewrites this message —
-    decided drafts show their outcome (and their slot), pending drafts keep
-    their one-tap buttons. Nobody disappears; everything stays visible."""
+    """The approval card is LIVE: every decision rewrites this message while KEEPING
+    the full posts formatting intact, updating status badges and pending buttons."""
     token = bot_token()
     ids = (_card_map.get(chat_id) or {}).get(message_id)
     if not token or not message_id:
         return
     if not ids:
-        # unknown message (e.g. an old card from before this feature) —
-        # just drop its buttons so no stale tap fires twice
         _api(token, "editMessageReplyMarkup",
              {"chat_id": chat_id, "message_id": message_id})
         return
-    rows = [r for r in (db.get_draft(i) for i in ids) if r]
+    rows = [r for r in (db.get_draft(i, any_account=True) for i in ids) if r]
     pending = [r["id"] for r in rows if r["status"] == "draft"]
-    lines = ["⏳ Approvals — tap a button; this card tracks the rest:"]
-    lines.extend(_card_status_line(r) for r in rows)
-    lines.append("")
-    lines.append("tap show on the card for any full draft")
-    _api_edit_text(token, chat_id, message_id, chr(10).join(lines))
+    
+    # Use drafts_card so full verbatim content remains intact across status updates!
+    new_text = drafts_card(rows)
+    _api_edit_text(token, chat_id, message_id, new_text)
     markup = {"reply_markup": _approve_keyboard(pending)} if pending else {}
     _api(token, "editMessageReplyMarkup",
          {"chat_id": chat_id, "message_id": message_id, **markup})
@@ -1483,25 +1589,33 @@ def _handle_callback(cfg: Config, cb: dict) -> None:
         draft_id = int(sid)
     except ValueError:
         draft_id = -1
+    # Fast answer: dismiss the spinner immediately
+    _api(token, "answerCallbackQuery", {"callback_query_id": cb.get("id")})
     if action == "s":
         # read-only: the full draft as its own message, card stays live
         db.log("telegram", f"show tap for draft #{draft_id}")
-        d = db.get_draft(draft_id)
+        d = db.get_draft(draft_id, any_account=True)
         if d and d["status"] in ("draft", "approved"):
-            full = (f"#{draft_id} [{d.get('kind') or 'post'}] FULL DRAFT:" + chr(10)
-                    + _quote(d["text"] or ""))
+            acct_id = d.get("account_id") or db.active_account()
+            acct = db.get_account(acct_id) or {}
+            handle = acct.get("handle") or f"Account #{acct_id}"
+            is_ar = _get_lang() == "ar"
+            title_prefix = f"📄 **المسودة الكاملة #{draft_id} [@{handle}]**" if is_ar else f"📄 **Full Draft #{draft_id} [@{handle}]**"
+            full = (title_prefix + chr(10) * 2
+                    + (d["text"] or ""))
             if d.get("thread"):
-                full += chr(10) + chr(10).join(
-                    f"{n+1}. {_quote(t)}" for n, t in enumerate(d["thread"][1:]))
+                full += chr(10) * 2 + chr(10).join(
+                    f"{n+1}. {t}" for n, t in enumerate(d["thread"][1:]))
             link = (d.get("meta") or {}).get("link_reply")
             if link:
-                full += chr(10) + f"link in first reply: {link}"
+                lbl_lnk = "🔗 أول رد برابط:" if is_ar else "🔗 Link in first reply:"
+                full += chr(10) * 2 + f"{lbl_lnk} {link}"
             send_message(chat_id, full)
             reply = ""  # silent toast; the full text IS the response
         else:
-            reply = f"No draft #{draft_id} waiting — /drafts lists them."
-        _api(token, "answerCallbackQuery",
-             {"callback_query_id": cb.get("id"), "text": reply[:190]})
+            is_ar = _get_lang() == "ar"
+            reply = f"لا توجد مسودة #{draft_id} بالانتظار." if is_ar else f"No draft #{draft_id} waiting — /drafts lists them."
+            send_message(chat_id, reply)
         return  # show never rewrites or clears the card
     if action == "a":
         reply = approve_draft_tg(cfg, draft_id)
@@ -1509,8 +1623,6 @@ def _handle_callback(cfg: Config, cb: dict) -> None:
         reply = reject_draft_tg(draft_id)
     else:
         reply = "unknown button"
-    _api(token, "answerCallbackQuery",
-         {"callback_query_id": cb.get("id"), "text": reply[:190]})
     _rebuild_card(chat_id, msg.get("message_id"))
 
 
@@ -1552,14 +1664,16 @@ def _handle_update(cfg: Config, upd: dict) -> None:
         return
     name, args = cmd
     if name in ("start", "help"):
-        reply: str = HELP_TEXT
+        reply: str = get_help_text()
+    elif name == "lang" or name == "language":
+        reply = _cmd_lang(args)
     elif name == "status":
         reply = _cmd_status(cfg)
     elif name == "ideas":
         reply = _cmd_ideas()
     elif name == "drafts":
         reply = _cmd_drafts()
-        ids = [d["id"] for d in db.drafts_by_status("draft", DRAFTS_PAGE)]
+        ids = [d["id"] for d in db.drafts_by_status("draft", DRAFTS_PAGE, all_accounts=True)]
         r = send_message(chat_id, reply,
                          reply_markup=_approve_keyboard(ids) or None)
         if r.get("message_id"):
@@ -1607,7 +1721,26 @@ def _handle_update(cfg: Config, upd: dict) -> None:
     elif name == "digest":
         reply = _cmd_digest(cfg)
     elif name == "study":
-        reply = _cmd_study(cfg)
+        send_message(chat_id, "⏳ جاري دراسة الحساب بالكامل وفحص التغريدات في الخلفية... سأرسل لك التقرير فور الانتهاء!")
+        import threading
+        def _bg_study():
+            rep = _cmd_study(cfg)
+            send_message(chat_id, rep)
+        threading.Thread(target=_bg_study, daemon=True).start()
+        return
+    elif name == "autopilot":
+        from ..gen import autopilot as ap_mod
+        arg = (args or "").strip().lower()
+        if arg in ("on", "enable", "1", "start"):
+            s = ap_mod.set_enabled(True, cfg)
+            reply = f"🚀 تم تشغيل الطيار الآلي (Autopilot) بنجاح! الدور القادم: {s.get('next_tick', 'قريباً')}"
+        elif arg in ("off", "disable", "0", "stop"):
+            ap_mod.set_enabled(False)
+            reply = "🛑 تم إيقاف الطيار الآلي (Autopilot)."
+        else:
+            state = ap_mod.get_state()
+            status_txt = "شغال ✅" if state.get("enabled") else "متوقف 🛑"
+            reply = f"حالة الطيار الآلي: {status_txt}\nللتشغيل: /autopilot on\nللإيقاف: /autopilot off"
     elif name == "account":
         reply = _cmd_account(args)
     else:
@@ -1642,6 +1775,47 @@ def status() -> dict:
             "task_alive": bool(_state["task"] and not _state["task"].done())}
 
 
+def sync_bot_commands() -> None:
+    """Register standard commands with Telegram via setMyCommands for auto-completion menu."""
+    token = bot_token()
+    if not token or len(token) < TOKEN_MIN_LEN:
+        return
+    is_ar = _get_lang() == "ar"
+    if is_ar:
+        cmds = [
+            {"command": "status", "description": "حالة الحساب والطيار الآلي"},
+            {"command": "account", "description": "عرض الحسابات والتبديل بينها"},
+            {"command": "ideas", "description": "استعراض بنك الأفكار المقترحة"},
+            {"command": "drafts", "description": "المسودات بانتظار الاعتماد"},
+            {"command": "thread", "description": "صياغة ثريد جديد متكامل"},
+            {"command": "post", "description": "حفظ فكرة كمسودة جديدة"},
+            {"command": "autopilot", "description": "تشغيل/إيقاف الطيار الآلي"},
+            {"command": "study", "description": "دراسة الحساب وتحديث نبرة الصوت"},
+            {"command": "digest", "description": "التقرير اليومي الملخص"},
+            {"command": "lang", "description": "تغيير اللغة (ar / en)"},
+            {"command": "help", "description": "دليل المساعدة والأوامر"},
+        ]
+    else:
+        cmds = [
+            {"command": "status", "description": "Account & autopilot status"},
+            {"command": "account", "description": "List & switch active account"},
+            {"command": "ideas", "description": "Top idea-bank angles"},
+            {"command": "drafts", "description": "Pending approval drafts"},
+            {"command": "thread", "description": "Compose multi-tweet thread"},
+            {"command": "post", "description": "Save text as new draft"},
+            {"command": "autopilot", "description": "Enable/disable autopilot"},
+            {"command": "study", "description": "Study account & refresh brain"},
+            {"command": "digest", "description": "Daily summary report"},
+            {"command": "lang", "description": "Switch language (ar / en)"},
+            {"command": "help", "description": "Help & command list"},
+        ]
+    try:
+        _api(token, "setMyCommands", {"commands": cmds})
+        db.log("system", f"Telegram bot commands registered with setMyCommands ({len(cmds)} commands, lang={_get_lang()})")
+    except Exception as e:
+        db.log("system", f"Telegram setMyCommands failed: {e}", level="warn")
+
+
 async def start(cfg: Config, force: bool = False) -> None:
     """Start long-polling when settings allow it. force=True is the test
     escape hatch (ignores env guard + enabled check; httpx still faked)."""
@@ -1657,6 +1831,7 @@ async def start(cfg: Config, force: bool = False) -> None:
         return
     _state["stop"].clear()
     _chat_tasks.clear()  # any survivors belong to the previous (dead) loop
+    sync_bot_commands()
     _state["task"] = asyncio.get_running_loop().create_task(_poll_loop(cfg))
 
 

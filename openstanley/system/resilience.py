@@ -25,6 +25,7 @@ X_ERROR_MAP = {
                           "before any retry"),
     "327": ("rate limited", "X is throttling writes — backing off; the "
                              "draft stays scheduled for the next window"),
+    "34": ("not found", "the target post was deleted or does not exist"),
     "32": ("auth", "cookies rejected — re-paste them in Settings → "
                     "Connect (this is the weekly decay)"),
     "353": ("auth", "cookies rejected (shadow ban check) — re-paste in "
@@ -45,18 +46,47 @@ def classify_x_error(error_text: str) -> Optional[tuple[str, str]]:
 
 
 def alert_x_error(draft_id: int, error_text: str, account: int = 2) -> None:
-    """Publish-failure alert with the classified fix path."""
+    """Publish-failure alert with the classified fix path and exact raw cause."""
     cls = classify_x_error(error_text)
     from ..integrations import telegram as tg
-    kind, fix = cls or ("unknown", "check the agent log for details")
+    from . import resilience as _res
+    is_ar = False
+    try:
+        from ..integrations.telegram import _get_lang
+        is_ar = _get_lang() == "ar"
+    except Exception:
+        pass
+
+    clean_err = str(error_text).strip()
+    # Clean up lengthy JSON or trace wrappers to extract core message
+    if "Executor shutdown" in clean_err:
+        kind = "سيرفر معطل" if is_ar else "system reload"
+        fix = "حدثت إعادة تشغيل أو تحديث مؤقت للخدمة أثناء النشر — سيتم إعادة المحاولة تلقائياً" if is_ar else "Service was restarting/reloading during publish — will retry automatically"
+    elif cls:
+        kind, fix = cls
+    else:
+        kind = "خطأ غير مصنف" if is_ar else "error"
+        # Truncate clean message
+        snippet = clean_err.replace("\n", " ")[:160]
+        fix = f"السبب: {snippet}" if is_ar else f"Reason: {snippet}"
+
+    acct_obj = db.get_account(account) or {}
+    handle = acct_obj.get("handle") or f"Account #{account}"
+
     try:
         if tg.is_enabled():
-            tg.notify_bg(f"⚠️ Draft #{draft_id} failed to publish "
-                         f"({kind}): {fix}")
+            if is_ar:
+                tg.notify_bg(f"⚠️ فشل نشر المسودة #{draft_id} [@{handle}]\n"
+                             f"📌 النوع: {kind}\n"
+                             f"🔍 التفاصيل: {fix}")
+            else:
+                tg.notify_bg(f"⚠️ Draft #{draft_id} failed to publish [@{handle}]\n"
+                             f"📌 Type: {kind}\n"
+                             f"🔍 Details: {fix}")
     except Exception:  # noqa: BLE001 — alert delivery is best-effort
         pass
     db.log("publish", f"draft {draft_id} failure classified as "
-                      f"'{kind}' — alerted owner", level="warn")
+                      f"'{kind}' — alerted owner: {fix}", level="warn")
 
 
 # ---------- cookie countdown ----------
