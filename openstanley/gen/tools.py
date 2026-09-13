@@ -100,6 +100,16 @@ Available tools:
       keep their data). Use when the owner says delete/remove/clear a
       draft by id, or to clear all pending. Safe to use freely — it is
       reversible and never touches published history
+- create_loop {instruction}
+    → TEACH ME A STANDING LOOP in plain words: what to do, when, and
+      extras. I parse it into a scheduled loop that drafts into the
+      approval queue. Examples: 'every day at 11am get me the most
+      trending GitHub repo and draft a post, repo link in the first
+      comment' / 'every morning draft from the latest AI news' /
+      'every 6h what's trending about AI agents on X'. Manage on the
+      Loops page.
+- my_loops {}
+    → list the custom loops you taught me (schedule, last run, result)
 - remember_rule {text}
     → stores a STANDING rule in the brain (source=directive) — use when the
       user says "remember…" about how to run the account ("remember my
@@ -153,6 +163,11 @@ ROUTING (pick the exact tool for common asks):
   asked for one quote and got 4 plain posts with the URL in the body).
   ONE quote ask = ONE draft. If you have no url yet, x_search first, then
   create_quote_draft in the SAME turn.
+- "every day at ... / every morning / make me a loop / create a loop /
+  I want you to (daily|hourly|weekly) ..." -> create_loop {instruction}
+  (pass the owner's whole instruction verbatim — the parser reads the
+  time, source, and extras like 'link in the first comment' from it)
+- "what are my loops / show my custom loops" -> my_loops
 - "today's report / digest" -> get_digest
 - "reply to this mention" (or list them) -> reply_to_mention
 - "what works for @competitor" -> competitor_scan
@@ -646,6 +661,70 @@ def _tool_github_drafts(cfg, user: str = "", count: int = 2) -> dict:
 
 
 register("github_drafts", _tool_github_drafts)
+
+
+def _tool_create_loop(cfg, instruction: str = "") -> dict:
+    """TEACH THE AGENT A LOOP (owner 2026-09-13: 'I want to tell him
+    every day at 11am to get me the most trending GitHub repo and draft
+    a post from it and include the repo link in the first comment').
+    The instruction is parsed into a scheduled custom loop; drafts land
+    in the approval queue as always."""
+    from . import custom_loops as cl
+    from .llm import LLMError
+    instruction = (instruction or "").strip()
+    if len(instruction) < 8:
+        return {"ok": False, "error": "instruction too short — tell me "
+                                     "what to do, when, and any extras "
+                                     "(e.g. 'daily 11am trending GitHub "
+                                     "repo, link in first comment')"}
+    try:
+        conf = cl.parse_instruction(cfg, instruction)
+    except LLMError as e:
+        return {"ok": False, "error": f"could not understand the loop: {e}"}
+    try:
+        loop = cl.create_loop(
+            name=str(conf.get("name") or "my loop")[:60],
+            source=conf.get("source") or "github_trending",
+            param=str(conf.get("param") or ""),
+            interval_h=int(conf.get("interval_h") or 24),
+            draft_count=int(conf.get("draft_count") or 1),
+            at_hour=conf.get("at_hour"),
+            link_first_reply=bool(conf.get("link_first_reply")),
+            instruction=instruction)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    when = (f"daily at {loop['at_hour']:02d}:00"
+            if loop.get("at_hour") is not None
+            else f"every {loop['interval_h']}h")
+    return {"ok": True, "loop_id": loop["id"], "name": loop["name"],
+            "source": loop["source"], "schedule": when,
+            "link_first_reply": loop["link_first_reply"],
+            "note": f"loop created: {loop['name']} — {when}. Drafts "
+                    f"land in the approval queue; manage it on the Loops "
+                    f"page."}
+
+
+register("create_loop", _tool_create_loop)
+
+
+def _tool_my_loops(cfg) -> dict:
+    from . import custom_loops as cl
+    loops = cl.list_loops()
+    if not loops:
+        return {"ok": True, "loops": [],
+                "note": "no custom loops — teach me one: 'every day at "
+                        "11am draft from the trending GitHub repo'"}
+    return {"ok": True, "loops": [
+        {"id": l["id"], "name": l["name"], "source": l["source"],
+         "param": l.get("param", ""), "enabled": l.get("enabled"),
+         "schedule": (f"daily {l['at_hour']:02d}:00"
+                      if l.get("at_hour") is not None
+                      else f"every {l.get('interval_h')}h"),
+         "last_run": l.get("last_run"),
+         "last_result": l.get("last_result")} for l in loops]}
+
+
+register("my_loops", _tool_my_loops)
 
 
 
