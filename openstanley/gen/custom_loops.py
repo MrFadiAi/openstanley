@@ -82,7 +82,7 @@ def update_loop(loop_id: str, **fields) -> Optional[dict]:
     for i, l in enumerate(loops):
         if l["id"] == loop_id:
             for k in ("name", "param", "interval_h", "draft_count",
-                      "enabled"):
+                      "enabled", "last_run", "last_result"):
                 if k in fields and fields[k] is not None:
                     loops[i][k] = fields[k]
             _save(loops)
