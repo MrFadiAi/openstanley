@@ -714,11 +714,31 @@ register("create_loop", _tool_create_loop)
 
 def _tool_my_loops(cfg) -> dict:
     from . import custom_loops as cl
+    from . import behaviors as beh
     loops = cl.list_loops()
+    on = [b["name"] for b in beh.get_behaviors() if b["enabled"]]
+    summary = {"ok": True, "loops": [
+        {"id": l["id"], "name": l["name"], "source": l["source"],
+         "param": l.get("param", ""), "enabled": l.get("enabled"),
+         "schedule": (f"daily {l['at_hour']:02d}:00"
+                      if l.get("at_hour") is not None
+                      else f"every {l.get('interval_h')}h"),
+         "last_run": l.get("last_run"),
+         "last_result": l.get("last_result")} for l in loops]}
+    # RECONCILE with the Loops page (live 2026-09-14: the owner saw '2
+    # active' in the UI and the agent said '1 loop' — both right, both
+    # confusing). Behaviors are toggles the create loop uses; taught
+    # loops run on their own schedule. The answer must count BOTH.
+    summary["autonomous_behaviors_on"] = on
+    on_names = ", ".join(on) if on else "none"
+    summary["note"] = (f"{len(loops)} taught loop(s) + {len(on)} "
+                       f"behavior toggle(s) ON ({on_names}). "
+                       "The Loops page counts both as active.")
     if not loops:
-        return {"ok": True, "loops": [],
-                "note": "no custom loops — teach me one: 'every day at "
-                        "11am draft from the trending GitHub repo'"}
+        summary["note"] = ("no taught loops yet — teach me one: 'every "
+                           "day at 11am draft from the trending GitHub "
+                           "repo'. " + summary["note"])
+    return summary
     return {"ok": True, "loops": [
         {"id": l["id"], "name": l["name"], "source": l["source"],
          "param": l.get("param", ""), "enabled": l.get("enabled"),
