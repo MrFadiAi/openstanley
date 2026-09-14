@@ -54,3 +54,31 @@ def test_voice_settings_roundtrip():
                                            "voice_formality": 50,
                                            "voice_emoji_density": 3})
     print("[ok] /api/settings: voice_* roundtrip + clamping + validation")
+
+
+def test_activity_endpoint_returns_publishes():
+    """Live panel feed (owner 2026-09-14: 'I want a live panel when
+    something is published') — publishes since a timestamp, newest first."""
+    from fastapi.testclient import TestClient
+    from datetime import datetime as _dt
+    from openstanley.core import db as _db
+    did = _db.add_draft(text="activity probe published post", acct=1,
+                       status="published")
+    _db.update_draft(did, x_id="act-probe-1",
+                     published_at=_dt.now().isoformat(timespec="seconds"))
+    try:
+        import openstanley.server.__main__ as _srv
+        client = TestClient(_srv.app)
+        r = client.get("/api/activity")
+        assert r.status_code == 200
+        d = r.json()
+        assert d["ok"] and "now" in d
+        assert any(e["id"] == did and e["x_id"] == "act-probe-1"
+                   for e in d["events"])
+        # since-filter: a future ts excludes it
+        r2 = client.get("/api/activity",
+                        params={"since": "2099-01-01T00:00:00"})
+        assert all(e["id"] != did for e in r2.json()["events"])
+    finally:
+        with _db.connect() as c:
+            c.execute("DELETE FROM drafts WHERE id=?", (did,))

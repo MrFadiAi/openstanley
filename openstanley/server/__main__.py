@@ -1097,6 +1097,29 @@ async def delete_custom_loop_ep(loop_id: str):
     return {"ok": True}
 
 
+# ---------------- live publish feed ----------------
+
+@app.get("/api/activity")
+async def activity_ep(since: str = ""):
+    """Publishes since a timestamp (owner 2026-09-14: 'I want a live
+    panel when something is published'). The dashboard polls every 8s;
+    each new publish pulses in with its X link."""
+    now = datetime.now().isoformat(timespec="seconds")
+    q = "SELECT id, kind, published_at, x_id, text FROM drafts "         "WHERE status='published' AND published_at IS NOT NULL"
+    args: list = []
+    if since:
+        q += " AND published_at > ?"
+        args.append(since)
+    q += " ORDER BY published_at DESC LIMIT 20"
+    with db.connect() as c:
+        rows = c.execute(q, args).fetchall()
+    events = [{"id": r["id"], "ts": (r["published_at"] or "")[:19],
+               "kind": r["kind"], "x_id": r["x_id"],
+               "text": " ".join((r["text"] or "").split())[:110]}
+              for r in rows]
+    return {"ok": True, "now": now, "events": events}
+
+
 @app.get("/api/loops/status")
 async def loops_status():
     return _loops_status_data()

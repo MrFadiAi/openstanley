@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { AnimatePresence, motion } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { Sidebar } from '@/components/Sidebar';
+import { LiveFeed } from '@/components/LiveFeed';
 import { CommandPalette } from '@/components/CommandPalette';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -170,6 +171,7 @@ export default function App() {
       <TooltipProvider delayDuration={250}>
       <div className="flex h-screen overflow-hidden bg-bg">
         <Sidebar mode={mode} inboxCount={inboxCount} ideasCount={ideasCount} />
+        <LiveFeed />
         <main className="relative flex-1 overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
