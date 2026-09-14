@@ -70,11 +70,16 @@ def github_handle(cfg: Config, acct: Optional[int] = None) -> str:
 
 
 _GH_SYSTEM = (
-    "You write ONE X post in the user's voice about THEIR OWN open-source "
+    "You write ONE X post in the user's voice about an open-source "
     'project. Output STRICT JSON: {"tweet": "..."}. Under 240 chars. Ground '
     "it in a concrete fact from the repo description or the newest commits. "
     "The tone is a builder sharing their work, quietly proud, no hype words, "
-    "no hashtags, no question mark at the end.")
+    "no hashtags, no question mark at the end. "
+    "LANGUAGE: when the account voice is Arabic, write FULL Iraqi Arabic "
+    "sentences with at most 1-2 English technical terms per sentence "
+    "(repo name, model name) — never English phrases or clauses mixed in "
+    "(owner 2026-09-14: drafts were 'trash... one word Arabic and other "
+    "word English'). Follow the voice examples' natural mixing ratio.")
 
 
 def draft_repo_post(cfg: Config, repo: dict, commits: list[str],
@@ -94,6 +99,8 @@ def draft_repo_post(cfg: Config, repo: dict, commits: list[str],
            "matters to builders like the account's audience")
     vb = div.variety_block(own, fmt, div.question_budget(own))
     voice = voice_mod.voice_prompt_block()  # ACTIVE account voice+style
+    from .drafts import _recent_winners_block
+    voice += _recent_winners_block()  # current mixing ratio, not 2025 archives
     user = (f"YOUR OWN PROJECT, just pushed:" + chr(10) + material[:1800]
             + chr(10) + f"USER VOICE: {str(voice)[:350]}" + vb
             + chr(10) + "Write the post now.")
@@ -108,7 +115,13 @@ def draft_repo_post(cfg: Config, repo: dict, commits: list[str],
     image = None
     try:
         from . import quote_card
-        image = quote_card.make_card(text)
+        # repo cards render from the ENGLISH repo name/description — the
+        # Arabic post text is unrenderable by the card engine (every
+        # Arabic draft shipped image-less, owner 2026-09-14: 'without
+        # image or something useful'), and the repo name is the better
+        # visual anyway
+        card_text = f"{repo['name']}: {repo.get('desc', '')[:90]}".strip()
+        image = quote_card.make_card(card_text) or quote_card.make_card(text)
     except Exception:  # noqa: BLE001
         image = None
     did = db.add_draft(text=text, kind="post", temperature="bold",

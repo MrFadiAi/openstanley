@@ -34,6 +34,14 @@ Rules:
   or announcement and a source link is provided below, INCLUDE the link —
   this account's voice posts raw links and followers expect the pointer
   (owner 2026-09-06: 'it sometimes forgets to include links').
+- LANGUAGE MIXING (owner 2026-09-14: drafts read as 'trash... one word
+  Arabic and other word English, not understandable'): when writing in
+  Arabic, write FULL Iraqi Arabic sentences. Embed English ONLY for
+  product/repo/model names and unavoidable technical terms — at most 1-2
+  English words per sentence, sitting naturally inside the Arabic. NEVER
+  English phrases, clauses, or verbs. If a sentence needs more English
+  than that, rewrite the sentence in Arabic. Match the mixing RATIO of
+  the recent winners, not the density of the oldest examples.
 - No hashtags unless the voice uses them. No "🧵" emoji unless voice does.
 - If format is "thread": first tweet is the hook (no context, standalone scroll-stopper),
   then 3-7 tweets, each < 280 chars, numbered by the reader naturally.
